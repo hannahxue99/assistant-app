@@ -206,7 +206,7 @@ export async function updateParsedResult(
 }
 
 /** 理解状态标记（LLM 失败但规则结果已回填 → failed，联网后可补理解） */
-export async function setParseStatus(id: string, status: 'failed' | 'ok'): Promise<void> {
+export async function setParseStatus(id: string, status: 'pending' | 'failed' | 'ok'): Promise<void> {
   const d = getDb();
   await d.runAsync('UPDATE entries SET parse_status=? WHERE id=?', status, id);
 }

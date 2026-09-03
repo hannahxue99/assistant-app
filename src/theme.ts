@@ -16,6 +16,8 @@ export const theme = {
     goldSoft: '#F8EFD9',
   },
   radius: { card: 16, pill: 20, input: 12 },
+  spacing: { xxs: 4, xs: 8, sm: 12, md: 16, lg: 24, xl: 32 },
+  touchTarget: 44,
   shadow: Platform.select({
     ios: { shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
     android: { elevation: 2 },
@@ -27,6 +29,7 @@ export const theme = {
     body: 15,
     small: 13,
   },
+  fontWeight: { regular: '400', medium: '500', semibold: '600', bold: '700' } as const,
 };
 
 export type KindMeta = {

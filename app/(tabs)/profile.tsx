@@ -2,7 +2,6 @@
  * 「我的」页 — 主人页头 + 画像卡（原地编辑）+ 行内提醒开关 + 导出 + 统计 + 理解引擎入口
  * 设计：不开子页（理解引擎除外）；统计纯展示；导出直接调系统分享面板
  */
-import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -20,6 +19,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { EditAction } from '../../src/components/EditAction';
 import {
   countEntries,
   exportMarkdown,
@@ -127,9 +127,12 @@ export default function ProfileScreen() {
         <View style={styles.profileCard}>
           <View style={styles.profileHead}>
             <Text style={styles.cardTitle}>画像 · 让助手更懂你</Text>
-            <Pressable onPress={() => setEditing((v) => !v)} hitSlop={8}>
-              <Ionicons name="pencil-outline" size={15} color={editing ? theme.colors.accent : theme.colors.textDim} />
-            </Pressable>
+            <EditAction
+              editing={editing}
+              level="module"
+              onPress={editing ? saveImage : () => setEditing(true)}
+              label="编辑画像"
+            />
           </View>
           {editing ? (
             <>
@@ -151,9 +154,6 @@ export default function ProfileScreen() {
                 placeholderTextColor={theme.colors.textDim}
                 multiline
               />
-              <Pressable style={styles.saveBtn} onPress={saveImage}>
-                <Text style={styles.saveBtnText}>保存画像</Text>
-              </Pressable>
               <Text style={styles.hint}>不保存退出，改动丢弃</Text>
             </>
           ) : (
@@ -208,6 +208,13 @@ export default function ProfileScreen() {
           <Text style={[styles.rowLabel, { color: theme.colors.textDim }]}>统计</Text>
           <Text style={styles.rowValue}>{total} 条 · {days} 天</Text>
         </View>
+
+        {__DEV__ ? (
+          <Pressable style={styles.row} onPress={() => router.push('/design-system')}>
+            <Text style={styles.rowLabel}>组件预览</Text>
+            <Text style={styles.rowValue}>开发工具 ›</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -244,14 +251,6 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   inputEditing: { borderColor: theme.colors.accent, borderWidth: 2 },
-  saveBtn: {
-    backgroundColor: theme.colors.accent,
-    borderRadius: theme.radius.input,
-    paddingVertical: 11,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  saveBtnText: { color: '#fff', fontWeight: '700', fontSize: theme.font.body },
   hint: { fontSize: theme.font.small, color: theme.colors.textDim, textAlign: 'center' },
   row: {
     flexDirection: 'row',

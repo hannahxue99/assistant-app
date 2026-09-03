@@ -178,10 +178,13 @@ export async function ingest(
 
   // 异步：LLM 精理解（不 await，不阻塞 UI；完成后回调刷新 UI）
   if (settings.llmEnabled && settings.llmKey) {
-    understandEntry(entry, settings)
+    await setParseStatus(entry.id, 'pending');
+    const processingEntry: Entry = { ...entry, parseStatus: 'pending' };
+    understandEntry(processingEntry, settings)
       .then((r) => console.log(`[understand] ${entry.id} ${r}: ${entry.rawText.slice(0, 20)}`))
       .catch(() => console.warn(`[understand] ${entry.id} 异常`))
       .finally(() => onUnderstood?.());
+    return processingEntry;
   }
 
   return entry;

@@ -5,7 +5,6 @@
  * - 所有卡片点击 → 跳转该条的用户原声详情页（编辑在那里完成，返回时本页重载见新内容）
  * - 底部按钮栏已删除
  */
-import { Ionicons } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
@@ -19,6 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { EditAction } from '../../src/components/EditAction';
 import { listByTopic, renameTopic } from '../../src/db';
 import { logTimestamp } from '../../src/engine/schedule';
 import type { Entry } from '../../src/types';
@@ -46,6 +46,14 @@ export default function TopicDetailScreen() {
   );
 
   function handleBack() {
+    const nextTopic = topicDraft.trim().replace(/^#+\s*/, '');
+    if (editingTopic && nextTopic !== topic) {
+      Alert.alert('改动未保存', '丢弃当前主题修改吗？', [
+        { text: '继续编辑', style: 'cancel' },
+        { text: '丢弃', style: 'destructive', onPress: () => router.back() },
+      ]);
+      return;
+    }
     router.back();
   }
 
@@ -95,6 +103,11 @@ export default function TopicDetailScreen() {
         <Pressable onPress={handleBack} hitSlop={8}>
           <Text style={styles.back}>‹ 聚合消息</Text>
         </Pressable>
+        <EditAction
+          editing={editingTopic}
+          onPress={editingTopic ? saveTopic : startTopicEdit}
+          label="修改聚合主题"
+        />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -112,25 +125,10 @@ export default function TopicDetailScreen() {
                 style={styles.topicInput}
                 selectionColor={theme.colors.accent}
               />
-              <Pressable hitSlop={8} onPress={() => setEditingTopic(false)}>
-                <Text style={styles.cancel}>取消</Text>
-              </Pressable>
-              <Pressable hitSlop={8} onPress={saveTopic}>
-                <Text style={styles.done}>完成</Text>
-              </Pressable>
             </View>
           ) : (
             <View style={styles.topicTitleRow}>
               <Text style={styles.topic}>#{topic}</Text>
-              <Pressable
-                style={styles.editTopicButton}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="修改主题"
-                onPress={startTopicEdit}
-              >
-                <Ionicons name="pencil-outline" size={17} color={theme.colors.accent} />
-              </Pressable>
             </View>
           )}
           <Text style={styles.count}>{entries.length} 条</Text>
@@ -156,12 +154,17 @@ export default function TopicDetailScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
-  top: { paddingHorizontal: 16, paddingVertical: 8 },
+  top: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   back: { fontSize: theme.font.body, color: theme.colors.accent },
   content: { padding: 16, gap: 10 },
   head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
   topicTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1 },
-  editTopicButton: { padding: 3 },
   topicEditRow: { flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1 },
   hash: { fontSize: 18, fontWeight: '700', color: theme.colors.gold },
   topicInput: {
@@ -173,8 +176,6 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.colors.accent,
     paddingVertical: 4,
   },
-  cancel: { fontSize: theme.font.small, color: theme.colors.textDim },
-  done: { fontSize: theme.font.small, fontWeight: '700', color: theme.colors.accent },
   topic: { fontSize: 18, fontWeight: '700', color: theme.colors.gold },
   count: { fontSize: theme.font.small, color: theme.colors.textDim },
   card: {

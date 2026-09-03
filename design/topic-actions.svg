@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560">
+  <rect width="1120" height="560" fill="#F6F3EE"/>
+  <style>
+    .title{font:600 22px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#2B2622}.label{font:600 15px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#2B2622}.text{font:14px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#2B2622}.small{font:12px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#8A837B}.gold{fill:#C99A2E}.orange{fill:#E0733A}.line{stroke:#E8E2D9;stroke-width:1}.phone{fill:#F6F3EE;stroke:#D8D1C8;stroke-width:1.5}.card{fill:#FFF;stroke:#E8E2D9}.pinCard{fill:#F8EFD9;stroke:#C99A2E}
+  </style>
+  <text x="40" y="42" class="title">聚合操作与编辑入口统一规范</text>
+
+  <g transform="translate(40 74)">
+    <text x="0" y="0" class="label">1. 聚合消息置顶</text>
+    <rect x="0" y="18" width="320" height="420" rx="28" class="phone"/>
+    <text x="22" y="55" class="small">主人的备忘录</text>
+    <rect x="20" y="75" width="280" height="42" rx="13" fill="#EAE4DC"/>
+    <rect x="23" y="78" width="137" height="36" rx="10" fill="#FFF"/>
+    <text x="64" y="101" class="text">聚合消息</text><text x="208" y="101" class="small">用户原声</text>
+    <rect x="20" y="136" width="280" height="112" rx="13" class="pinCard"/>
+    <text x="34" y="167" class="label gold">#生理周期记录</text><text x="222" y="167" class="small">2 条</text>
+    <g transform="translate(267 155) scale(-1 1) rotate(-43)" fill="none" stroke="#C99A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M0-9h10l-2 6 4 4v3H-2V1l4-4z" fill="#C99A2E"/><path d="M5 4v10"/></g>
+    <text x="34" y="201" class="text">8 月 26 日生理周期记录</text><text x="34" y="229" class="small">最新 09-01 11:22</text>
+    <rect x="20" y="260" width="280" height="112" rx="13" class="card"/>
+    <text x="34" y="291" class="label gold">#家庭采购</text><text x="222" y="291" class="small">3 条</text>
+    <g transform="translate(267 279) scale(-1 1) rotate(-43)" fill="none" stroke="#8A837B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M0-9h10l-2 6 4 4v3H-2V1l4-4z"/><path d="M5 4v10"/></g>
+    <text x="34" y="325" class="text">明天购买 3 斤葡萄</text><text x="34" y="353" class="small">最新 今天 10:30</text>
+    <text x="20" y="407" class="small">线框＝未置顶　实心＝已置顶　点击区 44×44</text>
+  </g>
+
+  <g transform="translate(400 74)">
+    <text x="0" y="0" class="label">2. 统一编辑控件</text>
+    <rect x="0" y="18" width="320" height="420" rx="28" class="phone"/>
+    <text x="20" y="58" class="orange text">‹ 聚合消息</text>
+    <g transform="translate(274 47)" fill="none" stroke="#E0733A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M0 16h18"/><path d="M13-1a3 3 0 014 4L5 15l-6 1 1-6z"/></g>
+    <text x="20" y="112" class="label gold">#生理周期记录</text><text x="257" y="112" class="small">2 条</text>
+    <rect x="20" y="132" width="280" height="82" rx="13" class="card"/><text x="34" y="165" class="text">8 月 26 日生理周期记录</text><text x="34" y="194" class="small">今天 11:22:03</text>
+    <path d="M20 250h280" class="line"/>
+    <text x="20" y="282" class="orange text">‹ 聚合消息</text><text x="259" y="282" class="orange text">完成</text>
+    <text x="20" y="331" class="label gold">#</text><text x="39" y="331" class="label">健康记录</text><path d="M38 343h175" stroke="#E0733A" stroke-width="1.5"/>
+    <text x="20" y="395" class="small">同一位置：铅笔进入 → 完成保存</text>
+  </g>
+
+  <g transform="translate(760 74)">
+    <text x="0" y="0" class="label">3. 字号随层级适配</text>
+    <rect x="0" y="18" width="320" height="420" rx="28" class="phone"/>
+    <text x="20" y="61" class="label">页面级</text><text x="20" y="88" class="small">用户原声、聚合详情</text>
+    <rect x="20" y="105" width="280" height="62" rx="12" class="card"/>
+    <text x="34" y="143" class="text">图标 20px / 完成 15px</text>
+    <g transform="translate(261 125)" fill="none" stroke="#E0733A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M0 16h18"/><path d="M13-1a3 3 0 014 4L5 15l-6 1 1-6z"/></g>
+    <text x="20" y="218" class="label">模块级</text><text x="20" y="245" class="small">我的 · 画像卡</text>
+    <rect x="20" y="262" width="280" height="108" rx="12" class="card"/>
+    <text x="34" y="294" class="text">画像 · 让助手更懂你</text><text x="253" y="294" class="orange small">完成</text>
+    <text x="34" y="328" class="small">图标 18px / 完成 13px</text>
+    <text x="20" y="407" class="small">视觉尺寸可变，交互规则与 44×44 点击区不变</text>
+  </g>
+</svg>

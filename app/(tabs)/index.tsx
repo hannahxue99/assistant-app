@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,6 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Composer } from '../../src/components/Composer';
+import { TopicPinIcon } from '../../src/components/TopicPinIcon';
 import {
   getSettings,
   listEntries,
@@ -26,10 +28,12 @@ import {
   listTopicGroups,
   listWeekTasks,
   setDone,
+  setParseStatus,
   setTopicPinned,
 } from '../../src/db';
 import { syncEntryReminder } from '../../src/engine/notifications';
-import { ingest } from '../../src/engine/understand';
+import { ingest, understandEntry } from '../../src/engine/understand';
+import { shouldShowUnderstandingFailureBanner } from '../../src/engine/understanding-feedback';
 import {
   dateLabel,
   groupWeekTasks,
@@ -129,6 +133,20 @@ export default function HomeScreen() {
     setShownVoice(voiceLog.filter((e) => hitIds.has(e.id)));
   }
 
+  async function handleUnderstandingRetry(entry: Entry) {
+    if (!settings?.llmEnabled || !settings.llmKey) return;
+    await setParseStatus(entry.id, 'pending');
+    setStream((current) => current.map((item) => (
+      item.id === entry.id ? { ...item, parseStatus: 'pending' } : item
+    )));
+    await understandEntry({ ...entry, parseStatus: 'pending' }, settings);
+    await load();
+  }
+
+  const understandingFeedbackEnabled = !!settings?.llmEnabled && !!settings.llmKey;
+  const showUnderstandingFailureBanner = understandingFeedbackEnabled
+    && shouldShowUnderstandingFailureBanner(stream);
+
   const dateStr = new Date().toLocaleDateString('zh-CN', {
     month: 'long',
     day: 'numeric',
@@ -208,6 +226,18 @@ export default function HomeScreen() {
                   placeholderTextColor={theme.colors.textDim}
                 />
               </View>
+              {showUnderstandingFailureBanner ? (
+                <View style={styles.understandingBanner} accessibilityRole="alert">
+                  <Text style={styles.understandingBannerText}>多条消息暂未整理，原文均已安全保存</Text>
+                  <Pressable
+                    onPress={() => router.push('/settings/llm')}
+                    accessibilityRole="button"
+                    accessibilityLabel="检查理解引擎设置"
+                  >
+                    <Text style={styles.understandingAction}>检查设置</Text>
+                  </Pressable>
+                </View>
+              ) : null}
               {topics.length === 0 && stream.length === 0 ? (
                 <Text style={styles.empty}>
                   {query.trim() ? '没有匹配的记录。' : '第一条记录，从下面那句话开始。'}
@@ -223,23 +253,17 @@ export default function HomeScreen() {
                         >
                           <Text style={styles.topicName}>#{g.topic}</Text>
                         </Pressable>
-                        <View style={styles.topicActions}>
-                          <Text style={styles.topicCount}>{g.entries.length} 条</Text>
-                          <Pressable
-                            style={styles.pinButton}
-                            hitSlop={8}
-                            accessibilityRole="button"
-                            accessibilityLabel={g.pinnedAt !== null ? `取消置顶${g.topic}` : `置顶${g.topic}`}
-                            onPress={() => handleTopicPin(g)}
-                          >
-                            <Ionicons
-                              name={g.pinnedAt !== null ? 'pin' : 'pin-outline'}
-                              size={17}
-                              color={g.pinnedAt !== null ? theme.colors.gold : theme.colors.textDim}
-                            />
-                          </Pressable>
-                        </View>
+                        <Text style={styles.topicCount}>{g.entries.length} 条</Text>
                       </View>
+                      <Pressable
+                        style={styles.pinButton}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: g.pinnedAt !== null }}
+                        accessibilityLabel={g.pinnedAt !== null ? `取消置顶${g.topic}` : `置顶${g.topic}`}
+                        onPress={() => handleTopicPin(g)}
+                      >
+                        <TopicPinIcon pinned={g.pinnedAt !== null} />
+                      </Pressable>
                       <Pressable onPress={() => router.push(`/topic/${encodeURIComponent(g.topic)}`)}>
                         <Text style={styles.topicSummary} numberOfLines={2}>{g.latest.summary}</Text>
                         <Text style={styles.topicTime}>最新 {g.latest.dueAt ? dateLabel(g.latest.dueAt) : logTimestamp(g.latest.createdAt)}</Text>
@@ -247,14 +271,32 @@ export default function HomeScreen() {
                     </View>
                   ))}
                   {stream.map((e) => (
-                    <Pressable
-                      key={e.id}
-                      style={styles.streamCard}
-                      onPress={() => router.push(`/entry/${e.id}`)}
-                    >
-                      <Text style={styles.tsMono}>{logTimestamp(e.createdAt)}</Text>
-                      <Text style={styles.streamText} numberOfLines={2}>{e.summary}</Text>
-                    </Pressable>
+                    <View key={e.id} style={styles.streamCard}>
+                      <Pressable onPress={() => router.push(`/entry/${e.id}`)}>
+                        <Text style={styles.tsMono}>{logTimestamp(e.createdAt)}</Text>
+                        <Text style={styles.streamText} numberOfLines={2}>{e.summary}</Text>
+                      </Pressable>
+                      {understandingFeedbackEnabled && e.parseStatus === 'pending' ? (
+                        <View style={styles.understandingStatus} accessibilityLiveRegion="polite">
+                          <ActivityIndicator size="small" color={theme.colors.textDim} />
+                          <Text style={styles.processingText}>正在整理…</Text>
+                        </View>
+                      ) : null}
+                      {understandingFeedbackEnabled && e.parseStatus === 'failed' ? (
+                        <View style={styles.understandingStatus} accessibilityLiveRegion="polite">
+                          <View style={styles.failureDot} />
+                          <Text style={styles.failureText}>原文已保存，暂未整理</Text>
+                          <Pressable
+                            style={styles.retryButton}
+                            onPress={() => { void handleUnderstandingRetry(e); }}
+                            accessibilityRole="button"
+                            accessibilityLabel="重新整理这条消息"
+                          >
+                            <Text style={styles.understandingAction}>重试</Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
+                    </View>
                   ))}
                 </>
               )}
@@ -410,6 +452,7 @@ const styles = StyleSheet.create({
   },
   empty: { fontSize: theme.font.body, color: theme.colors.textDim, paddingVertical: 24, textAlign: 'center' },
   topicCard: {
+    position: 'relative',
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.input,
     borderWidth: 1,
@@ -418,10 +461,18 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   topicCardPinned: { borderColor: theme.colors.gold, backgroundColor: theme.colors.goldSoft },
-  topicHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  topicHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingRight: 32 },
   topicTitleTap: { flex: 1, paddingVertical: 2 },
-  topicActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  pinButton: { padding: 3 },
+  pinButton: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
   topicName: { fontSize: theme.font.body, fontWeight: '700', color: theme.colors.gold },
   topicCount: { fontSize: theme.font.small, color: theme.colors.textDim },
   topicSummary: { fontSize: theme.font.body, color: theme.colors.text },
@@ -434,6 +485,23 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 3,
   },
+  understandingBanner: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: theme.radius.input,
+    backgroundColor: theme.colors.accentSoft,
+  },
+  understandingBannerText: { flex: 1, fontSize: 12, lineHeight: 17, color: theme.colors.red },
+  understandingStatus: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 28, marginTop: 3 },
+  processingText: { fontSize: 12, color: theme.colors.textDim },
+  failureDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.red },
+  failureText: { flex: 1, fontSize: 12, color: theme.colors.red },
+  retryButton: { minWidth: 44, minHeight: 28, alignItems: 'flex-end', justifyContent: 'center' },
+  understandingAction: { fontSize: 12, fontWeight: '600', color: theme.colors.accent },
   tsMono: { fontSize: 12, color: theme.colors.textDim, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   streamText: { fontSize: theme.font.body, color: theme.colors.text },
   voiceText: { fontSize: theme.font.body, color: theme.colors.text, lineHeight: 22 },
