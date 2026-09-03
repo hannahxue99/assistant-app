@@ -16,7 +16,7 @@
 - Modify: `app/entry/[id].tsx`
 
 1. Remove the browse-state pencil action.
-2. Make both title and body accessible tap targets that enter the existing edit mode.
+2. Make the title, body, and remaining content canvas one accessible tap target that enters the existing edit mode.
 3. Show “完成” only in edit mode and preserve no-change save behavior.
 
 ### Task 2: Auto-save aggregate topic edits

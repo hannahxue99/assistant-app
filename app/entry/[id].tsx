@@ -142,16 +142,17 @@ export default function EntryDetailScreen() {
               />
             </>
           ) : (
-            <>
-              <Pressable onPress={startEdit} accessibilityRole="button" accessibilityLabel="编辑标题">
-                <Text style={styles.title}>{entry.summary}</Text>
-              </Pressable>
+            <Pressable
+              style={styles.browseEditArea}
+              onPress={startEdit}
+              accessibilityRole="button"
+              accessibilityLabel="编辑标题和内容"
+            >
+              <Text style={styles.title}>{entry.summary}</Text>
               {showBody && (
-                <Pressable onPress={startEdit} accessibilityRole="button" accessibilityLabel="编辑内容">
-                  <Text style={styles.body}>{entry.rawText}</Text>
-                </Pressable>
+                <Text style={styles.body}>{entry.rawText}</Text>
               )}
-            </>
+            </Pressable>
           )}
           {!editing && (
             <Pressable style={styles.deleteLink} onPress={confirmDelete}>
@@ -177,6 +178,7 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12, flexGrow: 1 },
   timestamps: { gap: 4 },
   ts: { fontSize: 13, color: theme.colors.textDim, fontFamily: 'Menlo' },
+  browseEditArea: { flex: 1, gap: 12 },
   title: { fontSize: 18, fontWeight: '600', color: theme.colors.text, lineHeight: 26 },
   body: { fontSize: 16, color: theme.colors.textDim, lineHeight: 26 },
   deleteLink: { marginTop: 'auto', paddingTop: 48, paddingBottom: 24, alignItems: 'center' },
