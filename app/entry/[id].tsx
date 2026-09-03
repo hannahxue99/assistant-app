@@ -1,7 +1,7 @@
 /**
  * 用户原声详情页 — 参考 iOS 备忘录（Apple Notes）交互模式：
- * - 顶部导航行：‹ 返回 ｜ 右上 ✏️ 手动编辑
- * - 点击进手动编辑（只有标题+原文输入框）→「完成」保存；无改动点完成=直接退出
+ * - 浏览态点击标题或正文进入编辑；不显示铅笔
+ * - 编辑态右上显示「完成」保存；无改动点完成=直接退出
  * - 删除 = 正文下方居中小字链接（仍二次确认）
  * - 编辑经 applyCorrection 落库（快照入 correctedFrom）；topic 不动 → 聚合归属不变
  */
@@ -33,7 +33,7 @@ export default function EntryDetailScreen() {
   const twoParts = !!entry && entry.rawText.trim() !== entry.summary.trim();
   const dirty = editing && !!entry
     && draftTitle.trim() !== ''
-    && (!twoParts || draftBody.trim() !== '')
+    && draftBody.trim() !== ''
     && (draftTitle.trim() !== entry.summary.trim() || draftBody.trim() !== entry.rawText.trim());
 
   useFocusEffect(
@@ -48,11 +48,6 @@ export default function EntryDetailScreen() {
       })();
     }, [id]),
   );
-
-  function setText(v: string) {
-    setDraftTitle(v);
-    if (!twoParts) setDraftBody(v);
-  }
 
   function handleBack() {
     if (dirty) {
@@ -80,7 +75,7 @@ export default function EntryDetailScreen() {
     }
     const updated = await applyCorrection(entry.id, {
       summary: draftTitle.trim(),
-      rawText: twoParts ? draftBody.trim() : draftTitle.trim(),
+      rawText: draftBody.trim(),
     });
     setEditing(false);
     if (updated) {
@@ -114,11 +109,7 @@ export default function EntryDetailScreen() {
         <Pressable onPress={handleBack} hitSlop={8}>
           <Text style={styles.back}>‹ 用户原声</Text>
         </Pressable>
-        <EditAction
-          editing={editing}
-          onPress={editing ? handleSave : startEdit}
-          label="编辑用户原声"
-        />
+        {editing && <EditAction editing onPress={handleSave} label="编辑用户原声" />}
       </View>
       {entry && (
         <ScrollView contentContainerStyle={styles.content}>
@@ -140,20 +131,26 @@ export default function EntryDetailScreen() {
                 placeholder="标题"
                 placeholderTextColor={theme.colors.textDim}
               />
-              {twoParts && (
-                <TextInput
-                  style={styles.bodyInput}
-                  value={draftBody}
-                  onChangeText={setDraftBody}
-                  multiline
-                  maxLength={500}
-                />
-              )}
+              <TextInput
+                style={styles.bodyInput}
+                value={draftBody}
+                onChangeText={setDraftBody}
+                multiline
+                maxLength={500}
+                placeholder="内容"
+                placeholderTextColor={theme.colors.textDim}
+              />
             </>
           ) : (
             <>
-              <Text style={styles.title}>{entry.summary}</Text>
-              {showBody && <Text style={styles.body}>{entry.rawText}</Text>}
+              <Pressable onPress={startEdit} accessibilityRole="button" accessibilityLabel="编辑标题">
+                <Text style={styles.title}>{entry.summary}</Text>
+              </Pressable>
+              {showBody && (
+                <Pressable onPress={startEdit} accessibilityRole="button" accessibilityLabel="编辑内容">
+                  <Text style={styles.body}>{entry.rawText}</Text>
+                </Pressable>
+              )}
             </>
           )}
           {!editing && (
