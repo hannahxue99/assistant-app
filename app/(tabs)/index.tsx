@@ -4,7 +4,6 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useCallback, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -19,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Composer } from '../../src/components/Composer';
+import { TopicPinIcon } from '../../src/components/TopicPinIcon';
 import {
   getSettings,
   listEntries,
@@ -233,17 +233,7 @@ export default function HomeScreen() {
                         accessibilityLabel={g.pinnedAt !== null ? `取消置顶${g.topic}` : `置顶${g.topic}`}
                         onPress={() => handleTopicPin(g)}
                       >
-                        <SymbolView
-                          name={{
-                            ios: g.pinnedAt !== null ? 'pin.fill' : 'pin',
-                            android: 'push_pin',
-                            web: 'push_pin',
-                          }}
-                          size={19}
-                          weight="regular"
-                          tintColor={g.pinnedAt !== null ? theme.colors.gold : theme.colors.textDim}
-                          resizeMode="scaleAspectFit"
-                        />
+                        <TopicPinIcon pinned={g.pinnedAt !== null} />
                       </Pressable>
                       <Pressable onPress={() => router.push(`/topic/${encodeURIComponent(g.topic)}`)}>
                         <Text style={styles.topicSummary} numberOfLines={2}>{g.latest.summary}</Text>

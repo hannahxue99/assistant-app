@@ -14,11 +14,11 @@
     <text x="64" y="101" class="text">聚合消息</text><text x="208" y="101" class="small">用户原声</text>
     <rect x="20" y="136" width="280" height="112" rx="13" class="pinCard"/>
     <text x="34" y="167" class="label gold">#生理周期记录</text><text x="222" y="167" class="small">2 条</text>
-    <g transform="translate(267 155) rotate(-43)" fill="none" stroke="#C99A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M0-9h10l-2 6 4 4v3H-2V1l4-4z" fill="#C99A2E"/><path d="M5 4v10"/></g>
+    <g transform="translate(267 155) scale(-1 1) rotate(-43)" fill="none" stroke="#C99A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M0-9h10l-2 6 4 4v3H-2V1l4-4z" fill="#C99A2E"/><path d="M5 4v10"/></g>
     <text x="34" y="201" class="text">8 月 26 日生理周期记录</text><text x="34" y="229" class="small">最新 09-01 11:22</text>
     <rect x="20" y="260" width="280" height="112" rx="13" class="card"/>
     <text x="34" y="291" class="label gold">#家庭采购</text><text x="222" y="291" class="small">3 条</text>
-    <g transform="translate(267 279) rotate(-43)" fill="none" stroke="#8A837B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M0-9h10l-2 6 4 4v3H-2V1l4-4z"/><path d="M5 4v10"/></g>
+    <g transform="translate(267 279) scale(-1 1) rotate(-43)" fill="none" stroke="#8A837B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M0-9h10l-2 6 4 4v3H-2V1l4-4z"/><path d="M5 4v10"/></g>
     <text x="34" y="325" class="text">明天购买 3 斤葡萄</text><text x="34" y="353" class="small">最新 今天 10:30</text>
     <text x="20" y="407" class="small">线框＝未置顶　实心＝已置顶　点击区 44×44</text>
   </g>
