@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
   topicHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   topicTitleTap: { flex: 1, paddingVertical: 2 },
   topicActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  pinButton: { padding: 3 },
+  pinButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   topicName: { fontSize: theme.font.body, fontWeight: '700', color: theme.colors.gold },
   topicCount: { fontSize: theme.font.small, color: theme.colors.textDim },
   topicSummary: { fontSize: theme.font.body, color: theme.colors.text },
