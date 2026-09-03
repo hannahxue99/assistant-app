@@ -1,0 +1,602 @@
+import * as SQLite from 'expo-sqlite';
+import type {
+  Entry,
+  EntryFilter,
+  EntryKind,
+  NewEntryInput,
+  Profile,
+  Settings,
+  TopicGroup,
+} from './types';
+import { sortTopicGroups } from './engine/topic-order';
+
+let db: SQLite.SQLiteDatabase | null = null;
+
+const DEFAULT_SETTINGS: Settings = {
+  llmEnabled: false,
+  llmBaseUrl: 'https://api.deepseek.com/v1',
+  llmKey: '',
+  llmModel: 'deepseek-chat',
+};
+
+const DEFAULT_PROFILE: Profile = {
+  name: '',
+  goals: [],
+  avoid: [],
+  notifyMorning: true,
+  notifyEvening: true,
+};
+
+/** 初始化数据库：建表 + FTS trigram + 种子数据 */
+export async function initDatabase(): Promise<void> {
+  if (db) return;
+  db = await SQLite.openDatabaseAsync('assistant.db');
+  await db.execAsync(`
+    PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS entries (
+      id TEXT PRIMARY KEY,
+      raw_text TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'info',
+      summary TEXT NOT NULL,
+      due_at INTEGER,
+      remind_at INTEGER,
+      topic TEXT,
+      tags TEXT NOT NULL DEFAULT '[]',
+      persons TEXT NOT NULL DEFAULT '[]',
+      parse_status TEXT NOT NULL DEFAULT 'pending',
+      parse_source TEXT,
+      corrected_from TEXT,
+      created_at INTEGER NOT NULL,
+      done INTEGER NOT NULL DEFAULT 0,
+      done_at INTEGER,
+      source TEXT NOT NULL DEFAULT 'text'
+    );
+    CREATE INDEX IF NOT EXISTS idx_entries_created ON entries(created_at);
+    CREATE INDEX IF NOT EXISTS idx_entries_due ON entries(due_at);
+    CREATE INDEX IF NOT EXISTS idx_entries_topic ON entries(topic);
+    CREATE INDEX IF NOT EXISTS idx_entries_kind ON entries(kind);
+
+    -- 中文全文搜索：trigram tokenizer（SQLite ≥3.34，Expo 内置支持）
+    -- entry_id 用于关联主表（UNINDEXED 不参与索引）；写入路径经 syncFts 增量维护，
+    -- 启动不做全量重建（旧库如需手动重建可调用 rebuildFts）
+    CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts USING fts5(
+      entry_id UNINDEXED, summary, raw_text, tags,
+      tokenize='trigram'
+    );
+
+    CREATE TABLE IF NOT EXISTS profile (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      name TEXT NOT NULL DEFAULT '',
+      goals TEXT NOT NULL DEFAULT '[]',
+      avoid TEXT NOT NULL DEFAULT '[]',
+      notify_morning INTEGER NOT NULL DEFAULT 1,
+      notify_evening INTEGER NOT NULL DEFAULT 1
+    );
+    INSERT OR IGNORE INTO profile (id, name, goals, avoid, notify_morning, notify_evening)
+      VALUES (1, '', '[]', '[]', 1, 1);
+
+    CREATE TABLE IF NOT EXISTS settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      llm_enabled INTEGER NOT NULL DEFAULT 0,
+      llm_base_url TEXT NOT NULL DEFAULT 'https://api.deepseek.com/v1',
+      llm_key TEXT NOT NULL DEFAULT '',
+      llm_model TEXT NOT NULL DEFAULT 'deepseek-chat'
+    );
+    INSERT OR IGNORE INTO settings (id) VALUES (1);
+
+    -- 主题级展示偏好独立保存，避免把置顶状态重复写入每条原声。
+    CREATE TABLE IF NOT EXISTS topic_preferences (
+      topic TEXT PRIMARY KEY,
+      pinned_at INTEGER
+    );
+
+    -- 回退旧版规则主题：LLM 未成功理解的记录应保持无主题。
+    -- 仅清理规则层曾自动生成的三个固定名称，不影响 LLM 或手动主题。
+    UPDATE entries SET topic = NULL
+    WHERE parse_source = 'rule'
+      AND topic IN ('待办事项', '想法记录', '日常信息');
+
+  `);
+}
+
+/** 供引擎层（如迁移）使用的薄查询助手 */
+export async function queryFirst<T = any>(sql: string, ...args: any[]): Promise<T | null> {
+  return getDb().getFirstAsync<T>(sql, ...args);
+}
+
+/** 供引擎层使用的执行助手 */
+export async function runSql(sql: string, ...args: any[]): Promise<void> {
+  await getDb().runAsync(sql, ...args);
+}
+
+function getDb(): SQLite.SQLiteDatabase {
+  if (!db) throw new Error('数据库未初始化，请先调用 initDatabase()');
+  return db;
+}
+
+/* ---------------- Entry CRUD ---------------- */
+
+function rowToEntry(r: any): Entry {
+  return {
+    id: r.id,
+    rawText: r.raw_text,
+    kind: r.kind as EntryKind,
+    summary: r.summary,
+    dueAt: r.due_at,
+    remindAt: r.remind_at,
+    topic: typeof r.topic === 'string' && r.topic.trim() ? r.topic.trim() : null,
+    tags: safeParse(r.tags),
+    persons: safeParse(r.persons),
+    parseStatus: r.parse_status,
+    parseSource: r.parse_source,
+    correctedFrom: r.corrected_from,
+    createdAt: r.created_at,
+    done: r.done,
+    doneAt: r.done_at,
+    source: r.source,
+  };
+}
+
+function safeParse(s: string): string[] {
+  try {
+    const v = JSON.parse(s);
+    return Array.isArray(v) ? v.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 创建条目。若已带理解结果可一并写入；否则 parseStatus=pending */
+export async function insertEntry(input: NewEntryInput, parsed?: {
+  kind?: EntryKind; summary?: string; dueAt?: number | null;
+  tags?: string[]; topic?: string | null; persons?: string[];
+}): Promise<Entry> {
+  const d = getDb();
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const createdAt = input.createdAt ?? Date.now();
+  const kind = parsed?.kind ?? 'info';
+  const summary = parsed?.summary ?? input.rawText;
+  const dueAt = parsed?.dueAt ?? null;
+  const tags = parsed?.tags ?? [];
+  const topic = parsed?.topic?.trim() || null;
+  const persons = parsed?.persons ?? [];
+  const parseStatus = parsed ? 'ok' : 'pending';
+  const parseSource = parsed ? 'rule' : null;
+
+  await d.runAsync(
+    `INSERT INTO entries (id, raw_text, kind, summary, due_at, remind_at, topic, tags, persons,
+       parse_status, parse_source, created_at, done, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+    id, input.rawText, kind, summary, dueAt, dueAt, topic,
+    JSON.stringify(tags), JSON.stringify(persons),
+    parseStatus, parseSource, createdAt, input.source,
+  );
+  await syncFts(id);
+  return (await getEntry(id))!;
+}
+
+/** 批量插入（供测试/恢复） */
+export async function insertEntries(items: NewEntryInput[]): Promise<Entry[]> {
+  const out: Entry[] = [];
+  for (const it of items) out.push(await insertEntry(it));
+  return out;
+}
+
+export async function getEntry(id: string): Promise<Entry | null> {
+  const d = getDb();
+  const r = await d.getFirstAsync<any>('SELECT * FROM entries WHERE id = ?', id);
+  return r ? rowToEntry(r) : null;
+}
+
+/** 更新理解结果（异步理解完成后回填） */
+export async function updateParsedResult(
+  id: string,
+  parsed: { kind: EntryKind; summary: string; dueAt: number | null; tags: string[]; topic: string | null; persons: string[] },
+  parseSource: 'rule' | 'llm',
+): Promise<void> {
+  const d = getDb();
+  await d.runAsync(
+    `UPDATE entries SET kind=?, summary=?, due_at=?, remind_at=?, topic=?, tags=?, persons=?,
+       parse_status='ok', parse_source=?
+     WHERE id=?`,
+    parsed.kind, parsed.summary, parsed.dueAt, parsed.dueAt, parsed.topic,
+    JSON.stringify(parsed.tags), JSON.stringify(parsed.persons), parseSource, id,
+  );
+  await syncFts(id);
+}
+
+/** 理解状态标记（LLM 失败但规则结果已回填 → failed，联网后可补理解） */
+export async function setParseStatus(id: string, status: 'failed' | 'ok'): Promise<void> {
+  const d = getDb();
+  await d.runAsync('UPDATE entries SET parse_status=? WHERE id=?', status, id);
+}
+
+/** 理解失败、待补理解的条目（启动时重试用） */
+export async function listParseFailed(limit = 50): Promise<Entry[]> {
+  const d = getDb();
+  const rows = await d.getAllAsync<any>(
+    `SELECT * FROM entries WHERE parse_status='failed' ORDER BY created_at DESC LIMIT ?`, limit,
+  );
+  return rows.map(rowToEntry);
+}
+
+/** 手动纠正（用户一键改）——记录纠正快照供画像学习。
+ *  rawText 自 2026-09-01 起允许用户编辑（覆盖 PRD 早期「原文永存」决策，用户拍板）；
+ *  未传的字段保持原值——topic 不传即不变，聚合归属不受编辑影响。 */
+export async function applyCorrection(
+  id: string,
+  patch: { kind?: EntryKind; summary?: string; rawText?: string; dueAt?: number | null; topic?: string | null; tags?: string[] },
+): Promise<Entry | null> {
+  const prev = await getEntry(id);
+  if (!prev) return null;
+  const snapshot = JSON.stringify({
+    kind: prev.kind, summary: prev.summary, rawText: prev.rawText,
+    dueAt: prev.dueAt, topic: prev.topic, tags: prev.tags,
+  });
+  const d = getDb();
+  await d.runAsync(
+    `UPDATE entries SET kind=?, summary=?, raw_text=?, due_at=?, remind_at=?, topic=?, tags=?,
+       parse_status='manual', corrected_from=?
+     WHERE id=?`,
+    patch.kind ?? prev.kind,
+    patch.summary ?? prev.summary,
+    patch.rawText ?? prev.rawText,
+    patch.dueAt !== undefined ? patch.dueAt : prev.dueAt,
+    patch.dueAt !== undefined ? patch.dueAt : prev.dueAt,
+    patch.topic !== undefined ? patch.topic : prev.topic,
+    JSON.stringify(patch.tags ?? prev.tags),
+    snapshot, id,
+  );
+  await syncFts(id);
+  return getEntry(id);
+}
+
+export async function setDone(id: string, done: boolean): Promise<void> {
+  const d = getDb();
+  await d.runAsync(
+    'UPDATE entries SET done=?, done_at=? WHERE id=?',
+    done ? 1 : 0, done ? Date.now() : null, id,
+  );
+}
+
+export async function deleteEntry(id: string): Promise<void> {
+  const d = getDb();
+  await d.runAsync('DELETE FROM entries WHERE id=?', id);
+  await d.runAsync('DELETE FROM entries_fts WHERE entry_id=?', id);
+}
+
+export async function listEntries(filter?: EntryFilter, limit = 500): Promise<Entry[]> {
+  const d = getDb();
+  let sql = 'SELECT * FROM entries';
+  const conds: string[] = [];
+  const args: any[] = [];
+
+  if (filter?.query?.trim()) {
+    // 用 FTS 找 entry_id，再回表拿完整数据
+    // 查询词包成短语并转义内部引号，避免 " * ^ - 等 fts5 语法字符触发 SQLite 错误
+    const phrase = '"' + filter.query.trim().replace(/"/g, '""') + '"';
+    const fts = await d.getAllAsync<any>(
+      `SELECT entry_id FROM entries_fts WHERE entries_fts MATCH ? ORDER BY rank LIMIT ?`,
+      phrase, limit,
+    );
+    if (fts.length === 0) return [];
+    const ids = fts.map((r: any) => r.entry_id);
+    const placeholders = ids.map(() => '?').join(',');
+    conds.push(`id IN (${placeholders})`);
+    args.push(...ids);
+  }
+
+  if (filter?.kind && filter.kind !== 'all') {
+    conds.push('kind = ?');
+    args.push(filter.kind);
+  }
+  if (filter && !filter.showDone) {
+    conds.push('done = 0');
+  }
+
+  if (conds.length) sql += ' WHERE ' + conds.join(' AND ');
+  sql += ' ORDER BY created_at DESC LIMIT ?';
+  args.push(limit);
+
+  const rows = await d.getAllAsync<any>(sql, ...args);
+  return rows.map(rowToEntry);
+}
+
+/** 带词高亮的关键词过滤（离线兜底，用于 FTS 未命中时） */
+export async function listByKeyword(query: string, limit = 500): Promise<Entry[]> {
+  const d = getDb();
+  const like = `%${query.trim()}%`;
+  const rows = await d.getAllAsync<any>(
+    `SELECT * FROM entries
+     WHERE raw_text LIKE ? OR summary LIKE ? OR tags LIKE ?
+     ORDER BY created_at DESC LIMIT ?`,
+    like, like, like, limit,
+  );
+  return rows.map(rowToEntry);
+}
+
+/** 今日到期待办（供「今天」页） */
+export async function listTodayTasks(): Promise<Entry[]> {
+  const d = getDb();
+  const startOfDay = startOfToday();
+  const endOfDay = startOfDay + 24 * 3600 * 1000;
+  const rows = await d.getAllAsync<any>(
+    `SELECT * FROM entries
+     WHERE kind='task' AND done=0 AND due_at IS NOT NULL AND due_at BETWEEN ? AND ?
+     ORDER BY due_at ASC`,
+    startOfDay, endOfDay,
+  );
+  return rows.map(rowToEntry);
+}
+
+/** 未过期但尚未完成且无提醒的待办（供拖延检测） */
+export async function listOverdueTasks(): Promise<Entry[]> {
+  const d = getDb();
+  const rows = await d.getAllAsync<any>(
+    `SELECT * FROM entries
+     WHERE kind='task' AND done=0 AND due_at IS NOT NULL AND due_at < ?
+     ORDER BY due_at ASC`,
+    Date.now(),
+  );
+  return rows.map(rowToEntry);
+}
+
+/** 全部未完成待办（含无时间的） */
+export async function listOpenTasks(): Promise<Entry[]> {
+  const d = getDb();
+  const rows = await d.getAllAsync<any>(
+    `SELECT * FROM entries WHERE kind='task' AND done=0 ORDER BY due_at IS NULL, due_at ASC`,
+  );
+  return rows.map(rowToEntry);
+}
+
+/** 本周待办数据：今日起 7 天窗口内未完成 + 今天已完成（划线展示，次日消失）。
+ *  逾期未完成的不再进本周待办（用户决策 2026-09-01）；仍可在搜索/备忘录中找到。 */
+export async function listWeekTasks(): Promise<Entry[]> {
+  const d = getDb();
+  const startOfDay = startOfToday();
+  const windowEnd = startOfDay + 7 * 24 * 3600 * 1000;
+  const rows = await d.getAllAsync<any>(
+    `SELECT * FROM entries
+     WHERE kind='task' AND due_at IS NOT NULL AND (
+       (done = 0 AND due_at >= ? AND due_at < ?)
+       OR (done = 1 AND done_at >= ?)
+     )
+     ORDER BY due_at ASC`,
+    startOfDay, windowEnd, startOfDay,
+  );
+  return rows.map(rowToEntry);
+}
+
+/** 长期待办：7 天窗口之后的未完成待办，升序 */
+export async function listLongTermTasks(): Promise<Entry[]> {
+  const d = getDb();
+  const windowEnd = startOfToday() + 7 * 24 * 3600 * 1000;
+  const rows = await d.getAllAsync<any>(
+    `SELECT * FROM entries
+     WHERE kind='task' AND done=0 AND due_at IS NOT NULL AND due_at >= ?
+     ORDER BY due_at ASC`,
+    windowEnd,
+  );
+  return rows.map(rowToEntry);
+}
+
+/** 总记录数（我的页统计行） */
+export async function countEntries(): Promise<number> {
+  const d = getDb();
+  const r = await d.getFirstAsync<any>('SELECT COUNT(*) AS n FROM entries');
+  return r?.n ?? 0;
+}
+
+/** 最早一条记录的时间（我的页「已陪伴 N 天」起算点） */
+export async function firstEntryAt(): Promise<number | null> {
+  const d = getDb();
+  const r = await d.getFirstAsync<any>('SELECT MIN(created_at) AS first FROM entries');
+  return r?.first ?? null;
+}
+
+/** 近 N 天活跃主题（供理解引擎判断"新话题还是已有主题更新"） */
+export async function listActiveTopics(
+  days = 180,
+  limit = 100,
+): Promise<{ topic: string; count: number; latestText: string }[]> {
+  const d = getDb();
+  const since = Date.now() - days * 24 * 3600 * 1000;
+  const safeLimit = Math.max(1, Math.min(limit, 100));
+  const rows = await d.getAllAsync<any>(
+    `SELECT e.topic, COUNT(*) AS cnt, MAX(e.created_at) AS latest,
+       (SELECT e2.raw_text FROM entries e2 WHERE e2.topic = e.topic
+        ORDER BY e2.created_at DESC LIMIT 1) AS latest_text
+     FROM entries e WHERE e.topic IS NOT NULL AND e.created_at >= ?
+     GROUP BY e.topic
+     ORDER BY latest DESC LIMIT ?`,
+    since, safeLimit,
+  );
+  return rows.map((r: any) => ({ topic: r.topic, count: r.cnt, latestText: r.latest_text ?? '' }));
+}
+
+/** 主题分组视图 */
+export async function listTopicGroups(limit = 200): Promise<TopicGroup[]> {
+  const d = getDb();
+  const [rows, preferenceRows] = await Promise.all([
+    d.getAllAsync<any>(
+      `SELECT * FROM entries WHERE topic IS NOT NULL ORDER BY created_at DESC LIMIT ?`,
+      limit,
+    ),
+    d.getAllAsync<{ topic: string; pinned_at: number | null }>(
+      'SELECT topic, pinned_at FROM topic_preferences WHERE pinned_at IS NOT NULL',
+    ),
+  ]);
+  const pinnedByTopic = new Map(preferenceRows.map((r) => [r.topic, r.pinned_at]));
+  const map = new Map<string, Entry[]>();
+  for (const r of rows) {
+    const t = r.topic;
+    if (!map.has(t)) map.set(t, []);
+    map.get(t)!.push(rowToEntry(r));
+  }
+  const groups: TopicGroup[] = [];
+  for (const [topic, entries] of map) {
+    groups.push({
+      topic,
+      entries,
+      latest: entries[0],
+      updatedAt: entries[0].createdAt,
+      pinnedAt: pinnedByTopic.get(topic) ?? null,
+    });
+  }
+  return sortTopicGroups(groups);
+}
+
+/** 非空主题的所有条目 */
+export async function listByTopic(topic: string): Promise<Entry[]> {
+  const d = getDb();
+  const rows = await d.getAllAsync<any>(
+    `SELECT * FROM entries WHERE topic=? ORDER BY created_at DESC`, topic,
+  );
+  return rows.map(rowToEntry);
+}
+
+/** 主题重命名/合并 */
+export async function renameTopic(from: string, to: string): Promise<void> {
+  const d = getDb();
+  const target = to.trim();
+  if (!target || target === from) return;
+
+  await d.withExclusiveTransactionAsync(async (txn) => {
+    const pins = await txn.getAllAsync<{ pinned_at: number | null }>(
+      'SELECT pinned_at FROM topic_preferences WHERE topic IN (?, ?)',
+      from,
+      target,
+    );
+    const pinnedAt = pins.reduce<number | null>(
+      (latest, row) => row.pinned_at !== null && (latest === null || row.pinned_at > latest)
+        ? row.pinned_at
+        : latest,
+      null,
+    );
+
+    await txn.runAsync('UPDATE entries SET topic=? WHERE topic=?', target, from);
+    await txn.runAsync('DELETE FROM topic_preferences WHERE topic IN (?, ?)', from, target);
+    if (pinnedAt !== null) {
+      await txn.runAsync(
+        'INSERT INTO topic_preferences (topic, pinned_at) VALUES (?, ?)',
+        target,
+        pinnedAt,
+      );
+    }
+  });
+}
+
+/** 置顶或取消置顶一个聚合主题。重复操作保持幂等。 */
+export async function setTopicPinned(topic: string, pinned: boolean): Promise<void> {
+  const d = getDb();
+  if (pinned) {
+    await d.runAsync(
+      `INSERT INTO topic_preferences (topic, pinned_at) VALUES (?, ?)
+       ON CONFLICT(topic) DO UPDATE SET pinned_at=excluded.pinned_at`,
+      topic,
+      Date.now(),
+    );
+  } else {
+    await d.runAsync('DELETE FROM topic_preferences WHERE topic=?', topic);
+  }
+}
+
+function startOfToday(): number {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+/** 同步单条 entry 到 FTS（trigram 自动切词，中文无需分词器） */
+async function syncFts(id: string): Promise<void> {
+  const d = getDb();
+  const e = await getEntry(id);
+  if (!e) return;
+  // 先删旧
+  await d.runAsync('DELETE FROM entries_fts WHERE entry_id=?', id);
+  await d.runAsync(
+    `INSERT INTO entries_fts (entry_id, summary, raw_text, tags) VALUES (?, ?, ?, ?)`,
+    id, e.summary, e.rawText, e.tags.join(' '),
+  );
+}
+
+/** 全量重建 FTS（理解回填/恢复后调用） */
+export async function rebuildFts(): Promise<void> {
+  const d = getDb();
+  await d.runAsync('DELETE FROM entries_fts');
+  const rows = await d.getAllAsync<any>('SELECT * FROM entries');
+  for (const r of rows) {
+    const e = rowToEntry(r);
+    await d.runAsync(
+      `INSERT INTO entries_fts (entry_id, summary, raw_text, tags) VALUES (?, ?, ?, ?)`,
+      e.id, e.summary, e.rawText, e.tags.join(' '),
+    );
+  }
+}
+
+/* ---------------- Profile & Settings ---------------- */
+
+export async function getProfile(): Promise<Profile> {
+  const d = getDb();
+  const r = await d.getFirstAsync<any>('SELECT * FROM profile WHERE id=1');
+  if (!r) return DEFAULT_PROFILE;
+  return {
+    name: r.name,
+    goals: safeParse(r.goals),
+    avoid: safeParse(r.avoid),
+    notifyMorning: !!r.notify_morning,
+    notifyEvening: !!r.notify_evening,
+  };
+}
+
+export async function saveProfile(p: Profile): Promise<void> {
+  const d = getDb();
+  await d.runAsync(
+    `UPDATE profile SET name=?, goals=?, avoid=?, notify_morning=?, notify_evening=? WHERE id=1`,
+    p.name, JSON.stringify(p.goals), JSON.stringify(p.avoid),
+    p.notifyMorning ? 1 : 0, p.notifyEvening ? 1 : 0,
+  );
+}
+
+export async function getSettings(): Promise<Settings> {
+  const d = getDb();
+  const r = await d.getFirstAsync<any>('SELECT * FROM settings WHERE id=1');
+  if (!r) return DEFAULT_SETTINGS;
+  return {
+    llmEnabled: !!r.llm_enabled,
+    llmBaseUrl: r.llm_base_url,
+    llmKey: r.llm_key,
+    llmModel: r.llm_model,
+  };
+}
+
+export async function saveSettings(s: Settings): Promise<void> {
+  const d = getDb();
+  await d.runAsync(
+    `UPDATE settings SET llm_enabled=?, llm_base_url=?, llm_key=?, llm_model=? WHERE id=1`,
+    s.llmEnabled ? 1 : 0, s.llmBaseUrl, s.llmKey, s.llmModel,
+  );
+}
+
+/* ---------------- Export ---------------- */
+
+export async function exportMarkdown(): Promise<string> {
+  const d = getDb();
+  const rows = await d.getAllAsync<any>('SELECT * FROM entries ORDER BY created_at ASC');
+  const entries = rows.map(rowToEntry);
+  let md = '# 我的个人助手记录\n\n';
+  for (const e of entries) {
+    const ts = new Date(e.createdAt).toLocaleString('zh-CN');
+    const kindLabel = { task: '待办', idea: '想法', info: '信息' }[e.kind] ?? e.kind;
+    const doneLabel = e.done ? ' ✅完成' : '';
+    md += `## ${kindLabel}${doneLabel} · ${ts}\n\n`;
+    md += `> ${e.rawText}\n\n`;
+    if (e.summary !== e.rawText) md += `**理解**：${e.summary}\n\n`;
+    if (e.topic) md += `主题：${e.topic}\n\n`;
+    if (e.tags.length) md += `标签：${e.tags.join('、')}\n\n`;
+    if (e.dueAt) md += `时间：${new Date(e.dueAt).toLocaleString('zh-CN')}\n\n`;
+    md += '---\n\n';
+  }
+  return md;
+}

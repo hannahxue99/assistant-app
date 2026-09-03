@@ -1,0 +1,74 @@
+<svg viewBox="0 0 700 620" width="700" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'PingFang SC',sans-serif">
+  <rect x="15" y="10" width="300" height="600" rx="26" fill="#fff" stroke="#B4B2A9" stroke-width="0.5"/>
+  <text x="165" y="32" text-anchor="middle" font-size="11" fill="#888780">9:41</text>
+  <text x="31" y="60" font-size="18" font-weight="500" fill="#2C2C2A">主人</text>
+  <text x="31" y="80" font-size="11" fill="#888780">已陪伴 23 天 · 共 128 条记录</text>
+
+  <rect x="31" y="94" width="268" height="118" rx="8" fill="#F1EFE8"/>
+  <text x="41" y="114" font-size="13" font-weight="500" fill="#2C2C2A">画像 · 让助手更懂你</text>
+  <text x="41" y="134" font-size="11" fill="#888780">近期目标</text>
+  <text x="41" y="152" font-size="12" fill="#2C2C2A">学英语；每周跑步两次；读完三本书</text>
+  <text x="41" y="172" font-size="11" fill="#888780">想少做的事</text>
+  <text x="41" y="190" font-size="12" fill="#2C2C2A">熬夜；刷短视频</text>
+  <g transform="translate(279,102) scale(0.6)" fill="none" stroke="#888780" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></g>
+
+  <rect x="31" y="226" width="268" height="34" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="41" y="247" font-size="13" fill="#2C2C2A">理解引擎</text>
+  <text x="289" y="247" text-anchor="end" font-size="12" fill="#888780">已开启 ›</text>
+  <rect x="31" y="268" width="268" height="64" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="41" y="290" font-size="13" fill="#2C2C2A">早 8:00 每日一问</text>
+  <rect x="255" y="276" width="34" height="20" rx="10" fill="#185FA5"/>
+  <circle cx="279" cy="286" r="7" fill="#fff"/>
+  <text x="41" y="318" font-size="13" fill="#2C2C2A">晚 21:00 复盘提示</text>
+  <rect x="255" y="304" width="34" height="20" rx="10" fill="#D3D1C7"/>
+  <circle cx="265" cy="314" r="7" fill="#fff"/>
+  <rect x="31" y="344" width="268" height="34" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="41" y="365" font-size="13" fill="#2C2C2A">导出数据</text>
+  <text x="289" y="365" text-anchor="end" font-size="12" fill="#888780">Markdown ⤴</text>
+  <rect x="31" y="386" width="268" height="34" rx="8" fill="#F1EFE8"/>
+  <text x="41" y="407" font-size="13" fill="#5F5E5A">统计</text>
+  <text x="289" y="407" text-anchor="end" font-size="12" fill="#888780">128 条 · 23 天</text>
+
+  <line x1="31" y1="568" x2="299" y2="568" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="98" y="588" text-anchor="middle" font-size="11" fill="#888780">首页</text>
+  <text x="232" y="588" text-anchor="middle" font-size="11" font-weight="500" fill="#185FA5">我的</text>
+
+  <rect x="345" y="10" width="300" height="600" rx="26" fill="#fff" stroke="#B4B2A9" stroke-width="0.5"/>
+  <text x="361" y="42" font-size="12" fill="#185FA5">‹ 我的</text>
+  <text x="361" y="70" font-size="16" font-weight="500" fill="#2C2C2A">理解引擎</text>
+  <text x="361" y="92" font-size="11" fill="#888780">口语随手记被整理成待办、想法和信息</text>
+  <rect x="361" y="106" width="268" height="34" rx="8" fill="#F1EFE8"/>
+  <text x="371" y="127" font-size="13" fill="#2C2C2A">启用 LLM 理解</text>
+  <rect x="589" y="112" width="34" height="20" rx="10" fill="#185FA5"/>
+  <circle cx="613" cy="122" r="7" fill="#fff"/>
+  <text x="361" y="162" font-size="11" fill="#888780">API 地址（OpenAI 兼容）</text>
+  <rect x="361" y="170" width="268" height="32" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="371" y="190" font-size="12" fill="#5F5E5A">https://api.deepseek.com/v1</text>
+  <text x="361" y="224" font-size="11" fill="#888780">模型名</text>
+  <rect x="361" y="232" width="268" height="32" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="371" y="252" font-size="12" fill="#5F5E5A">deepseek-chat</text>
+  <text x="361" y="286" font-size="11" fill="#888780">API Key（仅存在本机）</text>
+  <rect x="361" y="294" width="268" height="32" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="371" y="314" font-size="12" fill="#5F5E5A">sk-••••••••••••</text>
+  <rect x="361" y="340" width="268" height="36" rx="8" fill="#185FA5"/>
+  <text x="495" y="362" text-anchor="middle" font-size="13" font-weight="500" fill="#fff">保存</text>
+  <text x="361" y="396" font-size="11" fill="#888780">关掉开关即退回纯规则模式，原文照记</text>
+
+  <rect x="470" y="10" width="220" height="600" rx="24" fill="#fff" stroke="#B4B2A9" stroke-width="0.5"/>
+  <text x="486" y="42" font-size="12" fill="#185FA5">‹ 我的</text>
+  <text x="486" y="68" font-size="16" font-weight="500" fill="#2C2C2A">编辑画像</text>
+  <text x="486" y="94" font-size="11" fill="#888780">近期目标</text>
+  <rect x="486" y="102" width="188" height="66" rx="8" fill="#fff" stroke="#378ADD" stroke-width="1.5"/>
+  <text x="494" y="122" font-size="12" fill="#2C2C2A">学英语；每周跑步两</text>
+  <text x="494" y="140" font-size="12" fill="#2C2C2A">次；读完三本书|</text>
+  <text x="486" y="190" font-size="11" fill="#888780">想少做的事</text>
+  <rect x="486" y="198" width="188" height="46" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="494" y="218" font-size="12" fill="#2C2C2A">熬夜；刷短视频</text>
+  <rect x="486" y="258" width="188" height="34" rx="8" fill="#185FA5"/>
+  <text x="580" y="280" text-anchor="middle" font-size="13" font-weight="500" fill="#fff">保存画像</text>
+  <text x="580" y="312" text-anchor="middle" font-size="11" fill="#888780">不保存退出，改动丢弃</text>
+
+  <text x="120" y="616" text-anchor="middle" font-size="11" fill="#888780">我的页</text>
+  <text x="495" y="616" text-anchor="middle" font-size="11" fill="#888780">理解引擎子页</text>
+  <text x="580" y="616" text-anchor="middle" font-size="11" fill="#888780">画像编辑态</text>
+</svg>

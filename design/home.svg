@@ -1,0 +1,81 @@
+<svg viewBox="0 0 660 620" width="660" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'PingFang SC',sans-serif">
+  <rect x="15" y="10" width="300" height="600" rx="26" fill="#fff" stroke="#B4B2A9" stroke-width="0.5"/>
+  <text x="165" y="32" text-anchor="middle" font-size="11" fill="#888780">9:41</text>
+  <text x="31" y="54" font-size="11" fill="#5F5E5A">8月31日 星期一 · 今天</text>
+  <text x="31" y="82" font-size="18" font-weight="500" fill="#2C2C2A">本周待办</text>
+  <rect x="31" y="94" width="268" height="30" rx="8" fill="#FAEEDA" stroke="#EF9F27" stroke-width="0.5"/>
+  <text x="41" y="113" font-size="13" font-weight="500" fill="#854F0B">8/31 周一 14:00</text>
+  <text x="160" y="113" font-size="13" fill="#2C2C2A">交方案初稿</text>
+  <rect x="31" y="130" width="268" height="30" rx="8" fill="#F1EFE8"/>
+  <text x="41" y="149" font-size="13" font-weight="500" fill="#185FA5">9/2 周三 15:00</text>
+  <text x="160" y="149" font-size="13" fill="#2C2C2A">跟小王碰方案</text>
+  <rect x="31" y="166" width="268" height="30" rx="8" fill="#F1EFE8"/>
+  <text x="41" y="185" font-size="13" font-weight="500" fill="#185FA5">9/4 周五 09:00</text>
+  <text x="160" y="185" font-size="13" fill="#2C2C2A">还书</text>
+  <text x="31" y="226" font-size="14" font-weight="500" fill="#5F5E5A">长期待办</text>
+  <rect x="31" y="236" width="268" height="30" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="41" y="255" font-size="13" font-weight="500" fill="#5F5E5A">9/15 周二 10:00</text>
+  <text x="160" y="255" font-size="13" fill="#2C2C2A">护照到期前换发</text>
+  <rect x="31" y="272" width="268" height="30" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="41" y="291" font-size="13" font-weight="500" fill="#5F5E5A">10/1 周四 全天</text>
+  <text x="160" y="291" font-size="13" fill="#2C2C2A">续车险</text>
+  <text x="31" y="330" font-size="18" font-weight="500" fill="#2C2C2A">主人的备忘录</text>
+  <rect x="31" y="342" width="268" height="30" rx="15" fill="#F1EFE8"/>
+  <rect x="34" y="345" width="131" height="24" rx="12" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="99" y="361" text-anchor="middle" font-size="12" font-weight="500" fill="#2C2C2A">聚合</text>
+  <text x="232" y="361" text-anchor="middle" font-size="12" fill="#5F5E5A">用户原声</text>
+  <rect x="31" y="382" width="268" height="62" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="41" y="402" font-size="13" font-weight="500" fill="#854F0B">#孩子英语</text>
+  <text x="289" y="402" text-anchor="end" font-size="11" fill="#888780">12 条</text>
+  <text x="41" y="420" font-size="13" fill="#2C2C2A">学到第 50 本绘本</text>
+  <text x="41" y="436" font-size="11" fill="#888780">最新 08-30 18:05</text>
+  <rect x="31" y="452" width="268" height="62" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="41" y="472" font-size="13" font-weight="500" fill="#854F0B">#装修</text>
+  <text x="289" y="472" text-anchor="end" font-size="11" fill="#888780">8 条</text>
+  <text x="41" y="490" font-size="13" fill="#2C2C2A">定了瓷砖，下周三送货</text>
+  <text x="41" y="506" font-size="11" fill="#888780">最新 08-29 07:58</text>
+  <rect x="31" y="524" width="268" height="34" rx="12" fill="#fff" stroke="#888780" stroke-width="0.5"/>
+  <text x="43" y="545" font-size="13" fill="#888780">记点/改点什么…</text>
+  <g transform="translate(270,531) scale(0.75)" fill="none" stroke="#185FA5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></g>
+  <line x1="31" y1="570" x2="299" y2="570" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="98" y="590" text-anchor="middle" font-size="11" font-weight="500" fill="#185FA5">首页</text>
+  <text x="232" y="590" text-anchor="middle" font-size="11" fill="#888780">我的</text>
+
+  <rect x="345" y="10" width="300" height="600" rx="26" fill="#fff" stroke="#B4B2A9" stroke-width="0.5"/>
+  <text x="495" y="32" text-anchor="middle" font-size="11" fill="#888780">9:41</text>
+  <text x="361" y="54" font-size="11" fill="#5F5E5A">8月31日 星期一 · 今天</text>
+  <text x="361" y="82" font-size="18" font-weight="500" fill="#2C2C2A">本周待办</text>
+  <rect x="361" y="94" width="268" height="30" rx="8" fill="#FAEEDA" stroke="#EF9F27" stroke-width="0.5"/>
+  <text x="371" y="113" font-size="13" font-weight="500" fill="#854F0B">8/31 周一 14:00</text>
+  <text x="490" y="113" font-size="13" fill="#2C2C2A">交方案初稿</text>
+  <rect x="361" y="130" width="268" height="30" rx="8" fill="#F1EFE8"/>
+  <text x="371" y="149" font-size="13" font-weight="500" fill="#185FA5">9/2 周三 15:00</text>
+  <text x="490" y="149" font-size="13" fill="#2C2C2A">跟小王碰方案</text>
+  <rect x="361" y="166" width="268" height="30" rx="8" fill="#F1EFE8"/>
+  <text x="371" y="185" font-size="13" font-weight="500" fill="#185FA5">9/4 周五 09:00</text>
+  <text x="490" y="185" font-size="13" fill="#2C2C2A">还书</text>
+  <text x="361" y="226" font-size="14" font-weight="500" fill="#5F5E5A">长期待办</text>
+  <rect x="361" y="236" width="268" height="30" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="371" y="255" font-size="13" font-weight="500" fill="#5F5E5A">9/15 周二 10:00</text>
+  <text x="490" y="255" font-size="13" fill="#2C2C2A">护照到期前换发</text>
+  <text x="361" y="292" font-size="18" font-weight="500" fill="#2C2C2A">主人的备忘录</text>
+  <rect x="361" y="304" width="268" height="30" rx="15" fill="#F1EFE8"/>
+  <rect x="496" y="307" width="131" height="24" rx="12" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="428" y="323" text-anchor="middle" font-size="12" fill="#5F5E5A">聚合</text>
+  <text x="561" y="323" text-anchor="middle" font-size="12" font-weight="500" fill="#2C2C2A">用户原声</text>
+  <rect x="361" y="342" width="268" height="46" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="371" y="360" font-size="12" fill="#888780" font-family="monospace">08-31 09:12:04</text>
+  <text x="371" y="378" font-size="13" fill="#2C2C2A">买了牛奶和鸡蛋</text>
+  <rect x="361" y="394" width="268" height="46" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="371" y="412" font-size="12" fill="#888780" font-family="monospace">08-30 22:47:31</text>
+  <text x="371" y="430" font-size="13" fill="#2C2C2A">明天下午跟小王碰一下方案的事别忘了</text>
+  <rect x="361" y="446" width="268" height="46" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="371" y="464" font-size="12" fill="#888780" font-family="monospace">08-30 18:05:52</text>
+  <text x="371" y="482" font-size="13" fill="#2C2C2A">孩子英语学到第50本绘本了</text>
+  <rect x="361" y="498" width="268" height="46" rx="8" fill="#fff" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="371" y="516" font-size="12" fill="#888780" font-family="monospace">08-30 07:58:10</text>
+  <text x="371" y="534" font-size="13" fill="#2C2C2A">装修定了瓷砖下周三送货</text>
+  <line x1="361" y1="570" x2="629" y2="570" stroke="#D3D1C7" stroke-width="0.5"/>
+  <text x="428" y="590" text-anchor="middle" font-size="11" font-weight="500" fill="#185FA5">首页</text>
+  <text x="562" y="590" text-anchor="middle" font-size="11" fill="#888780">我的</text>
+</svg>

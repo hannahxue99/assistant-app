@@ -1,0 +1,148 @@
+<title>图标预览</title>
+<style>
+  :root{
+    --paper:#F1EFE8; --ink:#2C2C2A; --soft:#5F5E5A; --border:#D3D1C7;
+    --amber:#EF9F27; --blue:#185FA5;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#1C1B19; --ink:#ECE9DF; --soft:#B8B4A7; --border:#3A3833;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#1C1B19; --ink:#ECE9DF; --soft:#B8B4A7; --border:#3A3833;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+    padding:3rem 2rem 5rem;
+  }
+  .wrap{max-width:900px;margin:0 auto;}
+  h1{font-size:2rem;margin:0 0 .3rem;font-weight:700;letter-spacing:-.01em;}
+  .lede{color:var(--soft);margin:0 0 2.5rem;font-size:1.05rem;}
+  .group{margin-bottom:3rem;}
+  .group-h{
+    font-size:.78rem;letter-spacing:.2em;text-transform:uppercase;color:var(--soft);
+    border-bottom:1px solid var(--border);padding-bottom:.6rem;margin-bottom:1.5rem;
+  }
+  .row{display:flex;flex-wrap:wrap;gap:2.5rem;align-items:flex-end;}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:.7rem;}
+  .stage{
+    width:180px;height:180px;border-radius:34px;display:grid;place-items:center;
+    background:#FFFFFF; box-shadow:inset 0 0 0 1px var(--border);
+  }
+  .stage.dark{background:#1C1B19; box-shadow:inset 0 0 0 1px #3A3833;}
+  .stage img{width:150px;height:150px;}
+  .name{font-size:.95rem;font-weight:600;color:var(--ink);}
+  .meta{font-size:.78rem;color:var(--soft);font-variant-numeric:tabular-nums;}
+  .tile{width:60px;height:60px;border-radius:14px;display:grid;place-items:center;flex:none;}
+  .tile.light{background:#FFFFFF;box-shadow:inset 0 0 0 1px var(--border);}
+  .tile.dark{background:#1C1B19;box-shadow:inset 0 0 0 1px #3A3833;}
+  .tile img{width:52px;height:52px;}
+  .realgrid{display:flex;flex-wrap:wrap;gap:2rem;}
+  .real-col{display:flex;flex-direction:column;align-items:center;gap:.6rem;}
+  .real-label{font-size:.78rem;color:var(--soft);}
+  .real-name{font-size:.95rem;font-weight:600;margin-top:.1rem;}
+  .dark-checker{
+    background:
+      repeating-conic-gradient(#E8E4D6 0% 25%, transparent 0% 50%)
+      50% / 20px 20px;
+    background-color:#FFFFFF;
+  }
+  code{font-family:"SF Mono",ui-monospace,monospace;font-size:.82rem;color:var(--soft);background:color-mix(in srgb,var(--ink) 6%,transparent);padding:.12rem .4rem;border-radius:4px;}
+</style>
+<div class="wrap">
+  <h1>图标预览</h1>
+  <p class="lede">折角备忘卡 · 纯白底 + 颗粒纸感 + 琥珀勾选。六张成品图与两处落地场景。</p>
+
+  <div class="group">
+    <div class="group-h">主图标 / 启动页</div>
+    <div class="row">
+      <div class="cell">
+        <div class="stage"><img src="../assets/images/icon.png" alt="icon"></div>
+        <div class="name">icon.png</div>
+        <div class="meta">1024×1024 · iOS / 通用</div>
+      </div>
+      <div class="cell">
+        <div class="stage"><img src="../assets/images/splash-icon.png" alt="splash"></div>
+        <div class="name">splash-icon.png</div>
+        <div class="meta">1024×1024 · 启动页（白底上浮卡片）</div>
+      </div>
+      <div class="cell">
+        <div class="stage"><img src="../assets/images/favicon.png" alt="favicon"></div>
+        <div class="name">favicon.png</div>
+        <div class="meta">48×48 · 浏览器标签</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-h">Android adaptive</div>
+    <div class="row">
+      <div class="cell">
+        <div class="stage"><img src="../assets/images/android-icon-foreground.png" alt="fg"></div>
+        <div class="name">foreground</div>
+        <div class="meta">512×512 · 透明底</div>
+      </div>
+      <div class="cell">
+        <div class="stage dark-checker"><img src="../assets/images/android-icon-background.png" alt="bg"></div>
+        <div class="name">background</div>
+        <div class="meta">512×512 · 纯白底</div>
+      </div>
+      <div class="cell">
+        <div class="stage dark-checker"><img src="../assets/images/android-icon-monochrome.png" alt="mono"></div>
+        <div class="name">monochrome</div>
+        <div class="meta">432×432 · Android 13 主题图标</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-h">桌面 60px（真实尺寸 · 浅/深底）</div>
+    <div class="realgrid">
+      <div class="real-col">
+        <div style="display:flex;gap:.6rem;">
+          <div class="tile light"><img src="../assets/images/icon.png"></div>
+          <div class="tile dark"><img src="../assets/images/icon.png"></div>
+        </div>
+        <div class="real-name">icon</div>
+      </div>
+      <div class="real-col">
+        <div style="display:flex;gap:.6rem;">
+          <div class="tile light"><img src="../assets/images/splash-icon.png"></div>
+          <div class="tile dark"><img src="../assets/images/splash-icon.png"></div>
+        </div>
+        <div class="real-name">splash-icon</div>
+      </div>
+      <div class="real-col">
+        <div style="display:flex;gap:.6rem;">
+          <div class="tile light"><img src="../assets/images/android-icon-foreground.png"></div>
+          <div class="tile dark"><img src="../assets/images/android-icon-foreground.png"></div>
+        </div>
+        <div class="real-name">foreground</div>
+      </div>
+      <div class="real-col">
+        <div style="display:flex;gap:.6rem;">
+          <div class="tile light"><img src="../assets/images/android-icon-monochrome.png"></div>
+          <div class="tile dark"><img src="../assets/images/android-icon-monochrome.png"></div>
+        </div>
+        <div class="real-name">monochrome</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-h">文件清单</div>
+    <div style="display:grid;gap:.5rem;color:var(--soft);font-size:.9rem;">
+      <div><code>assets/images/icon.png</code> — iOS 主图标</div>
+      <div><code>assets/images/splash-icon.png</code> — 启动页</div>
+      <div><code>assets/images/favicon.png</code> — Web favicon</div>
+      <div><code>assets/images/android-icon-background.png</code> — Android 背景层</div>
+      <div><code>assets/images/android-icon-foreground.png</code> — Android 前景层</div>
+      <div><code>assets/images/android-icon-monochrome.png</code> — Android 13+ 主题图标</div>
+      <div><code>app.json</code> — adaptiveIcon / splash 背景已设为 <code>#FFFFFF</code></div>
+    </div>
+  </div>
+</div>

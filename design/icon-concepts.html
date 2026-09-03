@@ -1,0 +1,311 @@
+<title>图标概念 · 口袋秘书</title>
+<style>
+  /* ---- token system: warm paper ---- */
+  :root{
+    --paper:#F1EFE8;
+    --paper-deep:#E8E4D6;
+    --paper-soft:#F7F5EE;
+    --ink:#2C2C2A;
+    --ink-soft:#5F5E5A;
+    --ink-faint:#888780;
+    --amber:#EF9F27;
+    --amber-deep:#854F0B;
+    --blue:#185FA5;
+    --border:#D3D1C7;
+    --ground:var(--paper);
+    --fg:var(--ink);
+    --fg-soft:var(--ink-soft);
+    --surface:var(--paper-soft);
+    --rule:var(--border);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#1C1B19;
+      --paper-deep:#2A2823;
+      --paper-soft:#232220;
+      --ink:#ECE9DF;
+      --ink-soft:#B8B4A7;
+      --ink-faint:#8A877E;
+      --amber:#F2A93A;
+      --amber-deep:#E8C77A;
+      --blue:#6EA8DC;
+      --border:#3A3833;
+      --ground:#1C1B19;
+      --fg:#ECE9DF;
+      --fg-soft:#B8B4A7;
+      --surface:#232220;
+      --rule:#3A3833;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#1C1B19; --paper-deep:#2A2823; --paper-soft:#232220;
+    --ink:#ECE9DF; --ink-soft:#B8B4A7; --ink-faint:#8A877E;
+    --amber:#F2A93A; --amber-deep:#E8C77A; --blue:#6EA8DC;
+    --border:#3A3833; --ground:#1C1B19; --fg:#ECE9DF; --fg-soft:#B8B4A7;
+    --surface:#232220; --rule:#3A3833;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--ground);
+    color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+    font-size:16px;line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    padding:0 0 4rem;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 2rem;}
+  .display{
+    font-family:"Noto Serif SC",Georgia,serif;
+    font-weight:700;
+    letter-spacing:-.01em;
+    text-wrap:balance;
+  }
+  /* ---- header ---- */
+  header{padding:4.5rem 0 3rem;border-bottom:1px solid var(--rule);}
+  .eyebrow{
+    font-size:.78rem;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-faint);font-variant-numeric:tabular-nums;margin-bottom:1rem;
+  }
+  h1.display{font-size:clamp(2.6rem,6vw,4.2rem);line-height:1.04;margin:0 0 1.25rem;}
+  .lede{font-size:1.18rem;color:var(--fg-soft);max-width:46ch;margin:0;}
+  .palette{display:flex;gap:.5rem;margin-top:1.8rem;}
+  .sw{width:30px;height:30px;border-radius:7px;border:1px solid var(--rule);}
+  .palette span{font-size:.72rem;color:var(--ink-faint);align-self:flex-end;margin-bottom:.2rem;}
+  /* ---- section ---- */
+  section{padding:3rem 0 0;}
+  .sec-h{
+    font-size:.82rem;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--ink-faint);font-variant-numeric:tabular-nums;
+    display:flex;align-items:baseline;gap:1rem;margin-bottom:1.6rem;
+  }
+  .sec-h::after{content:"";flex:1;height:1px;background:var(--rule);}
+  /* ---- real-size strip ---- */
+  .realgrid{display:flex;flex-wrap:wrap;gap:2rem 3rem;align-items:flex-end;}
+  .real-col{display:flex;flex-direction:column;align-items:center;gap:.7rem;}
+  .real-row{display:flex;gap:.6rem;align-items:center;}
+  .tile{width:60px;height:60px;border-radius:14px;display:grid;place-items:center;flex:none;}
+  .tile.light{background:#F1EFE8;box-shadow:inset 0 0 0 1px #D3D1C7;}
+  .tile.dark{background:#1C1B19;box-shadow:inset 0 0 0 1px #2A2823;}
+  .tile svg{width:100%;height:100%;}
+  .real-label{font-size:.78rem;color:var(--ink-faint);font-variant-numeric:tabular-nums;}
+  .real-name{font-family:"Noto Serif SC",serif;font-weight:500;color:var(--fg);font-size:.95rem;margin-top:.15rem;}
+  /* ---- concept grid ---- */
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1.5rem;}
+  @media (max-width:720px){.grid{grid-template-columns:1fr;}}
+  .card{
+    background:var(--surface);border:1px solid var(--rule);border-radius:18px;
+    padding:1.8rem;display:flex;flex-direction:column;gap:1.1rem;
+    transition:transform .25s ease, border-color .25s ease;
+  }
+  .card:hover{transform:translateY(-3px);border-color:var(--amber);}
+  @media (prefers-reduced-motion:reduce){.card{transition:none;}.card:hover{transform:none;}}
+  .card-stage{
+    height:230px;border-radius:14px;display:grid;place-items:center;
+    background:
+      repeating-linear-gradient(0deg, transparent 0 22px, color-mix(in srgb, var(--rule) 35%, transparent) 22px 23px),
+      var(--paper);
+    position:relative;overflow:hidden;
+  }
+  .card-stage svg{width:200px;height:200px;}
+  .card-no{
+    position:absolute;top:.7rem;left:.9rem;font-size:.72rem;letter-spacing:.18em;
+    color:var(--ink-faint);font-variant-numeric:tabular-nums;
+  }
+  .card-name{font-family:"Noto Serif SC",serif;font-weight:700;font-size:1.5rem;margin:0;display:flex;align-items:baseline;gap:.6rem;}
+  .card-meta{font-size:.78rem;color:var(--ink-faint);font-variant-numeric:tabular-nums;}
+  .card-why{color:var(--fg-soft);font-size:.96rem;margin:.1rem 0 0;line-height:1.55;}
+  .card-tag{
+    display:inline-block;font-size:.74rem;padding:.2rem .55rem;border-radius:99px;
+    background:color-mix(in srgb,var(--amber) 16%,transparent);color:var(--amber-deep);
+    border:1px solid color-mix(in srgb,var(--amber) 40%,transparent);
+    margin-top:.2rem;
+  }
+  /* ---- footer ---- */
+  footer{margin-top:3.5rem;padding-top:1.8rem;border-top:1px solid var(--rule);}
+  footer p{color:var(--fg-soft);font-size:.95rem;max-width:62ch;margin:0 0 .5rem;}
+  .pick{font-family:"Noto Serif SC",serif;font-weight:600;color:var(--fg);}
+  a.fab{color:var(--blue);}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&display=swap">
+
+<!-- ===== reusable icon defs ===== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- A · 折角备忘卡 -->
+    <symbol id="ic-fold" viewBox="0 0 120 120">
+      <defs>
+        <filter id="grain" x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" stitchTiles="stitch"/>
+          <feColorMatrix values="0 0 0 0 0.16  0 0 0 0 0.15  0 0 0 0 0.14  0 0 0 0.11 0"/>
+        </filter>
+      </defs>
+      <!-- card body -->
+      <rect x="26" y="30" width="68" height="62" rx="10" fill="#FFFFFF" stroke="#C9C6BA" stroke-width="1.6"/>
+      <!-- paper grain -->
+      <rect x="26" y="30" width="68" height="62" rx="10" fill="#FFFFFF" filter="url(#grain)" opacity="0.55"/>
+      <!-- folded corner (bigger, shows paper back) -->
+      <path d="M76 30 L94 30 L94 48 Z" fill="#E8E4D6"/>
+      <path d="M76 30 L94 48" stroke="#C9C6BA" stroke-width="1.4" fill="none"/>
+      <path d="M76 30 L76 32 L92 46" stroke="#FFFFFF" stroke-width="0.9" fill="none" opacity="0.7"/>
+      <!-- memo: title -->
+      <rect x="36" y="50" width="44" height="4" rx="2" fill="#4A4945"/>
+      <!-- todo row 1 (open) -->
+      <circle cx="40" cy="62" r="2.8" fill="#FFFFFF" stroke="#9A988E" stroke-width="1.3"/>
+      <rect x="47" y="60.5" width="30" height="3" rx="1.5" fill="#D3D1C7"/>
+      <!-- todo row 2 (done — amber) -->
+      <circle cx="40" cy="72" r="2.8" fill="#EF9F27"/>
+      <path d="M38.6 72 L40 73.4 L42 71" stroke="#FFFFFF" stroke-width="1.1" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="47" y="70.5" width="22" height="3" rx="1.5" fill="#D3D1C7"/>
+      <line x1="47" y1="72" x2="69" y2="72" stroke="#B8B4A7" stroke-width="1" opacity="0.8"/>
+      <!-- todo row 3 (open) -->
+      <circle cx="40" cy="82" r="2.8" fill="#FFFFFF" stroke="#9A988E" stroke-width="1.3"/>
+      <rect x="47" y="80.5" width="26" height="3" rx="1.5" fill="#D3D1C7"/>
+    </symbol>
+    <!-- B · 口袋探信 -->
+    <symbol id="ic-pocket" viewBox="0 0 120 120">
+      <!-- peeking note -->
+      <g transform="rotate(-5 60 38)">
+        <rect x="44" y="16" width="32" height="38" rx="4" fill="#FFFFFF" stroke="#D3D1C7" stroke-width="1.6"/>
+        <path d="M70 16 L76 16 L76 22 Z" fill="#E8E4D6"/>
+        <rect x="50" y="26" width="20" height="2.6" rx="1.3" fill="#E8E4D6"/>
+        <circle cx="60" cy="36" r="3" fill="#EF9F27"/>
+      </g>
+      <!-- pocket -->
+      <path d="M30 46 C30 40 35 38 40 38 L80 38 C85 38 90 40 90 46 L86 92 C86 96 82 98 78 98 L42 98 C38 98 34 96 34 92 Z"
+            fill="#2C2C2A"/>
+      <path d="M34 44 C34 41 37 40 40 40 L80 40 C83 40 86 41 86 44"
+            fill="none" stroke="#5F5E5A" stroke-width="1.4" stroke-dasharray="3 3"/>
+    </symbol>
+    <!-- C · 小本+铅笔 -->
+    <symbol id="ic-book" viewBox="0 0 120 120">
+      <rect x="30" y="28" width="56" height="66" rx="8" fill="#F7F5EE" stroke="#D3D1C7" stroke-width="1.6"/>
+      <circle cx="37" cy="40" r="1.3" fill="#5F5E5A"/>
+      <circle cx="37" cy="52" r="1.3" fill="#5F5E5A"/>
+      <circle cx="37" cy="64" r="1.3" fill="#5F5E5A"/>
+      <circle cx="37" cy="76" r="1.3" fill="#5F5E5A"/>
+      <rect x="46" y="44" width="32" height="3.4" rx="1.7" fill="#E8E4D6"/>
+      <rect x="46" y="52" width="22" height="3.4" rx="1.7" fill="#E8E4D6"/>
+      <!-- pencil, diagonal off corner -->
+      <g transform="rotate(42 84 30)">
+        <rect x="80.5" y="22" width="7" height="42" rx="1.5" fill="#EF9F27"/>
+        <rect x="80.5" y="60" width="7" height="4" fill="#5F5E5A"/>
+        <rect x="80.5" y="64" width="7" height="7" rx="1.5" fill="#E8B4A0"/>
+        <path d="M80.5 22 L87.5 22 L84 14 Z" fill="#2C2C2A"/>
+      </g>
+    </symbol>
+    <!-- D · 铃·浮现 -->
+    <symbol id="ic-bell" viewBox="0 0 120 120">
+      <!-- ding arcs -->
+      <path d="M48 24 Q45 19 40 19" fill="none" stroke="#185FA5" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M72 24 Q75 19 80 19" fill="none" stroke="#185FA5" stroke-width="2.4" stroke-linecap="round"/>
+      <!-- bell -->
+      <path d="M60 30 C52 30 47 37 47 46 L43 56 L77 56 L73 46 C73 37 68 30 60 30 Z" fill="#EF9F27"/>
+      <circle cx="60" cy="28" r="2.6" fill="#854F0B"/>
+      <rect x="44" y="56" width="32" height="4" rx="2" fill="#854F0B"/>
+      <circle cx="60" cy="64" r="3.2" fill="#854F0B"/>
+      <!-- note slip beneath -->
+      <g transform="rotate(-6 60 86)">
+        <rect x="22" y="66" width="76" height="40" rx="6" fill="#FFFFFF" stroke="#D3D1C7" stroke-width="1.6"/>
+        <rect x="32" y="78" width="42" height="3" rx="1.5" fill="#E8E4D6"/>
+        <rect x="32" y="86" width="28" height="3" rx="1.5" fill="#E8E4D6"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<header>
+  <div class="wrap">
+    <div class="eyebrow">图标概念 · v0</div>
+    <h1 class="display">口袋秘书，<br>该长什么样？</h1>
+    <p class="lede">四版插画风图标提案，沿用 app 内「温暖纸感」调色板。每版都从产品的世界取一个隐喻——记下、提醒、浮现、归档——并保证在 60px 桌面尺寸下仍可识别。</p>
+    <div class="palette" aria-label="调色板">
+      <div><div class="sw" style="background:#F1EFE8"></div><span>纸</span></div>
+      <div><div class="sw" style="background:#2C2C2A"></div><span>墨</span></div>
+      <div><div class="sw" style="background:#EF9F27"></div><span>琥珀</span></div>
+      <div><div class="sw" style="background:#185FA5"></div><span>蓝</span></div>
+      <div><div class="sw" style="background:#D3D1C7"></div><span>描边</span></div>
+    </div>
+  </div>
+</header>
+
+<section class="wrap">
+  <div class="sec-h">真实尺寸 · 桌面 60px</div>
+  <div class="realgrid">
+    <div class="real-col">
+      <div class="real-row">
+        <div class="tile light"><svg><use href="#ic-fold"/></svg></div>
+        <div class="tile dark"><svg><use href="#ic-fold"/></svg></div>
+      </div>
+      <div class="real-label">浅 / 深</div>
+      <div class="real-name">折角备忘卡</div>
+    </div>
+    <div class="real-col">
+      <div class="real-row">
+        <div class="tile light"><svg><use href="#ic-pocket"/></svg></div>
+        <div class="tile dark"><svg><use href="#ic-pocket"/></svg></div>
+      </div>
+      <div class="real-label">浅 / 深</div>
+      <div class="real-name">口袋探信</div>
+    </div>
+    <div class="real-col">
+      <div class="real-row">
+        <div class="tile light"><svg><use href="#ic-book"/></svg></div>
+        <div class="tile dark"><svg><use href="#ic-book"/></svg></div>
+      </div>
+      <div class="real-label">浅 / 深</div>
+      <div class="real-name">小本·铅笔</div>
+    </div>
+    <div class="real-col">
+      <div class="real-row">
+        <div class="tile light"><svg><use href="#ic-bell"/></svg></div>
+        <div class="tile dark"><svg><use href="#ic-bell"/></svg></div>
+      </div>
+      <div class="real-label">浅 / 深</div>
+      <div class="real-name">铃·浮现</div>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="sec-h">放大 · 细节</div>
+  <div class="grid">
+    <article class="card">
+      <div class="card-stage"><span class="card-no">A</span><svg viewBox="0 0 120 120"><use href="#ic-fold"/></svg></div>
+      <div>
+        <h2 class="card-name">折角备忘卡<span class="card-meta">— 记下</span></h2>
+        <p class="card-why">一张带颗粒的白纸卡，右上折角露纸背；内容是标题 + 三条带圆形勾选框的待办，中间那条琥珀色已勾选——正好呼应首页的圆形勾选框。「记下了、做完了」一眼读懂。</p>
+        <span class="card-tag">最稳 · 推荐主用</span>
+      </div>
+    </article>
+    <article class="card">
+      <div class="card-stage"><span class="card-no">B</span><svg viewBox="0 0 120 120"><use href="#ic-pocket"/></svg></div>
+      <div>
+        <h2 class="card-name">口袋探信<span class="card-meta">— 口袋里的</span></h2>
+        <p class="card-why">深色口袋里探出一张折角便签，琥珀点是备忘。直接图解产品名「口袋里的外置秘书」，人情味最足，对比强。</p>
+        <span class="card-tag">最有故事</span>
+      </div>
+    </article>
+    <article class="card">
+      <div class="card-stage"><span class="card-no">C</span><svg viewBox="0 0 120 120"><use href="#ic-book"/></svg></div>
+      <div>
+        <h2 class="card-name">小本·铅笔<span class="card-meta">— 备忘录</span></h2>
+        <p class="card-why">车缝线圈本搭一支琥珀铅笔。最经典的「备忘本」意象，稳妥中性，但与首页列表卡的视觉略有重复。</p>
+        <span class="card-tag">经典</span>
+      </div>
+    </article>
+    <article class="card">
+      <div class="card-stage"><span class="card-no">D</span><svg viewBox="0 0 120 120"><use href="#ic-bell"/></svg></div>
+      <div>
+        <h2 class="card-name">铃·浮现<span class="card-meta">— 提醒</span></h2>
+        <p class="card-why">琥珀小铃坐在便签上，上方两道蓝色 ding 弧线——「在对的时刻浮现」。强调提醒功能，但铃与备忘录的关联偏弱。</p>
+        <span class="card-tag">功能向</span>
+      </div>
+    </article>
+  </div>
+</section>
+
+<footer class="wrap">
+  <p class="pick">挑一个，我就把它落地成 <code>assets/images/icon.png</code> 与 <code>splash-icon.png</code>（1024 / 484，含深色与灰度变体），并同步 app.json 的 adaptive icon 配置。</p>
+  <p>没有满意的就说一声——比如想更抽象、想去掉琥珀点、想换成线描-only，我按你的意思改。</p>
+</footer>

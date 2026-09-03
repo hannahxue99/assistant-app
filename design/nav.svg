@@ -1,0 +1,37 @@
+<svg viewBox="0 0 680 392" width="680" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'PingFang SC',sans-serif">
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+<rect x="240" y="40" width="400" height="110" rx="16" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5" stroke-dasharray="4 3"/>
+<text x="258" y="60" font-size="12" fill="#5F5E5A">Stack 页面（Tab 之外，带返回）</text>
+<rect x="258" y="72" width="118" height="56" rx="8" fill="#fff" stroke="#888780" stroke-width="0.5"/>
+<text x="317" y="92" text-anchor="middle" font-size="14" font-weight="500" fill="#2C2C2A">用户原声详情</text>
+<text x="317" y="110" text-anchor="middle" font-size="12" fill="#5F5E5A">时间·标题·正文</text>
+<rect x="386" y="72" width="118" height="56" rx="8" fill="#fff" stroke="#888780" stroke-width="0.5"/>
+<text x="445" y="92" text-anchor="middle" font-size="14" font-weight="500" fill="#2C2C2A">主题详情页</text>
+<text x="445" y="110" text-anchor="middle" font-size="12" fill="#5F5E5A">最新状态·编辑</text>
+<rect x="514" y="72" width="104" height="56" rx="8" fill="#fff" stroke="#888780" stroke-width="0.5"/>
+<text x="566" y="92" text-anchor="middle" font-size="14" font-weight="500" fill="#2C2C2A">设置子页</text>
+<text x="566" y="110" text-anchor="middle" font-size="12" fill="#5F5E5A">引擎·通知·导出</text>
+<rect x="40" y="200" width="180" height="56" rx="8" fill="#E6F1FB" stroke="#378ADD" stroke-width="0.5"/>
+<text x="130" y="220" text-anchor="middle" font-size="14" font-weight="500" fill="#0C447C">首页</text>
+<text x="130" y="238" text-anchor="middle" font-size="12" fill="#185FA5">待办 + 备忘录 + 沉底记录</text>
+<rect x="460" y="200" width="180" height="56" rx="8" fill="#E6F1FB" stroke="#378ADD" stroke-width="0.5"/>
+<text x="550" y="220" text-anchor="middle" font-size="14" font-weight="500" fill="#0C447C">我的页</text>
+<text x="550" y="238" text-anchor="middle" font-size="12" fill="#185FA5">画像 + 设置入口</text>
+<path d="M165 200 C 190 170, 230 150, 262 130" fill="none" stroke="#378ADD" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="200" y="152" text-anchor="middle" font-size="12" fill="#185FA5">点原声行</text>
+<path d="M195 200 C 250 175, 360 150, 432 130" fill="none" stroke="#378ADD" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="330" y="152" text-anchor="middle" font-size="12" fill="#185FA5">点聚合主题卡</text>
+<path d="M560 200 C 563 175, 565 155, 566 130" fill="none" stroke="#378ADD" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="596" y="166" text-anchor="middle" font-size="12" fill="#185FA5">点入口</text>
+<path d="M130 256 L130 296" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+<path d="M550 256 L550 296" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+<rect x="40" y="300" width="600" height="52" rx="12" fill="#D3D1C7" stroke="#888780" stroke-width="0.5"/>
+<text x="130" y="326" text-anchor="middle" font-size="14" font-weight="500" fill="#2C2C2A">首页</text>
+<text x="550" y="326" text-anchor="middle" font-size="14" font-weight="500" fill="#2C2C2A">我的</text>
+<path d="M200 326 L480 326" fill="none" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+<text x="340" y="374" text-anchor="middle" font-size="12" fill="#5F5E5A">App 启动默认落在「首页」，打开即输入；两个 Tab 平级切换</text>
+</svg>
