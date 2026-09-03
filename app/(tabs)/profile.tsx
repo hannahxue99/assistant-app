@@ -208,6 +208,13 @@ export default function ProfileScreen() {
           <Text style={[styles.rowLabel, { color: theme.colors.textDim }]}>统计</Text>
           <Text style={styles.rowValue}>{total} 条 · {days} 天</Text>
         </View>
+
+        {__DEV__ ? (
+          <Pressable style={styles.row} onPress={() => router.push('/design-system')}>
+            <Text style={styles.rowLabel}>组件预览</Text>
+            <Text style={styles.rowValue}>开发工具 ›</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
