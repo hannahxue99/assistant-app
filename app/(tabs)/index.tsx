@@ -430,8 +430,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 1,
   },
-  // Ionicons' pin glyph points down-right by default; turn it to the Apple-style down-left direction.
-  pinIcon: { transform: [{ rotate: '90deg' }] },
+  // Keep the pin diagonally planted: cap at upper-right, point at lower-left.
+  pinIcon: { transform: [{ rotate: '45deg' }] },
   topicName: { fontSize: theme.font.body, fontWeight: '700', color: theme.colors.gold },
   topicCount: { fontSize: theme.font.small, color: theme.colors.textDim },
   topicSummary: { fontSize: theme.font.body, color: theme.colors.text },
