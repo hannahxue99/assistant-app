@@ -266,14 +266,14 @@ export default function HomeScreen() {
                       </Pressable>
                       <Pressable onPress={() => router.push(`/topic/${encodeURIComponent(g.topic)}`)}>
                         <Text style={styles.topicSummary} numberOfLines={2}>{g.latest.summary}</Text>
-                        <Text style={styles.topicTime}>最新 {g.latest.dueAt ? dateLabel(g.latest.dueAt) : logTimestamp(g.latest.createdAt)}</Text>
+                        <Text style={styles.topicTime}>{logTimestamp(g.latest.updatedAt)}</Text>
                       </Pressable>
                     </View>
                   ))}
                   {stream.map((e) => (
                     <View key={e.id} style={styles.streamCard}>
                       <Pressable onPress={() => router.push(`/entry/${e.id}`)}>
-                        <Text style={styles.tsMono}>{logTimestamp(e.createdAt)}</Text>
+                        <Text style={styles.tsMono}>{logTimestamp(e.updatedAt)}</Text>
                         <Text style={styles.streamText} numberOfLines={2}>{e.summary}</Text>
                       </Pressable>
                       {understandingFeedbackEnabled && e.parseStatus === 'pending' ? (
@@ -320,7 +320,7 @@ export default function HomeScreen() {
               ) : (
                 shownVoice.map((e) => (
                   <Pressable key={e.id} style={styles.streamCard} onPress={() => router.push(`/entry/${e.id}`)}>
-                    <Text style={styles.tsMono}>{logTimestamp(e.createdAt)}</Text>
+                    <Text style={styles.tsMono}>{logTimestamp(e.updatedAt)}</Text>
                     <Text style={styles.voiceText}>{e.rawText}</Text>
                   </Pressable>
                 ))

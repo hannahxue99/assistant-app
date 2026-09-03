@@ -29,6 +29,7 @@ export interface Entry {
   parseSource: ParseSource | null;
   correctedFrom: string | null; // 纠正前的理解结果快照（JSON）
   createdAt: number;          // 创建时间（ms）
+  updatedAt: number;          // 用户最后修改标题/内容的时间；未修改时等于 createdAt
   done: 0 | 1;                // 仅 task 有意义
   doneAt: number | null;
   source: EntrySource;

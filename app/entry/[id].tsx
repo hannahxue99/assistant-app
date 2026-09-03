@@ -18,6 +18,7 @@ import {
   syncEntryReminder,
 } from '../../src/engine/notifications';
 import { logTimestamp } from '../../src/engine/schedule';
+import { wasEntryEdited } from '../../src/engine/entry-time';
 import type { Entry } from '../../src/types';
 import { theme } from '../../src/theme';
 
@@ -121,7 +122,12 @@ export default function EntryDetailScreen() {
       </View>
       {entry && (
         <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.ts}>{logTimestamp(entry.createdAt)}</Text>
+          <View style={styles.timestamps}>
+            <Text style={styles.ts}>创建 {logTimestamp(entry.createdAt)}</Text>
+            {wasEntryEdited(entry) && (
+              <Text style={styles.ts}>编辑 {logTimestamp(entry.updatedAt)}</Text>
+            )}
+          </View>
           {editing ? (
             <>
               <TextInput
@@ -172,6 +178,7 @@ const styles = StyleSheet.create({
   },
   back: { fontSize: theme.font.body, color: theme.colors.accent },
   content: { padding: 16, gap: 12, flexGrow: 1 },
+  timestamps: { gap: 4 },
   ts: { fontSize: 13, color: theme.colors.textDim, fontFamily: 'Menlo' },
   title: { fontSize: 18, fontWeight: '600', color: theme.colors.text, lineHeight: 26 },
   body: { fontSize: 16, color: theme.colors.textDim, lineHeight: 26 },

@@ -47,6 +47,7 @@ export async function initDatabase(): Promise<void> {
       parse_source TEXT,
       corrected_from TEXT,
       created_at INTEGER NOT NULL,
+      updated_at INTEGER,
       done INTEGER NOT NULL DEFAULT 0,
       done_at INTEGER,
       source TEXT NOT NULL DEFAULT 'text'
@@ -97,6 +98,16 @@ export async function initDatabase(): Promise<void> {
       AND topic IN ('待办事项', '想法记录', '日常信息');
 
   `);
+
+  // 旧版本只有 created_at。先探测列再迁移，避免重复 ALTER 导致启动失败。
+  const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(entries)');
+  if (!columns.some((column) => column.name === 'updated_at')) {
+    await db.execAsync('ALTER TABLE entries ADD COLUMN updated_at INTEGER;');
+  }
+  await db.execAsync(`
+    UPDATE entries SET updated_at = created_at WHERE updated_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_entries_updated ON entries(updated_at);
+  `);
 }
 
 /** 供引擎层（如迁移）使用的薄查询助手 */
@@ -131,6 +142,7 @@ function rowToEntry(r: any): Entry {
     parseSource: r.parse_source,
     correctedFrom: r.corrected_from,
     createdAt: r.created_at,
+    updatedAt: r.updated_at ?? r.created_at,
     done: r.done,
     doneAt: r.done_at,
     source: r.source,
@@ -165,11 +177,11 @@ export async function insertEntry(input: NewEntryInput, parsed?: {
 
   await d.runAsync(
     `INSERT INTO entries (id, raw_text, kind, summary, due_at, remind_at, topic, tags, persons,
-       parse_status, parse_source, created_at, done, source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+       parse_status, parse_source, created_at, updated_at, done, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
     id, input.rawText, kind, summary, dueAt, dueAt, topic,
     JSON.stringify(tags), JSON.stringify(persons),
-    parseStatus, parseSource, createdAt, input.source,
+    parseStatus, parseSource, createdAt, createdAt, input.source,
   );
   await syncFts(id);
   return (await getEntry(id))!;
@@ -215,7 +227,7 @@ export async function setParseStatus(id: string, status: 'pending' | 'failed' | 
 export async function listParseFailed(limit = 50): Promise<Entry[]> {
   const d = getDb();
   const rows = await d.getAllAsync<any>(
-    `SELECT * FROM entries WHERE parse_status='failed' ORDER BY created_at DESC LIMIT ?`, limit,
+    `SELECT * FROM entries WHERE parse_status='failed' ORDER BY updated_at DESC LIMIT ?`, limit,
   );
   return rows.map(rowToEntry);
 }
@@ -236,7 +248,7 @@ export async function applyCorrection(
   const d = getDb();
   await d.runAsync(
     `UPDATE entries SET kind=?, summary=?, raw_text=?, due_at=?, remind_at=?, topic=?, tags=?,
-       parse_status='manual', corrected_from=?
+       parse_status='manual', corrected_from=?, updated_at=?
      WHERE id=?`,
     patch.kind ?? prev.kind,
     patch.summary ?? prev.summary,
@@ -245,7 +257,7 @@ export async function applyCorrection(
     patch.dueAt !== undefined ? patch.dueAt : prev.dueAt,
     patch.topic !== undefined ? patch.topic : prev.topic,
     JSON.stringify(patch.tags ?? prev.tags),
-    snapshot, id,
+    snapshot, Date.now(), id,
   );
   await syncFts(id);
   return getEntry(id);
@@ -295,7 +307,7 @@ export async function listEntries(filter?: EntryFilter, limit = 500): Promise<En
   }
 
   if (conds.length) sql += ' WHERE ' + conds.join(' AND ');
-  sql += ' ORDER BY created_at DESC LIMIT ?';
+  sql += ' ORDER BY updated_at DESC LIMIT ?';
   args.push(limit);
 
   const rows = await d.getAllAsync<any>(sql, ...args);
@@ -309,7 +321,7 @@ export async function listByKeyword(query: string, limit = 500): Promise<Entry[]
   const rows = await d.getAllAsync<any>(
     `SELECT * FROM entries
      WHERE raw_text LIKE ? OR summary LIKE ? OR tags LIKE ?
-     ORDER BY created_at DESC LIMIT ?`,
+     ORDER BY updated_at DESC LIMIT ?`,
     like, like, like, limit,
   );
   return rows.map(rowToEntry);
@@ -404,10 +416,10 @@ export async function listActiveTopics(
   const since = Date.now() - days * 24 * 3600 * 1000;
   const safeLimit = Math.max(1, Math.min(limit, 100));
   const rows = await d.getAllAsync<any>(
-    `SELECT e.topic, COUNT(*) AS cnt, MAX(e.created_at) AS latest,
+    `SELECT e.topic, COUNT(*) AS cnt, MAX(e.updated_at) AS latest,
        (SELECT e2.raw_text FROM entries e2 WHERE e2.topic = e.topic
-        ORDER BY e2.created_at DESC LIMIT 1) AS latest_text
-     FROM entries e WHERE e.topic IS NOT NULL AND e.created_at >= ?
+        ORDER BY e2.updated_at DESC LIMIT 1) AS latest_text
+     FROM entries e WHERE e.topic IS NOT NULL AND e.updated_at >= ?
      GROUP BY e.topic
      ORDER BY latest DESC LIMIT ?`,
     since, safeLimit,
@@ -420,7 +432,7 @@ export async function listTopicGroups(limit = 200): Promise<TopicGroup[]> {
   const d = getDb();
   const [rows, preferenceRows] = await Promise.all([
     d.getAllAsync<any>(
-      `SELECT * FROM entries WHERE topic IS NOT NULL ORDER BY created_at DESC LIMIT ?`,
+      `SELECT * FROM entries WHERE topic IS NOT NULL ORDER BY updated_at DESC LIMIT ?`,
       limit,
     ),
     d.getAllAsync<{ topic: string; pinned_at: number | null }>(
@@ -440,7 +452,7 @@ export async function listTopicGroups(limit = 200): Promise<TopicGroup[]> {
       topic,
       entries,
       latest: entries[0],
-      updatedAt: entries[0].createdAt,
+      updatedAt: entries[0].updatedAt,
       pinnedAt: pinnedByTopic.get(topic) ?? null,
     });
   }
@@ -451,7 +463,7 @@ export async function listTopicGroups(limit = 200): Promise<TopicGroup[]> {
 export async function listByTopic(topic: string): Promise<Entry[]> {
   const d = getDb();
   const rows = await d.getAllAsync<any>(
-    `SELECT * FROM entries WHERE topic=? ORDER BY created_at DESC`, topic,
+    `SELECT * FROM entries WHERE topic=? ORDER BY updated_at DESC`, topic,
   );
   return rows.map(rowToEntry);
 }
