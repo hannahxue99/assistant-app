@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520">
+  <style>
+    .title{font:600 22px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#2B2622}.label{font:600 15px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#2B2622}.body{font:14px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#2B2622}.small{font:12px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#8A837B}.warn{font:12px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#C05A4E}.action{font:600 12px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#E0733A}.phone{fill:#F6F3EE;stroke:#D8D1C8;stroke-width:1.5}.card{fill:#FFF;stroke:#E8E2D9}.topic{fill:#F8EFD9;stroke:#C99A2E}.banner{fill:#F9E8DD}.gold{fill:#C99A2E}
+  </style>
+  <rect width="1200" height="520" fill="#FBF9F6"/>
+  <text x="42" y="48" class="title">理解状态 · C 端呈现</text>
+
+  <g transform="translate(42 82)">
+    <text class="label">1. 正在整理</text>
+    <rect y="24" width="340" height="250" rx="24" class="phone"/>
+    <rect x="18" y="48" width="304" height="116" rx="13" class="card"/>
+    <text x="34" y="78" class="small">今天 10:32:18</text>
+    <text x="34" y="108" class="body">明天下午去医院，记得预约</text>
+    <circle cx="40" cy="139" r="6" fill="none" stroke="#8A837B" stroke-width="1.5" stroke-dasharray="12 8"/>
+    <text x="54" y="143" class="small">正在整理…</text>
+  </g>
+
+  <g transform="translate(430 82)">
+    <text class="label">2. 整理成功</text>
+    <rect y="24" width="340" height="250" rx="24" class="phone"/>
+    <rect x="18" y="48" width="304" height="116" rx="13" class="topic"/>
+    <text x="34" y="81" class="label gold">#牙医预约</text>
+    <text x="34" y="113" class="body">9 月 4 日下午预约牙医</text>
+    <text x="34" y="143" class="small">最新 今天 10:32</text>
+    <text x="18" y="204" class="small">不额外显示“成功”，结果本身即反馈</text>
+  </g>
+
+  <g transform="translate(818 82)">
+    <text class="label">3. 理解失败</text>
+    <rect y="24" width="340" height="250" rx="24" class="phone"/>
+    <rect x="18" y="48" width="304" height="116" rx="13" class="card"/>
+    <text x="34" y="78" class="small">今天 10:32:18</text>
+    <text x="34" y="108" class="body">明天下午去医院，记得预约</text>
+    <circle cx="39" cy="139" r="3" fill="#C05A4E"/>
+    <text x="49" y="143" class="warn">原文已保存，暂未整理</text>
+    <text x="278" y="143" class="action">重试</text>
+  </g>
+
+  <g transform="translate(42 405)">
+    <rect width="1116" height="62" rx="13" class="banner"/>
+    <text x="18" y="37" class="warn">多条消息暂未整理，原文均已安全保存</text>
+    <text x="1020" y="37" class="action">检查设置</text>
+  </g>
+  <text x="42" y="497" class="small">纯规则模式：C 端不显示状态提示</text>
+</svg>
