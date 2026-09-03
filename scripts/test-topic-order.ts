@@ -16,6 +16,7 @@ function entry(id: string, createdAt: number): Entry {
     parseSource: 'llm',
     correctedFrom: null,
     createdAt,
+    updatedAt: createdAt,
     done: 0,
     doneAt: null,
     source: 'text',
@@ -42,9 +43,9 @@ check(
   ['置顶旧', '普通新'],
 );
 check(
-  '多个置顶按最近置顶时间排序',
+  '多个置顶按最近内容更新时间排序，与置顶操作时间无关',
   sortTopicGroups([group('先置顶', 500, 100), group('后置顶', 100, 300)]).map((g) => g.topic),
-  ['后置顶', '先置顶'],
+  ['先置顶', '后置顶'],
 );
 check(
   '普通主题按最新消息排序',

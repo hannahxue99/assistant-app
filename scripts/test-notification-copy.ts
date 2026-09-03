@@ -8,7 +8,7 @@ function entry(id: string, dueAt: number | null, done: 0 | 1 = 0): Entry {
   return {
     id, rawText: id, summary: id, kind: 'task', dueAt, remindAt: dueAt,
     topic: null, tags: [], persons: [], parseStatus: 'ok', parseSource: 'rule',
-    correctedFrom: null, createdAt: NOW, done, doneAt: null, source: 'text',
+    correctedFrom: null, createdAt: NOW, updatedAt: NOW, done, doneAt: null, source: 'text',
   };
 }
 

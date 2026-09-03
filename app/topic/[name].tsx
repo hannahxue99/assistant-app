@@ -144,7 +144,7 @@ export default function TopicDetailScreen() {
             {e.rawText.trim() !== e.summary.trim() && (
               <Text style={styles.rawText}>{e.rawText}</Text>
             )}
-            <Text style={styles.ts}>{logTimestamp(e.createdAt)}</Text>
+            <Text style={styles.ts}>{logTimestamp(e.updatedAt)}</Text>
           </Pressable>
         ))}
       </ScrollView>

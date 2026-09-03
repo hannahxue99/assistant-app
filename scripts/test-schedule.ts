@@ -20,7 +20,7 @@ function entry(partial: Partial<Entry> & { id: string }): Entry {
   return {
     rawText: 'x', kind: 'task', summary: partial.id, dueAt: null, remindAt: null,
     topic: null, tags: [], persons: [], parseStatus: 'ok', parseSource: 'rule',
-    correctedFrom: null, createdAt: NOW, done: 0, doneAt: null, source: 'text',
+    correctedFrom: null, createdAt: NOW, updatedAt: NOW, done: 0, doneAt: null, source: 'text',
     ...partial,
   };
 }

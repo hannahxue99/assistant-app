@@ -43,7 +43,8 @@
     "test:schedule": "tsx scripts/test-schedule.ts",
     "test:notifications": "tsx scripts/test-notification-copy.ts",
     "test:understanding": "tsx scripts/test-understanding-feedback.ts",
-    "test:topics": "tsx scripts/test-topic-order.ts"
+    "test:topics": "tsx scripts/test-topic-order.ts",
+    "test:entry-time": "tsx scripts/test-entry-time.ts"
   },
   "private": true
 }
