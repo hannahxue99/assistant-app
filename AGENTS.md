@@ -12,5 +12,6 @@ For every new product or feature request, follow this sequence:
 3. Wait for the user to confirm the design and approach before changing production code.
 4. Implement code on a dedicated Git branch and deliver it through a PR. Do not overwrite or discard prior versions; preserve commit history so the change can be reviewed and rolled back.
 5. Run relevant automated checks and provide a concise change summary, test results, and PR information.
+6. After acceptance, capture reusable knowledge in the repository before closing the work. Record the product decision, root cause or key trade-off, pitfalls, reusable implementation pattern, verification method, and rollback point. Update the knowledge index so future work can discover it without relying on chat history.
 
 If the directory is not yet a Git repository or has no usable remote/PR target, stop before implementation and ask the user whether to initialize/connect one. Do not represent uncommitted workspace edits as a PR.
