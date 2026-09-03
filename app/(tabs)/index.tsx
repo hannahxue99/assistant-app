@@ -4,6 +4,7 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
 import { useCallback, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -223,23 +224,27 @@ export default function HomeScreen() {
                         >
                           <Text style={styles.topicName}>#{g.topic}</Text>
                         </Pressable>
-                        <View style={styles.topicActions}>
-                          <Text style={styles.topicCount}>{g.entries.length} 条</Text>
-                          <Pressable
-                            style={styles.pinButton}
-                            hitSlop={8}
-                            accessibilityRole="button"
-                            accessibilityLabel={g.pinnedAt !== null ? `取消置顶${g.topic}` : `置顶${g.topic}`}
-                            onPress={() => handleTopicPin(g)}
-                          >
-                            <Ionicons
-                              name={g.pinnedAt !== null ? 'pin' : 'pin-outline'}
-                              size={17}
-                              color={g.pinnedAt !== null ? theme.colors.gold : theme.colors.textDim}
-                            />
-                          </Pressable>
-                        </View>
+                        <Text style={styles.topicCount}>{g.entries.length} 条</Text>
                       </View>
+                      <Pressable
+                        style={styles.pinButton}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: g.pinnedAt !== null }}
+                        accessibilityLabel={g.pinnedAt !== null ? `取消置顶${g.topic}` : `置顶${g.topic}`}
+                        onPress={() => handleTopicPin(g)}
+                      >
+                        <SymbolView
+                          name={{
+                            ios: g.pinnedAt !== null ? 'pin.fill' : 'pin',
+                            android: 'push_pin',
+                            web: 'push_pin',
+                          }}
+                          size={19}
+                          weight="regular"
+                          tintColor={g.pinnedAt !== null ? theme.colors.gold : theme.colors.textDim}
+                          resizeMode="scaleAspectFit"
+                        />
+                      </Pressable>
                       <Pressable onPress={() => router.push(`/topic/${encodeURIComponent(g.topic)}`)}>
                         <Text style={styles.topicSummary} numberOfLines={2}>{g.latest.summary}</Text>
                         <Text style={styles.topicTime}>最新 {g.latest.dueAt ? dateLabel(g.latest.dueAt) : logTimestamp(g.latest.createdAt)}</Text>
@@ -410,6 +415,7 @@ const styles = StyleSheet.create({
   },
   empty: { fontSize: theme.font.body, color: theme.colors.textDim, paddingVertical: 24, textAlign: 'center' },
   topicCard: {
+    position: 'relative',
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.input,
     borderWidth: 1,
@@ -418,10 +424,18 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   topicCardPinned: { borderColor: theme.colors.gold, backgroundColor: theme.colors.goldSoft },
-  topicHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  topicHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingRight: 32 },
   topicTitleTap: { flex: 1, paddingVertical: 2 },
-  topicActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  pinButton: { padding: 3 },
+  pinButton: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
   topicName: { fontSize: theme.font.body, fontWeight: '700', color: theme.colors.gold },
   topicCount: { fontSize: theme.font.small, color: theme.colors.textDim },
   topicSummary: { fontSize: theme.font.body, color: theme.colors.text },

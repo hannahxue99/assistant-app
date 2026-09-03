@@ -5,12 +5,12 @@
  * - 删除 = 正文下方居中小字链接（仍二次确认）
  * - 编辑经 applyCorrection 落库（快照入 correctedFrom）；topic 不动 → 聚合归属不变
  */
-import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
+import { EditAction } from '../../src/components/EditAction';
 import { applyCorrection, deleteEntry, getEntry } from '../../src/db';
 import {
   cancelEntryReminder,
@@ -113,15 +113,11 @@ export default function EntryDetailScreen() {
         <Pressable onPress={handleBack} hitSlop={8}>
           <Text style={styles.back}>‹ 用户原声</Text>
         </Pressable>
-        {editing ? (
-          <Pressable onPress={handleSave} hitSlop={8}>
-            <Text style={styles.doneBtn}>完成</Text>
-          </Pressable>
-        ) : (
-          <Pressable onPress={startEdit} hitSlop={8} style={styles.iconBtn}>
-            <Ionicons name="pencil-outline" size={20} color={theme.colors.accent} />
-          </Pressable>
-        )}
+        <EditAction
+          editing={editing}
+          onPress={editing ? handleSave : startEdit}
+          label="编辑用户原声"
+        />
       </View>
       {entry && (
         <ScrollView contentContainerStyle={styles.content}>
@@ -174,15 +170,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doneBtn: { fontSize: theme.font.body, color: theme.colors.accent, fontWeight: '600' },
-  doneBtnDisabled: { color: theme.colors.textDim },
   back: { fontSize: theme.font.body, color: theme.colors.accent },
   content: { padding: 16, gap: 12, flexGrow: 1 },
   ts: { fontSize: 13, color: theme.colors.textDim, fontFamily: 'Menlo' },

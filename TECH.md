@@ -47,6 +47,7 @@ src/
 │  └─ notifications.ts        # 未来 14 天晨晚通知排程 + 待办到点提醒
 └─ components/
    ├─ Composer.tsx            # 沉底输入：描边输入框 + 麦克风图标 + 语音转写
+   ├─ EditAction.tsx          # 统一编辑入口：铅笔进入 / 完成退出，支持页面与模块字号
    └─ EntryCard.tsx           # 通用条目卡（详情入口）
 ```
 
