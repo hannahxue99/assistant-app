@@ -4,6 +4,7 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
 import { useCallback, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -232,11 +233,16 @@ export default function HomeScreen() {
                         accessibilityLabel={g.pinnedAt !== null ? `取消置顶${g.topic}` : `置顶${g.topic}`}
                         onPress={() => handleTopicPin(g)}
                       >
-                        <Ionicons
-                          name={g.pinnedAt !== null ? 'pin' : 'pin-outline'}
-                          size={18}
-                          color={g.pinnedAt !== null ? theme.colors.gold : theme.colors.textDim}
-                          style={styles.pinIcon}
+                        <SymbolView
+                          name={{
+                            ios: g.pinnedAt !== null ? 'pin.fill' : 'pin',
+                            android: 'push_pin',
+                            web: 'push_pin',
+                          }}
+                          size={19}
+                          weight="regular"
+                          tintColor={g.pinnedAt !== null ? theme.colors.gold : theme.colors.textDim}
+                          resizeMode="scaleAspectFit"
                         />
                       </Pressable>
                       <Pressable onPress={() => router.push(`/topic/${encodeURIComponent(g.topic)}`)}>
@@ -430,8 +436,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 1,
   },
-  // Keep the pin diagonally planted: cap at upper-right, point at lower-left.
-  pinIcon: { transform: [{ rotate: '45deg' }] },
   topicName: { fontSize: theme.font.body, fontWeight: '700', color: theme.colors.gold },
   topicCount: { fontSize: theme.font.small, color: theme.colors.textDim },
   topicSummary: { fontSize: theme.font.body, color: theme.colors.text },
