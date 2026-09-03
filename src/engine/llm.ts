@@ -68,6 +68,15 @@ export async function understandWithLlm(
 
   const url = cfg.baseUrl.replace(/\/+$/, '') + '/chat/completions';
   let res: Response;
+  let timedOut = false;
+  const requestController = new AbortController();
+  const abortFromCaller = () => requestController.abort();
+  if (signal?.aborted) requestController.abort();
+  else signal?.addEventListener('abort', abortFromCaller, { once: true });
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    requestController.abort();
+  }, 30_000);
   try {
     res = await fetch(url, {
       method: 'POST',
@@ -76,10 +85,14 @@ export async function understandWithLlm(
         Authorization: `Bearer ${cfg.key}`,
       },
       body: JSON.stringify(body),
-      signal,
+      signal: requestController.signal,
     });
   } catch (e: any) {
+    if (timedOut) throw new LlmError('网络请求超时');
     throw new LlmError(`网络请求失败：${e?.message ?? '未知错误'}`);
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener('abort', abortFromCaller);
   }
 
   if (!res.ok) {
