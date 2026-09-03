@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="620" viewBox="0 0 760 620">
+  <rect width="760" height="620" fill="#FFFFFF"/>
+  <style>
+    .label{font:600 16px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#2B2622}.phone{fill:#F6F3EE;stroke:#D8D1C8;stroke-width:1.5}.nav{font:15px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#E0733A}.title{font:700 18px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#C99A2E}.body{font:16px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#2B2622}.small{font:12px Menlo,monospace;fill:#8A837B}.card{fill:#FFF;stroke:#E8E2D9}.input{fill:none;stroke:#E0733A;stroke-width:1.5}
+  </style>
+  <text x="40" y="34" class="label">用户原声 · 编辑态</text>
+  <rect x="40" y="52" width="320" height="530" rx="28" class="phone"/>
+  <text x="60" y="95" class="nav">‹ 用户原声</text>
+  <text x="295" y="95" class="nav">完成</text>
+  <text x="60" y="143" class="small">创建 今天 10:23:03</text>
+  <text x="60" y="166" class="small">编辑 今天 14:35:12</text>
+  <text x="60" y="216" class="body" font-weight="600">关注模型业界的最新变化</text>
+  <path d="M60 228H340" class="input"/>
+  <text x="60" y="274" class="body">每周整理主要模型发布、能力变化</text>
+  <text x="60" y="302" class="body">和行业动态。</text>
+  <path d="M60 322H340" stroke="#E8E2D9"/>
+
+  <text x="400" y="34" class="label">聚合详情 · 主题编辑态</text>
+  <rect x="400" y="52" width="320" height="530" rx="28" class="phone"/>
+  <text x="420" y="95" class="nav">‹ 聚合消息</text>
+  <text x="420" y="153" class="title">#</text>
+  <text x="440" y="153" class="body" font-weight="600">模型行业追踪</text>
+  <path d="M439 164H620" class="input"/>
+  <text x="660" y="153" class="small">5 条</text>
+  <rect x="420" y="188" width="280" height="92" rx="13" class="card"/>
+  <text x="436" y="225" class="body">GPT 新版本能力追踪</text>
+  <text x="436" y="256" class="small">今天 14:35:12</text>
+  <rect x="420" y="294" width="280" height="92" rx="13" class="card"/>
+  <text x="436" y="331" class="body">本周主要模型更新汇总</text>
+  <text x="436" y="362" class="small">昨天 18:20:06</text>
+</svg>

@@ -3,10 +3,11 @@
  *
  * 交互规则（2026-09-01 二次改版，用户决策）：
  * - 所有卡片点击 → 跳转该条的用户原声详情页（编辑在那里完成，返回时本页重载见新内容）
+ * - 点击主题标题原位编辑；失焦或键盘确认自动保存，不显示编辑/完成按钮
  * - 底部按钮栏已删除
  */
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -18,7 +19,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { EditAction } from '../../src/components/EditAction';
 import { listByTopic, renameTopic } from '../../src/db';
 import { logTimestamp } from '../../src/engine/schedule';
 import type { Entry } from '../../src/types';
@@ -33,6 +33,7 @@ export default function TopicDetailScreen() {
   const [topic, setTopic] = useState(routeTopic);
   const [editingTopic, setEditingTopic] = useState(false);
   const [topicDraft, setTopicDraft] = useState(routeTopic);
+  const topicSaveInFlight = useRef(false);
 
   const load = useCallback(async () => {
     const list = await listByTopic(topic);
@@ -71,29 +72,41 @@ export default function TopicDetailScreen() {
   }
 
   async function saveTopic() {
+    if (topicSaveInFlight.current) return;
+    topicSaveInFlight.current = true;
     const nextTopic = topicDraft.trim().replace(/^#+\s*/, '');
     if (!nextTopic) {
+      setTopicDraft(topic);
+      setEditingTopic(false);
+      topicSaveInFlight.current = false;
       Alert.alert('主题不能为空', '请输入一个主题名称。');
       return;
     }
     if (nextTopic === topic) {
       setEditingTopic(false);
+      topicSaveInFlight.current = false;
       return;
     }
 
     const targetEntries = await listByTopic(nextTopic);
     if (targetEntries.length > 0) {
+      setEditingTopic(false);
+      topicSaveInFlight.current = false;
       Alert.alert(
         '合并聚合消息？',
         `“${nextTopic}”已经存在，修改后两组消息会合并。`,
         [
-          { text: '取消', style: 'cancel' },
+          { text: '取消', style: 'cancel', onPress: () => setTopicDraft(topic) },
           { text: '合并', onPress: () => { void applyTopicRename(nextTopic); } },
         ],
       );
       return;
     }
-    await applyTopicRename(nextTopic);
+    try {
+      await applyTopicRename(nextTopic);
+    } finally {
+      topicSaveInFlight.current = false;
+    }
   }
 
   return (
@@ -103,11 +116,6 @@ export default function TopicDetailScreen() {
         <Pressable onPress={handleBack} hitSlop={8}>
           <Text style={styles.back}>‹ 聚合消息</Text>
         </Pressable>
-        <EditAction
-          editing={editingTopic}
-          onPress={editingTopic ? saveTopic : startTopicEdit}
-          label="修改聚合主题"
-        />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -122,14 +130,20 @@ export default function TopicDetailScreen() {
                 maxLength={40}
                 returnKeyType="done"
                 onSubmitEditing={saveTopic}
+                onBlur={saveTopic}
                 style={styles.topicInput}
                 selectionColor={theme.colors.accent}
               />
             </View>
           ) : (
-            <View style={styles.topicTitleRow}>
+            <Pressable
+              style={styles.topicTitleRow}
+              onPress={startTopicEdit}
+              accessibilityRole="button"
+              accessibilityLabel="修改聚合主题"
+            >
               <Text style={styles.topic}>#{topic}</Text>
-            </View>
+            </Pressable>
           )}
           <Text style={styles.count}>{entries.length} 条</Text>
         </View>
@@ -138,7 +152,9 @@ export default function TopicDetailScreen() {
           <Pressable
             key={e.id}
             style={styles.card}
-            onPress={() => router.push(`/entry/${e.id}`)}
+            onPress={() => {
+              if (!editingTopic) router.push(`/entry/${e.id}`);
+            }}
           >
             <Text style={styles.historyText}>{e.summary}</Text>
             {e.rawText.trim() !== e.summary.trim() && (
