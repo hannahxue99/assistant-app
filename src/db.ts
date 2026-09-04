@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import type {
+  BackupEnvelope,
   BackupPayload,
   Entry,
   EntryFilter,
@@ -11,6 +12,13 @@ import type {
   TopicPreference,
 } from './types';
 import { buildImportableMarkdown } from './engine/backup-format';
+import {
+  buildImportDecisions,
+  isDefaultProfile,
+  summarizeImport,
+  type ImportPreview,
+  type ImportResult,
+} from './engine/import-merge';
 import { sortTopicGroups } from './engine/topic-order';
 
 let db: SQLite.SQLiteDatabase | null = null;
@@ -95,6 +103,25 @@ export async function initDatabase(): Promise<void> {
       pinned_at INTEGER
     );
 
+    -- 导入发生冲突时保留两侧快照，避免自动取新版本后无法追溯。
+    CREATE TABLE IF NOT EXISTS import_conflicts (
+      id TEXT PRIMARY KEY,
+      entry_id TEXT NOT NULL,
+      local_snapshot TEXT NOT NULL,
+      incoming_snapshot TEXT NOT NULL,
+      winner TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      imported_at INTEGER NOT NULL,
+      source_exported_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_import_conflicts_entry ON import_conflicts(entry_id);
+
+    -- 数据已导入但本地提醒尚未重建时保留队列，启动后自动补偿。
+    CREATE TABLE IF NOT EXISTS notification_sync_queue (
+      entry_id TEXT PRIMARY KEY,
+      queued_at INTEGER NOT NULL
+    );
+
     -- 回退旧版规则主题：LLM 未成功理解的记录应保持无主题。
     -- 仅清理规则层曾自动生成的三个固定名称，不影响 LLM 或手动主题。
     UPDATE entries SET topic = NULL
@@ -164,6 +191,57 @@ function safeParse(s: string): string[] {
     return Array.isArray(v) ? v.map(String) : [];
   } catch {
     return [];
+  }
+}
+
+function rowToProfile(r: any): Profile {
+  if (!r) return DEFAULT_PROFILE;
+  return {
+    name: r.name,
+    goals: safeParse(r.goals),
+    avoid: safeParse(r.avoid),
+    notifyMorning: !!r.notify_morning,
+    notifyEvening: !!r.notify_evening,
+  };
+}
+
+async function insertImportedEntry(d: SQLite.SQLiteDatabase, entry: Entry): Promise<void> {
+  await d.runAsync(
+    `INSERT INTO entries (
+       id, raw_text, kind, summary, due_at, remind_at, topic, tags, persons,
+       parse_status, parse_source, corrected_from, created_at, updated_at, revision_at,
+       done, done_at, source
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    entry.id, entry.rawText, entry.kind, entry.summary, entry.dueAt, entry.remindAt,
+    entry.topic, JSON.stringify(entry.tags), JSON.stringify(entry.persons),
+    entry.parseStatus, entry.parseSource, entry.correctedFrom, entry.createdAt,
+    entry.updatedAt, entry.revisionAt, entry.done, entry.doneAt, entry.source,
+  );
+}
+
+async function updateImportedEntry(d: SQLite.SQLiteDatabase, entry: Entry): Promise<void> {
+  await d.runAsync(
+    `UPDATE entries SET
+       raw_text=?, kind=?, summary=?, due_at=?, remind_at=?, topic=?, tags=?, persons=?,
+       parse_status=?, parse_source=?, corrected_from=?, created_at=?, updated_at=?, revision_at=?,
+       done=?, done_at=?, source=?
+     WHERE id=?`,
+    entry.rawText, entry.kind, entry.summary, entry.dueAt, entry.remindAt, entry.topic,
+    JSON.stringify(entry.tags), JSON.stringify(entry.persons), entry.parseStatus,
+    entry.parseSource, entry.correctedFrom, entry.createdAt, entry.updatedAt,
+    entry.revisionAt, entry.done, entry.doneAt, entry.source, entry.id,
+  );
+}
+
+async function rebuildFtsWithDatabase(d: SQLite.SQLiteDatabase): Promise<void> {
+  await d.runAsync('DELETE FROM entries_fts');
+  const rows = await d.getAllAsync<any>('SELECT * FROM entries');
+  for (const r of rows) {
+    const entry = rowToEntry(r);
+    await d.runAsync(
+      `INSERT INTO entries_fts (entry_id, summary, raw_text, tags) VALUES (?, ?, ?, ?)`,
+      entry.id, entry.summary, entry.rawText, entry.tags.join(' '),
+    );
   }
 }
 
@@ -286,6 +364,7 @@ export async function deleteEntry(id: string): Promise<void> {
   const d = getDb();
   await d.runAsync('DELETE FROM entries WHERE id=?', id);
   await d.runAsync('DELETE FROM entries_fts WHERE entry_id=?', id);
+  await d.runAsync('DELETE FROM notification_sync_queue WHERE entry_id=?', id);
 }
 
 export async function listEntries(filter?: EntryFilter, limit = 500): Promise<Entry[]> {
@@ -546,16 +625,7 @@ async function syncFts(id: string): Promise<void> {
 
 /** 全量重建 FTS（理解回填/恢复后调用） */
 export async function rebuildFts(): Promise<void> {
-  const d = getDb();
-  await d.runAsync('DELETE FROM entries_fts');
-  const rows = await d.getAllAsync<any>('SELECT * FROM entries');
-  for (const r of rows) {
-    const e = rowToEntry(r);
-    await d.runAsync(
-      `INSERT INTO entries_fts (entry_id, summary, raw_text, tags) VALUES (?, ?, ?, ?)`,
-      e.id, e.summary, e.rawText, e.tags.join(' '),
-    );
-  }
+  await rebuildFtsWithDatabase(getDb());
 }
 
 /* ---------------- Profile & Settings ---------------- */
@@ -563,14 +633,7 @@ export async function rebuildFts(): Promise<void> {
 export async function getProfile(): Promise<Profile> {
   const d = getDb();
   const r = await d.getFirstAsync<any>('SELECT * FROM profile WHERE id=1');
-  if (!r) return DEFAULT_PROFILE;
-  return {
-    name: r.name,
-    goals: safeParse(r.goals),
-    avoid: safeParse(r.avoid),
-    notifyMorning: !!r.notify_morning,
-    notifyEvening: !!r.notify_evening,
-  };
+  return rowToProfile(r);
 }
 
 export async function saveProfile(p: Profile): Promise<void> {
@@ -600,6 +663,135 @@ export async function saveSettings(s: Settings): Promise<void> {
     `UPDATE settings SET llm_enabled=?, llm_base_url=?, llm_key=?, llm_model=? WHERE id=1`,
     s.llmEnabled ? 1 : 0, s.llmBaseUrl, s.llmKey, s.llmModel,
   );
+}
+
+/* ---------------- Import ---------------- */
+
+export async function previewBackupImport(payload: BackupPayload): Promise<ImportPreview> {
+  const d = getDb();
+  const [rows, profileRow] = await Promise.all([
+    d.getAllAsync<any>('SELECT * FROM entries'),
+    d.getFirstAsync<any>('SELECT * FROM profile WHERE id=1'),
+  ]);
+  const localEntries = rows.map(rowToEntry);
+  const decisions = buildImportDecisions(payload.entries, localEntries);
+  return summarizeImport(decisions, rowToProfile(profileRow), payload);
+}
+
+/**
+ * 将已通过格式校验的备份合并到当前库。
+ * 预览后仍会在独占事务中重新计算决策，避免确认期间本地数据变化导致误覆盖。
+ */
+export async function importBackup(envelope: BackupEnvelope): Promise<ImportResult> {
+  const d = getDb();
+  let preview: ImportPreview = {
+    added: 0,
+    updated: 0,
+    ignored: 0,
+    conflicts: 0,
+    profileWillImport: false,
+  };
+  let affectedIds: string[] = [];
+  let affectedEntries: Entry[] = [];
+  let profileImported = false;
+
+  await d.withExclusiveTransactionAsync(async (txn) => {
+    const [rows, profileRow] = await Promise.all([
+      txn.getAllAsync<any>('SELECT * FROM entries'),
+      txn.getFirstAsync<any>('SELECT * FROM profile WHERE id=1'),
+    ]);
+    const localEntries = rows.map(rowToEntry);
+    const localProfile = rowToProfile(profileRow);
+    const decisions = buildImportDecisions(envelope.payload.entries, localEntries);
+    preview = summarizeImport(decisions, localProfile, envelope.payload);
+    affectedIds = [];
+    affectedEntries = [];
+    const importedAt = Date.now();
+
+    for (const decision of decisions) {
+      if (decision.hasConflict && decision.local) {
+        const winner = decision.action === 'update' ? 'incoming' : 'local';
+        await txn.runAsync(
+          `INSERT OR IGNORE INTO import_conflicts (
+             id, entry_id, local_snapshot, incoming_snapshot, winner, reason,
+             imported_at, source_exported_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          `${envelope.exportedAt}:${decision.incoming.id}:${decision.local.revisionAt}:${decision.incoming.revisionAt}:${decision.reason}`,
+          decision.incoming.id,
+          JSON.stringify(decision.local),
+          JSON.stringify(decision.incoming),
+          winner,
+          decision.reason,
+          importedAt,
+          envelope.exportedAt,
+        );
+      }
+
+      if (decision.action === 'add') {
+        await insertImportedEntry(txn, decision.incoming);
+        affectedIds.push(decision.incoming.id);
+        affectedEntries.push(decision.incoming);
+      } else if (decision.action === 'update') {
+        await updateImportedEntry(txn, decision.incoming);
+        affectedIds.push(decision.incoming.id);
+        affectedEntries.push(decision.incoming);
+      }
+    }
+
+    if (isDefaultProfile(localProfile) && !isDefaultProfile(envelope.payload.profile)) {
+      const profile = envelope.payload.profile;
+      await txn.runAsync(
+        `UPDATE profile SET name=?, goals=?, avoid=?, notify_morning=?, notify_evening=? WHERE id=1`,
+        profile.name,
+        JSON.stringify(profile.goals),
+        JSON.stringify(profile.avoid),
+        profile.notifyMorning ? 1 : 0,
+        profile.notifyEvening ? 1 : 0,
+      );
+      profileImported = true;
+    }
+
+    for (const preference of envelope.payload.topicPreferences) {
+      await txn.runAsync(
+        `INSERT INTO topic_preferences (topic, pinned_at) VALUES (?, ?)
+         ON CONFLICT(topic) DO UPDATE SET pinned_at=MAX(topic_preferences.pinned_at, excluded.pinned_at)`,
+        preference.topic,
+        preference.pinnedAt,
+      );
+    }
+
+    for (const entryId of affectedIds) {
+      await txn.runAsync(
+        `INSERT INTO notification_sync_queue (entry_id, queued_at) VALUES (?, ?)
+         ON CONFLICT(entry_id) DO UPDATE SET queued_at=excluded.queued_at`,
+        entryId,
+        importedAt,
+      );
+    }
+
+    if (affectedIds.length > 0) await rebuildFtsWithDatabase(txn);
+  });
+
+  return { ...preview, affectedEntries, profileImported };
+}
+
+export async function listPendingNotificationSyncEntries(): Promise<Entry[]> {
+  const rows = await getDb().getAllAsync<any>(
+    `SELECT entries.* FROM notification_sync_queue
+     JOIN entries ON entries.id = notification_sync_queue.entry_id
+     ORDER BY notification_sync_queue.queued_at ASC`,
+  );
+  return rows.map(rowToEntry);
+}
+
+export async function clearPendingNotificationSync(entryIds: string[]): Promise<void> {
+  if (entryIds.length === 0) return;
+  const d = getDb();
+  await d.withExclusiveTransactionAsync(async (txn) => {
+    for (const entryId of entryIds) {
+      await txn.runAsync('DELETE FROM notification_sync_queue WHERE entry_id=?', entryId);
+    }
+  });
 }
 
 /* ---------------- Export ---------------- */
