@@ -3,12 +3,18 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { getSettings, initDatabase } from '@/src/db';
+import {
+  clearPendingNotificationSync,
+  getSettings,
+  initDatabase,
+  listPendingNotificationSyncEntries,
+} from '@/src/db';
 import { migrateLegacyOnce } from '@/src/engine/migrate-legacy';
 import {
   configureNotificationHandler,
   ensurePermissions,
   scheduleDailyNotifications,
+  syncEntryReminders,
 } from '@/src/engine/notifications';
 import { retryFailedUnderstandings } from '@/src/engine/understand';
 import { theme } from '@/src/theme';
@@ -47,6 +53,11 @@ export default function RootLayout() {
       const granted = await ensurePermissions();
       if (granted) {
         await scheduleDailyNotifications(); // 依据画像开关重挂晨晚通知（晨问逐日续期）
+        const pendingReminderEntries = await listPendingNotificationSyncEntries();
+        if (pendingReminderEntries.length > 0) {
+          await syncEntryReminders(pendingReminderEntries);
+          await clearPendingNotificationSync(pendingReminderEntries.map((entry) => entry.id));
+        }
       }
       // 联网补理解：LLM 开启时重跑上次失败的条目（fire-and-forget）
       const settings = await getSettings();

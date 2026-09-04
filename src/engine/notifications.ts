@@ -144,6 +144,12 @@ export async function cancelEntryReminder(entryId: string): Promise<void> {
 /** 按条目当前状态同步到点提醒（唯一入口，写路径都调这里）：
  *  task + 未完成 + 未来时间 → 挂提醒；其余（非 task / 已完成 / 已过期 / 无时间）→ 撤。 */
 export async function syncEntryReminder(entry: Entry): Promise<void> {
+  await syncEntryReminderOnly(entry);
+  // 晨晚文案依赖任务快照；不阻塞当前写入流程，串行队列会合并顺序风险。
+  void refreshTaskDrivenNotifications();
+}
+
+async function syncEntryReminderOnly(entry: Entry): Promise<void> {
   const active = entry.kind === 'task' && !entry.done
     && !!entry.dueAt && entry.dueAt > Date.now() + 60_000;
   if (active) {
@@ -156,8 +162,12 @@ export async function syncEntryReminder(entry: Entry): Promise<void> {
   } else {
     await cancelEntryReminder(entry.id);
   }
-  // 晨晚文案依赖任务快照；不阻塞当前写入流程，串行队列会合并顺序风险。
-  void refreshTaskDrivenNotifications();
+}
+
+/** 批量导入后逐条同步到点提醒，只在最后重挂一次晨晚快照。 */
+export async function syncEntryReminders(entries: Entry[]): Promise<void> {
+  for (const entry of entries) await syncEntryReminderOnly(entry);
+  await refreshTaskDrivenNotifications();
 }
 
 /** 设置通知点击后的行为（在 app 入口调用一次）。

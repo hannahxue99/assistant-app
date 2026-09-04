@@ -30,6 +30,7 @@ export interface Entry {
   correctedFrom: string | null; // 纠正前的理解结果快照（JSON）
   createdAt: number;          // 创建时间（ms）
   updatedAt: number;          // 用户最后修改标题/内容的时间；未修改时等于 createdAt
+  revisionAt: number;         // 导出数据最后变化时间；用于备份合并冲突判断
   done: 0 | 1;                // 仅 task 有意义
   doneAt: number | null;
   source: EntrySource;
@@ -76,6 +77,27 @@ export interface TopicGroup {
   entries: Entry[];       // 倒序时间线
   updatedAt: number;
   pinnedAt: number | null; // 主题级置顶时间；不改写条目本身
+}
+
+/** 主题级备份偏好 */
+export interface TopicPreference {
+  topic: string;
+  pinnedAt: number;
+}
+
+/** Markdown V2 内嵌的完整恢复数据（不包含 LLM 设置和 Key） */
+export interface BackupPayload {
+  entries: Entry[];
+  profile: Profile;
+  topicPreferences: TopicPreference[];
+}
+
+export interface BackupEnvelope {
+  format: 'assistant-app-export-v2';
+  schemaVersion: 2;
+  exportedAt: number;
+  entryCount: number;
+  payload: BackupPayload;
 }
 
 /** 记录页筛选条件 */
