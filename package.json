@@ -7,6 +7,7 @@
     "expo": "~57.0.17",
     "expo-constants": "~57.0.15",
     "expo-dev-client": "~57.0.16",
+    "expo-document-picker": "~57.0.1",
     "expo-file-system": "~57.0.6",
     "expo-font": "~57.0.1",
     "expo-linking": "~57.0.8",
@@ -45,7 +46,8 @@
     "test:understanding": "tsx scripts/test-understanding-feedback.ts",
     "test:topics": "tsx scripts/test-topic-order.ts",
     "test:entry-time": "tsx scripts/test-entry-time.ts",
-    "test:backup": "tsx scripts/test-backup-format.ts"
+    "test:backup": "tsx scripts/test-backup-format.ts",
+    "test:import": "tsx scripts/test-import-merge.ts"
   },
   "private": true
 }

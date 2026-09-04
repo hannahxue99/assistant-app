@@ -4,6 +4,7 @@
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
+import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import {
@@ -20,17 +21,30 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EditAction } from '../../src/components/EditAction';
+import { ImportFeedbackModal } from '../../src/components/ImportFeedbackModal';
+import { ImportPreviewModal } from '../../src/components/ImportPreviewModal';
 import {
+  clearPendingNotificationSync,
   countEntries,
   exportMarkdown,
   firstEntryAt,
   getProfile,
   getSettings,
+  importBackup,
+  previewBackupImport,
   saveProfile,
 } from '../../src/db';
-import { ensurePermissions, scheduleDailyNotifications } from '../../src/engine/notifications';
-import type { Profile, Settings } from '../../src/types';
+import { BackupFormatError, parseImportableMarkdown } from '../../src/engine/backup-format';
+import type { ImportPreview } from '../../src/engine/import-merge';
+import {
+  ensurePermissions,
+  scheduleDailyNotifications,
+  syncEntryReminders,
+} from '../../src/engine/notifications';
+import type { BackupEnvelope, Profile, Settings } from '../../src/types';
 import { theme } from '../../src/theme';
+
+const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -41,6 +55,14 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [goalsText, setGoalsText] = useState('');
   const [avoidText, setAvoidText] = useState('');
+  const [importEnvelope, setImportEnvelope] = useState<BackupEnvelope | null>(null);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importFileName, setImportFileName] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importFeedback, setImportFeedback] = useState<{
+    kind: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     const [s, p, n, first] = await Promise.all([getSettings(), getProfile(), countEntries(), firstEntryAt()]);
@@ -107,6 +129,91 @@ export default function ProfileScreen() {
     } catch (e: any) {
       Alert.alert('导出失败', String(e?.message ?? e));
     }
+  }
+
+  function importErrorMessage(error: unknown): string {
+    if (error instanceof BackupFormatError) {
+      if (error.code === 'LEGACY_OR_UNKNOWN') {
+        return '这是旧版导出文件，缺少完整恢复数据。请使用新版「私人助手」导出的 Markdown。';
+      }
+      if (error.code === 'UNSUPPORTED_VERSION') {
+        return '该备份由更新版本的 App 生成，请升级「私人助手」后再导入。';
+      }
+      return `备份文件无效：${error.message}`;
+    }
+    return String((error as any)?.message ?? error);
+  }
+
+  function closeImportPreview() {
+    if (importing) return;
+    setImportEnvelope(null);
+    setImportPreview(null);
+    setImportFileName('');
+  }
+
+  async function chooseImportFile() {
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+      if (picked.canceled) return;
+      const asset = picked.assets[0];
+      if (!asset.name.toLowerCase().endsWith('.md')) {
+        setImportFeedback({ kind: 'error', message: '请选择由「私人助手」导出的 .md 文件；现有数据没有发生变化。' });
+        return;
+      }
+      const info = asset.size === undefined ? await FileSystem.getInfoAsync(asset.uri) : null;
+      const size = asset.size ?? (info?.exists ? info.size : 0);
+      if (size > MAX_IMPORT_BYTES) {
+        setImportFeedback({ kind: 'error', message: '文件超过 10 MB，请选择体积更小的 Markdown 备份；现有数据没有发生变化。' });
+        return;
+      }
+      const markdown = await FileSystem.readAsStringAsync(asset.uri);
+      const envelope = parseImportableMarkdown(markdown);
+      const preview = await previewBackupImport(envelope.payload);
+      setImportFileName(asset.name);
+      setImportEnvelope(envelope);
+      setImportPreview(preview);
+    } catch (error) {
+      setImportFeedback({ kind: 'error', message: `${importErrorMessage(error)}\n现有数据没有发生变化。` });
+    }
+  }
+
+  async function confirmImport() {
+    if (!importEnvelope || importing) return;
+    setImporting(true);
+    let result;
+    try {
+      result = await importBackup(importEnvelope);
+    } catch (error) {
+      setImportFeedback({ kind: 'error', message: `${importErrorMessage(error)}\n现有数据没有发生变化。` });
+      setImporting(false);
+      return;
+    }
+
+    let notificationWarning = false;
+    try {
+      await syncEntryReminders(result.affectedEntries);
+      await clearPendingNotificationSync(result.affectedEntries.map((entry) => entry.id));
+    } catch {
+      notificationWarning = true;
+    }
+    try {
+      await load();
+    } catch {
+      // 导入已提交；页面下次聚焦或重启时会重新加载。
+    }
+    setImportEnvelope(null);
+    setImportPreview(null);
+    setImportFileName('');
+    const summary = `新增 ${result.added} 条，更新 ${result.updated} 条，忽略 ${result.ignored} 条，保留本地冲突 ${result.conflicts} 条。`;
+    setImportFeedback({
+      kind: 'success',
+      message: notificationWarning ? `${summary}\n\n部分提醒将在下次启动时补建。` : summary,
+    });
+    setImporting(false);
   }
 
   const llmStatus = !settings.llmEnabled
@@ -199,10 +306,21 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <Pressable style={[styles.row, total === 0 && { opacity: 0.45 }]} onPress={doExport} disabled={total === 0}>
-          <Text style={styles.rowLabel}>导出数据</Text>
-          <Text style={styles.rowValue}>Markdown ⤴</Text>
-        </Pressable>
+        <Text style={styles.sectionLabel}>数据管理</Text>
+        <View style={styles.dataCard}>
+          <Pressable
+            style={[styles.dataRow, total === 0 && { opacity: 0.45 }]}
+            onPress={doExport}
+            disabled={total === 0}
+          >
+            <Text style={styles.rowLabel}>导出数据</Text>
+            <Text style={styles.rowValue}>Markdown ⤴</Text>
+          </Pressable>
+          <Pressable style={[styles.dataRow, styles.dataRowBorder]} onPress={chooseImportFile}>
+            <Text style={styles.rowLabel}>导入数据</Text>
+            <Text style={styles.rowValue}>选择备份文件 ›</Text>
+          </Pressable>
+        </View>
 
         <View style={[styles.row, styles.rowStatic]}>
           <Text style={[styles.rowLabel, { color: theme.colors.textDim }]}>统计</Text>
@@ -216,6 +334,24 @@ export default function ProfileScreen() {
           </Pressable>
         ) : null}
       </ScrollView>
+      <ImportPreviewModal
+        visible={!!importEnvelope}
+        fileName={importFileName}
+        exportedAt={importEnvelope?.exportedAt ?? null}
+        preview={importPreview}
+        importing={importing}
+        onCancel={closeImportPreview}
+        onConfirm={confirmImport}
+      />
+      <ImportFeedbackModal
+        kind={importFeedback?.kind ?? null}
+        message={importFeedback?.message ?? ''}
+        onClose={() => setImportFeedback(null)}
+        onRetry={() => {
+          setImportFeedback(null);
+          void chooseImportFile();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -266,6 +402,29 @@ const styles = StyleSheet.create({
   rowStatic: { backgroundColor: theme.colors.bg, borderColor: theme.colors.border },
   rowLabel: { fontSize: theme.font.body, color: theme.colors.text },
   rowValue: { fontSize: theme.font.small, color: theme.colors.textDim },
+  sectionLabel: {
+    fontSize: 12,
+    color: theme.colors.textDim,
+    marginTop: 4,
+    marginLeft: 4,
+    marginBottom: -3,
+  },
+  dataCard: {
+    backgroundColor: theme.colors.card,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.input,
+    overflow: 'hidden',
+  },
+  dataRow: {
+    minHeight: theme.touchTarget,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  dataRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
   notifyCard: {
     backgroundColor: theme.colors.card,
     borderWidth: 1,
