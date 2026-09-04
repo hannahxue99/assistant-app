@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import type {
+  BackupPayload,
   Entry,
   EntryFilter,
   EntryKind,
@@ -7,7 +8,9 @@ import type {
   Profile,
   Settings,
   TopicGroup,
+  TopicPreference,
 } from './types';
+import { buildImportableMarkdown } from './engine/backup-format';
 import { sortTopicGroups } from './engine/topic-order';
 
 let db: SQLite.SQLiteDatabase | null = null;
@@ -48,6 +51,7 @@ export async function initDatabase(): Promise<void> {
       corrected_from TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER,
+      revision_at INTEGER,
       done INTEGER NOT NULL DEFAULT 0,
       done_at INTEGER,
       source TEXT NOT NULL DEFAULT 'text'
@@ -104,8 +108,12 @@ export async function initDatabase(): Promise<void> {
   if (!columns.some((column) => column.name === 'updated_at')) {
     await db.execAsync('ALTER TABLE entries ADD COLUMN updated_at INTEGER;');
   }
+  if (!columns.some((column) => column.name === 'revision_at')) {
+    await db.execAsync('ALTER TABLE entries ADD COLUMN revision_at INTEGER;');
+  }
   await db.execAsync(`
     UPDATE entries SET updated_at = created_at WHERE updated_at IS NULL;
+    UPDATE entries SET revision_at = updated_at WHERE revision_at IS NULL;
     CREATE INDEX IF NOT EXISTS idx_entries_updated ON entries(updated_at);
   `);
 }
@@ -143,6 +151,7 @@ function rowToEntry(r: any): Entry {
     correctedFrom: r.corrected_from,
     createdAt: r.created_at,
     updatedAt: r.updated_at ?? r.created_at,
+    revisionAt: r.revision_at ?? r.updated_at ?? r.created_at,
     done: r.done,
     doneAt: r.done_at,
     source: r.source,
@@ -177,11 +186,11 @@ export async function insertEntry(input: NewEntryInput, parsed?: {
 
   await d.runAsync(
     `INSERT INTO entries (id, raw_text, kind, summary, due_at, remind_at, topic, tags, persons,
-       parse_status, parse_source, created_at, updated_at, done, source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+       parse_status, parse_source, created_at, updated_at, revision_at, done, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
     id, input.rawText, kind, summary, dueAt, dueAt, topic,
     JSON.stringify(tags), JSON.stringify(persons),
-    parseStatus, parseSource, createdAt, createdAt, input.source,
+    parseStatus, parseSource, createdAt, createdAt, createdAt, input.source,
   );
   await syncFts(id);
   return (await getEntry(id))!;
@@ -209,10 +218,10 @@ export async function updateParsedResult(
   const d = getDb();
   await d.runAsync(
     `UPDATE entries SET kind=?, summary=?, due_at=?, remind_at=?, topic=?, tags=?, persons=?,
-       parse_status='ok', parse_source=?
+       parse_status='ok', parse_source=?, revision_at=?
      WHERE id=?`,
     parsed.kind, parsed.summary, parsed.dueAt, parsed.dueAt, parsed.topic,
-    JSON.stringify(parsed.tags), JSON.stringify(parsed.persons), parseSource, id,
+    JSON.stringify(parsed.tags), JSON.stringify(parsed.persons), parseSource, Date.now(), id,
   );
   await syncFts(id);
 }
@@ -220,7 +229,7 @@ export async function updateParsedResult(
 /** 理解状态标记（LLM 失败但规则结果已回填 → failed，联网后可补理解） */
 export async function setParseStatus(id: string, status: 'pending' | 'failed' | 'ok'): Promise<void> {
   const d = getDb();
-  await d.runAsync('UPDATE entries SET parse_status=? WHERE id=?', status, id);
+  await d.runAsync('UPDATE entries SET parse_status=?, revision_at=? WHERE id=?', status, Date.now(), id);
 }
 
 /** 理解失败、待补理解的条目（启动时重试用） */
@@ -246,9 +255,10 @@ export async function applyCorrection(
     dueAt: prev.dueAt, topic: prev.topic, tags: prev.tags,
   });
   const d = getDb();
+  const changedAt = Date.now();
   await d.runAsync(
     `UPDATE entries SET kind=?, summary=?, raw_text=?, due_at=?, remind_at=?, topic=?, tags=?,
-       parse_status='manual', corrected_from=?, updated_at=?
+       parse_status='manual', corrected_from=?, updated_at=?, revision_at=?
      WHERE id=?`,
     patch.kind ?? prev.kind,
     patch.summary ?? prev.summary,
@@ -257,7 +267,7 @@ export async function applyCorrection(
     patch.dueAt !== undefined ? patch.dueAt : prev.dueAt,
     patch.topic !== undefined ? patch.topic : prev.topic,
     JSON.stringify(patch.tags ?? prev.tags),
-    snapshot, Date.now(), id,
+    snapshot, changedAt, changedAt, id,
   );
   await syncFts(id);
   return getEntry(id);
@@ -265,9 +275,10 @@ export async function applyCorrection(
 
 export async function setDone(id: string, done: boolean): Promise<void> {
   const d = getDb();
+  const changedAt = Date.now();
   await d.runAsync(
-    'UPDATE entries SET done=?, done_at=? WHERE id=?',
-    done ? 1 : 0, done ? Date.now() : null, id,
+    'UPDATE entries SET done=?, done_at=?, revision_at=? WHERE id=?',
+    done ? 1 : 0, done ? changedAt : null, changedAt, id,
   );
 }
 
@@ -487,7 +498,7 @@ export async function renameTopic(from: string, to: string): Promise<void> {
       null,
     );
 
-    await txn.runAsync('UPDATE entries SET topic=? WHERE topic=?', target, from);
+    await txn.runAsync('UPDATE entries SET topic=?, revision_at=? WHERE topic=?', target, Date.now(), from);
     await txn.runAsync('DELETE FROM topic_preferences WHERE topic IN (?, ?)', from, target);
     if (pinnedAt !== null) {
       await txn.runAsync(
@@ -595,7 +606,13 @@ export async function saveSettings(s: Settings): Promise<void> {
 
 export async function exportMarkdown(): Promise<string> {
   const d = getDb();
-  const rows = await d.getAllAsync<any>('SELECT * FROM entries ORDER BY created_at ASC');
+  const [rows, profile, preferenceRows] = await Promise.all([
+    d.getAllAsync<any>('SELECT * FROM entries ORDER BY created_at ASC'),
+    getProfile(),
+    d.getAllAsync<{ topic: string; pinned_at: number | null }>(
+      'SELECT topic, pinned_at FROM topic_preferences WHERE pinned_at IS NOT NULL ORDER BY topic ASC',
+    ),
+  ]);
   const entries = rows.map(rowToEntry);
   let md = '# 我的个人助手记录\n\n';
   for (const e of entries) {
@@ -610,5 +627,10 @@ export async function exportMarkdown(): Promise<string> {
     if (e.dueAt) md += `时间：${new Date(e.dueAt).toLocaleString('zh-CN')}\n\n`;
     md += '---\n\n';
   }
-  return md;
+  const topicPreferences: TopicPreference[] = preferenceRows.map((row) => ({
+    topic: row.topic,
+    pinnedAt: row.pinned_at!,
+  }));
+  const payload: BackupPayload = { entries, profile, topicPreferences };
+  return buildImportableMarkdown(md, payload);
 }

@@ -17,6 +17,7 @@ function entry(id: string, createdAt: number): Entry {
     correctedFrom: null,
     createdAt,
     updatedAt: createdAt,
+    revisionAt: createdAt,
     done: 0,
     doneAt: null,
     source: 'text',
