@@ -146,7 +146,9 @@ export async function cancelEntryReminder(entryId: string): Promise<void> {
 export async function syncEntryReminder(entry: Entry): Promise<void> {
   await syncEntryReminderOnly(entry);
   // 晨晚文案依赖任务快照；不阻塞当前写入流程，串行队列会合并顺序风险。
-  void refreshTaskDrivenNotifications();
+  void refreshTaskDrivenNotifications().catch((error) => {
+    console.warn('晨晚通知刷新失败，将在下次启动或任务变化时重试', error);
+  });
 }
 
 async function syncEntryReminderOnly(entry: Entry): Promise<void> {

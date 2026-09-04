@@ -20,8 +20,17 @@ import {
   type ImportResult,
 } from './engine/import-merge';
 import { sortTopicGroups } from './engine/topic-order';
+import { runSingleFlight, type SingleFlightState } from './engine/single-flight';
 
-let db: SQLite.SQLiteDatabase | null = null;
+type DatabaseGlobal = typeof globalThis & {
+  __assistantDatabaseRuntime?: SingleFlightState<SQLite.SQLiteDatabase>;
+};
+
+const databaseGlobal = globalThis as DatabaseGlobal;
+const databaseRuntime = databaseGlobal.__assistantDatabaseRuntime ??= {
+  value: null,
+  pending: null,
+};
 
 const DEFAULT_SETTINGS: Settings = {
   llmEnabled: false,
@@ -40,9 +49,12 @@ const DEFAULT_PROFILE: Profile = {
 
 /** 初始化数据库：建表 + FTS trigram + 种子数据 */
 export async function initDatabase(): Promise<void> {
-  if (db) return;
-  db = await SQLite.openDatabaseAsync('assistant.db');
-  await db.execAsync(`
+  await runSingleFlight(databaseRuntime, initializeDatabase);
+}
+
+async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
+  const database = await SQLite.openDatabaseAsync('assistant.db');
+  await database.execAsync(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS entries (
       id TEXT PRIMARY KEY,
@@ -131,18 +143,19 @@ export async function initDatabase(): Promise<void> {
   `);
 
   // 旧版本只有 created_at。先探测列再迁移，避免重复 ALTER 导致启动失败。
-  const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(entries)');
+  const columns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(entries)');
   if (!columns.some((column) => column.name === 'updated_at')) {
-    await db.execAsync('ALTER TABLE entries ADD COLUMN updated_at INTEGER;');
+    await database.execAsync('ALTER TABLE entries ADD COLUMN updated_at INTEGER;');
   }
   if (!columns.some((column) => column.name === 'revision_at')) {
-    await db.execAsync('ALTER TABLE entries ADD COLUMN revision_at INTEGER;');
+    await database.execAsync('ALTER TABLE entries ADD COLUMN revision_at INTEGER;');
   }
-  await db.execAsync(`
+  await database.execAsync(`
     UPDATE entries SET updated_at = created_at WHERE updated_at IS NULL;
     UPDATE entries SET revision_at = updated_at WHERE revision_at IS NULL;
     CREATE INDEX IF NOT EXISTS idx_entries_updated ON entries(updated_at);
   `);
+  return database;
 }
 
 /** 供引擎层（如迁移）使用的薄查询助手 */
@@ -156,8 +169,8 @@ export async function runSql(sql: string, ...args: any[]): Promise<void> {
 }
 
 function getDb(): SQLite.SQLiteDatabase {
-  if (!db) throw new Error('数据库未初始化，请先调用 initDatabase()');
-  return db;
+  if (!databaseRuntime.value) throw new Error('数据库未初始化，请先调用 initDatabase()');
+  return databaseRuntime.value;
 }
 
 /* ---------------- Entry CRUD ---------------- */

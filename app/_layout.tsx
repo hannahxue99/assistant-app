@@ -1,7 +1,8 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   clearPendingNotificationSync,
@@ -41,14 +42,25 @@ const appTheme = {
 };
 
 export default function RootLayout() {
-  const [ready, setReady] = useState(false);
+  const [startupState, setStartupState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [startupAttempt, setStartupAttempt] = useState(0);
 
   const bootstrap = useCallback(async () => {
+    setStartupState('loading');
     try {
-      await configureNotificationHandler(); // Android：先建 channel，再谈权限
       await initDatabase();
       // 一次性迁移老 App 数据（已迁移/库非空时自动跳过）
       await migrateLegacyOnce();
+      setStartupState('ready');
+    } catch (e) {
+      console.warn('数据库初始化失败', e);
+      setStartupState('error');
+      return;
+    }
+
+    // 通知与联网补理解都不是打开本地记录的前置条件，失败时不阻塞主界面。
+    try {
+      await configureNotificationHandler(); // Android：先建 channel，再谈权限
       // 先请求权限再排通知：iOS/Android 13+ 未授权时 schedule 会静默失败
       const granted = await ensurePermissions();
       if (granted) {
@@ -64,22 +76,47 @@ export default function RootLayout() {
       if (settings.llmEnabled && settings.llmKey) {
         retryFailedUnderstandings(settings).catch(() => {});
       }
-      setReady(true);
     } catch (e) {
-      console.warn('初始化失败', e);
-      setReady(true); // 尽力而为，不让白屏
+      console.warn('启动后的后台同步失败，将在下次启动时重试', e);
     }
   }, []);
 
   useEffect(() => {
-    bootstrap();
-  }, [bootstrap]);
+    void bootstrap();
+  }, [bootstrap, startupAttempt]);
 
-  if (!ready) {
+  if (startupState === 'loading') {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.bg }}>
         <ActivityIndicator color={theme.colors.accent} size="large" />
       </View>
+    );
+  }
+
+  if (startupState === 'error') {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.errorPage}>
+          <View style={styles.errorContent}>
+            <View style={styles.errorIcon}>
+              <Ionicons name="server-outline" size={30} color={theme.colors.accent} />
+            </View>
+            <Text style={styles.errorTitle}>数据暂时无法加载</Text>
+            <Text style={styles.errorDescription}>
+              请重新尝试。你的记录仍保存在本机，不会因为本次加载失败而丢失。
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="重新尝试加载数据"
+              onPress={() => setStartupAttempt((attempt) => attempt + 1)}
+              style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
+            >
+              <Text style={styles.retryButtonText}>重新尝试</Text>
+            </Pressable>
+            <Text style={styles.errorHint}>如果仍无法打开，请完全关闭 App 后重新进入</Text>
+          </View>
+        </SafeAreaView>
+      </SafeAreaProvider>
     );
   }
 
@@ -93,3 +130,62 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  errorPage: {
+    flex: 1,
+    backgroundColor: theme.colors.bg,
+  },
+  errorContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.xl,
+    paddingBottom: 56,
+  },
+  errorIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.accentSoft,
+    marginBottom: 22,
+  },
+  errorTitle: {
+    color: theme.colors.text,
+    fontSize: theme.font.title,
+    fontWeight: theme.fontWeight.semibold,
+    marginBottom: theme.spacing.sm,
+  },
+  errorDescription: {
+    maxWidth: 300,
+    color: theme.colors.textDim,
+    fontSize: theme.font.body,
+    lineHeight: 23,
+    textAlign: 'center',
+    marginBottom: 30,
+  },
+  retryButton: {
+    width: '100%',
+    minHeight: 50,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.accent,
+  },
+  retryButtonPressed: {
+    opacity: 0.78,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: theme.font.body,
+    fontWeight: theme.fontWeight.semibold,
+  },
+  errorHint: {
+    color: theme.colors.textDim,
+    fontSize: theme.font.small,
+    textAlign: 'center',
+    marginTop: 18,
+  },
+});
