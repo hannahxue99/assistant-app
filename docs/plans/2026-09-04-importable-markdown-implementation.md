@@ -89,4 +89,3 @@
 4. Mark the design implemented and document known legacy-file limitations.
 5. Push `codex/importable-markdown` and open a PR against `main`.
 6. Report automated results, manual verification steps, PR URL, and rollback point.
-
