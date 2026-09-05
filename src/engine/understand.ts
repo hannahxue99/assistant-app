@@ -19,6 +19,7 @@ import {
 import type { Entry, NewEntryInput, Settings } from '../types';
 import { extractRelativeDateExpression, hasTimeHint, parseChineseTime } from './time';
 import { LlmError, understandWithLlm } from './llm';
+import { notifyEntryChanges } from './entry-events';
 
 const WEEKDAY_CN = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -68,12 +69,30 @@ export function understandWithRules(rawText: string, now = Date.now()): {
  * 处理一条新条目：先规则(快)，后 LLM(精) 回填。
  * 返回是否成功应用了 LLM 结果。
  */
-export async function understandEntry(
+type UnderstandingResult = 'llm' | 'rule' | 'failed' | 'stale';
+const runtime = globalThis as typeof globalThis & { __understandingJobs?: Map<string, Promise<UnderstandingResult>> };
+const jobs = runtime.__understandingJobs ??= new Map();
+
+export function understandEntry(entry: Entry, settings: Settings, signal?: AbortSignal): Promise<UnderstandingResult> {
+  const existing = jobs.get(entry.id);
+  if (existing) return existing;
+  const job = processEntry(entry, settings, signal).finally(() => {
+    jobs.delete(entry.id);
+    notifyEntryChanges();
+  });
+  jobs.set(entry.id, job);
+  return job;
+}
+
+async function processEntry(
   entry: Entry,
   settings: Settings,
   signal?: AbortSignal,
-): Promise<'llm' | 'rule' | 'failed'> {
-  const now = Date.now();
+): Promise<UnderstandingResult> {
+  const current = await getEntry(entry.id);
+  if (!current || current.parseStatus === 'manual') return 'stale';
+  entry = current;
+  const now = entry.createdAt;
 
   // 规则层：时间归一化（总是本地先算，快且离线可靠）
   const time = hasTimeHint(entry.rawText) ? parseChineseTime(entry.rawText, now) : null;
@@ -88,19 +107,28 @@ export async function understandEntry(
         key: settings.llmKey,
         model: settings.llmModel,
         activeTopics,
+        referenceAt: now,
+        dueAt: ruleDueAt,
       }, signal);
       // LLM 不做时间，规则的时间优先；LLM 给的 dueAt 忽略
       const finalKind = parsed.kind === 'info' && ruleDueAt !== null ? 'task' : parsed.kind;
       // LLM 偶尔忽略"具体日期"指令 → 本地再兜一次
-      const finalSummary = concretizeDateInText(parsed.summary, now);
-      await updateParsedResult(entry.id, {
+      let finalSummary = concretizeDateInText(parsed.summary, now);
+      if (ruleDueAt !== null) {
+        const titleDate = hasTimeHint(finalSummary) ? parseChineseTime(finalSummary, now).dueAt : null;
+        if (titleDate === null || new Date(titleDate).toDateString() !== new Date(ruleDueAt).toDateString()) {
+          finalSummary = concretizeDateInText(entry.rawText, now);
+        }
+      }
+      const applied = await updateParsedResult(entry.id, {
         kind: finalKind,
         summary: finalSummary,
         dueAt: ruleDueAt,
         tags: parsed.tags,
         topic: parsed.topic,
         persons: parsed.persons,
-      }, 'llm');
+      }, 'llm', entry);
+      if (!applied) return 'stale';
       // 理解可能改变 kind/topic → 同步到点提醒
       const ok = await getEntry(entry.id);
       if (ok) await syncEntryReminder(ok);
@@ -114,21 +142,22 @@ export async function understandEntry(
   // 规则兜底
   const rule = understandWithRules(entry.rawText, now);
   const kind = rule.kind === 'info' && ruleDueAt !== null ? 'task' : rule.kind;
-  await updateParsedResult(entry.id, {
+  const failed = !!(settings.llmEnabled && settings.llmKey);
+  const applied = await updateParsedResult(entry.id, {
     kind,
     summary: rule.summary,
     dueAt: ruleDueAt,
     tags: rule.tags,
     topic: rule.topic,
     persons: rule.persons,
-  }, 'rule');
+  }, 'rule', entry, failed ? 'failed' : 'ok');
+  if (!applied) return 'stale';
   const updated = await getEntry(entry.id);
   if (updated) await syncEntryReminder(updated);
 
   // LLM 开启但失败 → 落 parse_status='failed'（规则结果已回填、条目可读），
   // 下次启动联网时由 retryFailedUnderstandings 补理解
   if (settings.llmEnabled && settings.llmKey) {
-    await setParseStatus(entry.id, 'failed');
     return 'failed';
   }
   return 'rule';
@@ -143,7 +172,7 @@ export async function retryFailedUnderstandings(settings: Settings): Promise<num
   if (!settings.llmEnabled || !settings.llmKey) return 0;
   const failed = await listParseFailed(50);
   for (const e of failed) {
-    understandEntry(e, settings).catch(() => {});
+    await understandEntry(e, settings).catch(() => {});
   }
   return failed.length;
 }
@@ -159,8 +188,9 @@ export async function ingest(
   onUnderstood?: () => void,
 ): Promise<Entry> {
   // 先插入，规则结果同步算好立即回填（保证首帧就是待办/时间正确）
-  const rule = understandWithRules(input.rawText, input.createdAt ?? Date.now());
-  const time = hasTimeHint(input.rawText) ? parseChineseTime(input.rawText, input.createdAt ?? Date.now()) : null;
+  input = { ...input, createdAt: input.createdAt ?? Date.now() };
+  const rule = understandWithRules(input.rawText, input.createdAt);
+  const time = hasTimeHint(input.rawText) ? parseChineseTime(input.rawText, input.createdAt) : null;
   const ruleDueAt = time?.dueAt ?? null;
   const kind = rule.kind === 'info' && ruleDueAt !== null ? 'task' : rule.kind;
 
