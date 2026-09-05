@@ -4,7 +4,7 @@
  */
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { getProfile, listOpenTasks } from '../db';
+import { getProfile, listOpenTasks, queueNotificationSync } from '../db';
 import type { Entry } from '../types';
 import { buildEveningCopy, buildMorningCopy } from './notification-copy';
 
@@ -144,9 +144,18 @@ export async function cancelEntryReminder(entryId: string): Promise<void> {
 /** 按条目当前状态同步到点提醒（唯一入口，写路径都调这里）：
  *  task + 未完成 + 未来时间 → 挂提醒；其余（非 task / 已完成 / 已过期 / 无时间）→ 撤。 */
 export async function syncEntryReminder(entry: Entry): Promise<void> {
-  await syncEntryReminderOnly(entry);
+  try {
+    // 保留到下次启动统一补偿，避免旧请求清除新修改的排程意图。
+    await queueNotificationSync(entry.id);
+    const permission = await Notifications.getPermissionsAsync();
+    if (isGranted(permission)) await syncEntryReminderOnly(entry);
+  } catch (error) {
+    console.warn('到点提醒同步失败，已保存的记录不受影响', error);
+  }
   // 晨晚文案依赖任务快照；不阻塞当前写入流程，串行队列会合并顺序风险。
-  void refreshTaskDrivenNotifications();
+  void refreshTaskDrivenNotifications().catch((error) => {
+    console.warn('晨晚通知刷新失败，将在下次启动或任务变化时重试', error);
+  });
 }
 
 async function syncEntryReminderOnly(entry: Entry): Promise<void> {

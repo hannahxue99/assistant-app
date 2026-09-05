@@ -47,7 +47,9 @@
     "test:topics": "tsx scripts/test-topic-order.ts",
     "test:entry-time": "tsx scripts/test-entry-time.ts",
     "test:backup": "tsx scripts/test-backup-format.ts",
-    "test:import": "tsx scripts/test-import-merge.ts"
+    "test:import": "tsx scripts/test-import-merge.ts",
+    "test:database-runtime": "tsx scripts/test-database-runtime.ts",
+    "test:notification-isolation": "node scripts/test-notification-isolation.cjs"
   },
   "private": true
 }
