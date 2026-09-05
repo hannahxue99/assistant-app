@@ -57,3 +57,20 @@
 ## Rollback point
 
 Revert this PR. It introduces no schema migration or data transformation, so existing local records remain compatible with the previous app version.
+
+## 2026-09-05 review follow-up
+
+- All database read/write entry points now await the same initialization promise, including callers outside root startup.
+- Single-entry notification synchronization records a durable queue intent before native work. Native failures are contained so saved records and successful LLM results remain intact.
+- Queue intents remain until startup compensation; this intentionally avoids clearing a newer change from an older in-flight single-entry request. Existing bulk compensation behavior is retained and requires a later concurrency audit.
+- Startup daily scheduling uses the task refresh queue. Notification failure no longer prevents understanding retries.
+- Added `node scripts/test-notification-isolation.cjs`: runs the real notification and understanding modules with failing native notification substitutes. Verifies ingest continues, LLM is invoked, topic/source survive, compensation is queued, and cancellation errors are contained.
+- Device acceptance and actual native notification delivery are still pending. This test does not claim to validate OS notification behavior.
+
+## Subsequent review batches
+
+1. Data consistency: version-conditional LLM writes; stable relative-date reference; edit-time task recomputation with topic preserved; interrupted pending recovery. Acceptance: edit during an LLM request, retry across midnight, change a task date, exit during processing.
+2. Product correctness: remove personal seed migration from general startup; aggregate groups before limiting results; preserve search filters across asynchronous refresh. Acceptance: clean installation, more than 200 grouped entries, search while LLM finishes.
+3. Notification follow-up: serialize all schedule entry points, preserve deletion cancellation intents, and acknowledge compensation by version so concurrent edits cannot lose queued work.
+
+These subsequent batches are not implemented by this PR update.

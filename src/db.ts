@@ -160,17 +160,26 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
 
 /** 供引擎层（如迁移）使用的薄查询助手 */
 export async function queryFirst<T = any>(sql: string, ...args: any[]): Promise<T | null> {
-  return getDb().getFirstAsync<T>(sql, ...args);
+  return (await getDb()).getFirstAsync<T>(sql, ...args);
 }
 
 /** 供引擎层使用的执行助手 */
 export async function runSql(sql: string, ...args: any[]): Promise<void> {
-  await getDb().runAsync(sql, ...args);
+  await (await getDb()).runAsync(sql, ...args);
 }
 
-function getDb(): SQLite.SQLiteDatabase {
-  if (!databaseRuntime.value) throw new Error('数据库未初始化，请先调用 initDatabase()');
-  return databaseRuntime.value;
+function getDb(): Promise<SQLite.SQLiteDatabase> {
+  return runSingleFlight(databaseRuntime, initializeDatabase);
+}
+
+/** 保存通知补偿意图；通知不可用不影响已保存的记录。 */
+export async function queueNotificationSync(entryId: string): Promise<void> {
+  const d = await getDb();
+  await d.runAsync(
+    `INSERT INTO notification_sync_queue (entry_id, queued_at) VALUES (?, ?)
+     ON CONFLICT(entry_id) DO UPDATE SET queued_at=excluded.queued_at`,
+    entryId, Date.now(),
+  );
 }
 
 /* ---------------- Entry CRUD ---------------- */
@@ -263,7 +272,7 @@ export async function insertEntry(input: NewEntryInput, parsed?: {
   kind?: EntryKind; summary?: string; dueAt?: number | null;
   tags?: string[]; topic?: string | null; persons?: string[];
 }): Promise<Entry> {
-  const d = getDb();
+  const d = await getDb();
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const createdAt = input.createdAt ?? Date.now();
   const kind = parsed?.kind ?? 'info';
@@ -295,7 +304,7 @@ export async function insertEntries(items: NewEntryInput[]): Promise<Entry[]> {
 }
 
 export async function getEntry(id: string): Promise<Entry | null> {
-  const d = getDb();
+  const d = await getDb();
   const r = await d.getFirstAsync<any>('SELECT * FROM entries WHERE id = ?', id);
   return r ? rowToEntry(r) : null;
 }
@@ -306,7 +315,7 @@ export async function updateParsedResult(
   parsed: { kind: EntryKind; summary: string; dueAt: number | null; tags: string[]; topic: string | null; persons: string[] },
   parseSource: 'rule' | 'llm',
 ): Promise<void> {
-  const d = getDb();
+  const d = await getDb();
   await d.runAsync(
     `UPDATE entries SET kind=?, summary=?, due_at=?, remind_at=?, topic=?, tags=?, persons=?,
        parse_status='ok', parse_source=?, revision_at=?
@@ -319,13 +328,13 @@ export async function updateParsedResult(
 
 /** 理解状态标记（LLM 失败但规则结果已回填 → failed，联网后可补理解） */
 export async function setParseStatus(id: string, status: 'pending' | 'failed' | 'ok'): Promise<void> {
-  const d = getDb();
+  const d = await getDb();
   await d.runAsync('UPDATE entries SET parse_status=?, revision_at=? WHERE id=?', status, Date.now(), id);
 }
 
 /** 理解失败、待补理解的条目（启动时重试用） */
 export async function listParseFailed(limit = 50): Promise<Entry[]> {
-  const d = getDb();
+  const d = await getDb();
   const rows = await d.getAllAsync<any>(
     `SELECT * FROM entries WHERE parse_status='failed' ORDER BY updated_at DESC LIMIT ?`, limit,
   );
@@ -345,7 +354,7 @@ export async function applyCorrection(
     kind: prev.kind, summary: prev.summary, rawText: prev.rawText,
     dueAt: prev.dueAt, topic: prev.topic, tags: prev.tags,
   });
-  const d = getDb();
+  const d = await getDb();
   const changedAt = Date.now();
   await d.runAsync(
     `UPDATE entries SET kind=?, summary=?, raw_text=?, due_at=?, remind_at=?, topic=?, tags=?,
@@ -365,7 +374,7 @@ export async function applyCorrection(
 }
 
 export async function setDone(id: string, done: boolean): Promise<void> {
-  const d = getDb();
+  const d = await getDb();
   const changedAt = Date.now();
   await d.runAsync(
     'UPDATE entries SET done=?, done_at=?, revision_at=? WHERE id=?',
@@ -374,14 +383,14 @@ export async function setDone(id: string, done: boolean): Promise<void> {
 }
 
 export async function deleteEntry(id: string): Promise<void> {
-  const d = getDb();
+  const d = await getDb();
   await d.runAsync('DELETE FROM entries WHERE id=?', id);
   await d.runAsync('DELETE FROM entries_fts WHERE entry_id=?', id);
   await d.runAsync('DELETE FROM notification_sync_queue WHERE entry_id=?', id);
 }
 
 export async function listEntries(filter?: EntryFilter, limit = 500): Promise<Entry[]> {
-  const d = getDb();
+  const d = await getDb();
   let sql = 'SELECT * FROM entries';
   const conds: string[] = [];
   const args: any[] = [];
@@ -419,7 +428,7 @@ export async function listEntries(filter?: EntryFilter, limit = 500): Promise<En
 
 /** 带词高亮的关键词过滤（离线兜底，用于 FTS 未命中时） */
 export async function listByKeyword(query: string, limit = 500): Promise<Entry[]> {
-  const d = getDb();
+  const d = await getDb();
   const like = `%${query.trim()}%`;
   const rows = await d.getAllAsync<any>(
     `SELECT * FROM entries
@@ -432,7 +441,7 @@ export async function listByKeyword(query: string, limit = 500): Promise<Entry[]
 
 /** 今日到期待办（供「今天」页） */
 export async function listTodayTasks(): Promise<Entry[]> {
-  const d = getDb();
+  const d = await getDb();
   const startOfDay = startOfToday();
   const endOfDay = startOfDay + 24 * 3600 * 1000;
   const rows = await d.getAllAsync<any>(
@@ -446,7 +455,7 @@ export async function listTodayTasks(): Promise<Entry[]> {
 
 /** 未过期但尚未完成且无提醒的待办（供拖延检测） */
 export async function listOverdueTasks(): Promise<Entry[]> {
-  const d = getDb();
+  const d = await getDb();
   const rows = await d.getAllAsync<any>(
     `SELECT * FROM entries
      WHERE kind='task' AND done=0 AND due_at IS NOT NULL AND due_at < ?
@@ -458,7 +467,7 @@ export async function listOverdueTasks(): Promise<Entry[]> {
 
 /** 全部未完成待办（含无时间的） */
 export async function listOpenTasks(): Promise<Entry[]> {
-  const d = getDb();
+  const d = await getDb();
   const rows = await d.getAllAsync<any>(
     `SELECT * FROM entries WHERE kind='task' AND done=0 ORDER BY due_at IS NULL, due_at ASC`,
   );
@@ -468,7 +477,7 @@ export async function listOpenTasks(): Promise<Entry[]> {
 /** 本周待办数据：今日起 7 天窗口内未完成 + 今天已完成（划线展示，次日消失）。
  *  逾期未完成的不再进本周待办（用户决策 2026-09-01）；仍可在搜索/备忘录中找到。 */
 export async function listWeekTasks(): Promise<Entry[]> {
-  const d = getDb();
+  const d = await getDb();
   const startOfDay = startOfToday();
   const windowEnd = startOfDay + 7 * 24 * 3600 * 1000;
   const rows = await d.getAllAsync<any>(
@@ -485,7 +494,7 @@ export async function listWeekTasks(): Promise<Entry[]> {
 
 /** 长期待办：7 天窗口之后的未完成待办，升序 */
 export async function listLongTermTasks(): Promise<Entry[]> {
-  const d = getDb();
+  const d = await getDb();
   const windowEnd = startOfToday() + 7 * 24 * 3600 * 1000;
   const rows = await d.getAllAsync<any>(
     `SELECT * FROM entries
@@ -498,14 +507,14 @@ export async function listLongTermTasks(): Promise<Entry[]> {
 
 /** 总记录数（我的页统计行） */
 export async function countEntries(): Promise<number> {
-  const d = getDb();
+  const d = await getDb();
   const r = await d.getFirstAsync<any>('SELECT COUNT(*) AS n FROM entries');
   return r?.n ?? 0;
 }
 
 /** 最早一条记录的时间（我的页「已陪伴 N 天」起算点） */
 export async function firstEntryAt(): Promise<number | null> {
-  const d = getDb();
+  const d = await getDb();
   const r = await d.getFirstAsync<any>('SELECT MIN(created_at) AS first FROM entries');
   return r?.first ?? null;
 }
@@ -515,7 +524,7 @@ export async function listActiveTopics(
   days = 180,
   limit = 100,
 ): Promise<{ topic: string; count: number; latestText: string }[]> {
-  const d = getDb();
+  const d = await getDb();
   const since = Date.now() - days * 24 * 3600 * 1000;
   const safeLimit = Math.max(1, Math.min(limit, 100));
   const rows = await d.getAllAsync<any>(
@@ -532,7 +541,7 @@ export async function listActiveTopics(
 
 /** 主题分组视图 */
 export async function listTopicGroups(limit = 200): Promise<TopicGroup[]> {
-  const d = getDb();
+  const d = await getDb();
   const [rows, preferenceRows] = await Promise.all([
     d.getAllAsync<any>(
       `SELECT * FROM entries WHERE topic IS NOT NULL ORDER BY updated_at DESC LIMIT ?`,
@@ -564,7 +573,7 @@ export async function listTopicGroups(limit = 200): Promise<TopicGroup[]> {
 
 /** 非空主题的所有条目 */
 export async function listByTopic(topic: string): Promise<Entry[]> {
-  const d = getDb();
+  const d = await getDb();
   const rows = await d.getAllAsync<any>(
     `SELECT * FROM entries WHERE topic=? ORDER BY updated_at DESC`, topic,
   );
@@ -573,7 +582,7 @@ export async function listByTopic(topic: string): Promise<Entry[]> {
 
 /** 主题重命名/合并 */
 export async function renameTopic(from: string, to: string): Promise<void> {
-  const d = getDb();
+  const d = await getDb();
   const target = to.trim();
   if (!target || target === from) return;
 
@@ -604,7 +613,7 @@ export async function renameTopic(from: string, to: string): Promise<void> {
 
 /** 置顶或取消置顶一个聚合主题。重复操作保持幂等。 */
 export async function setTopicPinned(topic: string, pinned: boolean): Promise<void> {
-  const d = getDb();
+  const d = await getDb();
   if (pinned) {
     await d.runAsync(
       `INSERT INTO topic_preferences (topic, pinned_at) VALUES (?, ?)
@@ -625,7 +634,7 @@ function startOfToday(): number {
 
 /** 同步单条 entry 到 FTS（trigram 自动切词，中文无需分词器） */
 async function syncFts(id: string): Promise<void> {
-  const d = getDb();
+  const d = await getDb();
   const e = await getEntry(id);
   if (!e) return;
   // 先删旧
@@ -638,19 +647,19 @@ async function syncFts(id: string): Promise<void> {
 
 /** 全量重建 FTS（理解回填/恢复后调用） */
 export async function rebuildFts(): Promise<void> {
-  await rebuildFtsWithDatabase(getDb());
+  await rebuildFtsWithDatabase(await getDb());
 }
 
 /* ---------------- Profile & Settings ---------------- */
 
 export async function getProfile(): Promise<Profile> {
-  const d = getDb();
+  const d = await getDb();
   const r = await d.getFirstAsync<any>('SELECT * FROM profile WHERE id=1');
   return rowToProfile(r);
 }
 
 export async function saveProfile(p: Profile): Promise<void> {
-  const d = getDb();
+  const d = await getDb();
   await d.runAsync(
     `UPDATE profile SET name=?, goals=?, avoid=?, notify_morning=?, notify_evening=? WHERE id=1`,
     p.name, JSON.stringify(p.goals), JSON.stringify(p.avoid),
@@ -659,7 +668,7 @@ export async function saveProfile(p: Profile): Promise<void> {
 }
 
 export async function getSettings(): Promise<Settings> {
-  const d = getDb();
+  const d = await getDb();
   const r = await d.getFirstAsync<any>('SELECT * FROM settings WHERE id=1');
   if (!r) return DEFAULT_SETTINGS;
   return {
@@ -671,7 +680,7 @@ export async function getSettings(): Promise<Settings> {
 }
 
 export async function saveSettings(s: Settings): Promise<void> {
-  const d = getDb();
+  const d = await getDb();
   await d.runAsync(
     `UPDATE settings SET llm_enabled=?, llm_base_url=?, llm_key=?, llm_model=? WHERE id=1`,
     s.llmEnabled ? 1 : 0, s.llmBaseUrl, s.llmKey, s.llmModel,
@@ -681,7 +690,7 @@ export async function saveSettings(s: Settings): Promise<void> {
 /* ---------------- Import ---------------- */
 
 export async function previewBackupImport(payload: BackupPayload): Promise<ImportPreview> {
-  const d = getDb();
+  const d = await getDb();
   const [rows, profileRow] = await Promise.all([
     d.getAllAsync<any>('SELECT * FROM entries'),
     d.getFirstAsync<any>('SELECT * FROM profile WHERE id=1'),
@@ -696,7 +705,7 @@ export async function previewBackupImport(payload: BackupPayload): Promise<Impor
  * 预览后仍会在独占事务中重新计算决策，避免确认期间本地数据变化导致误覆盖。
  */
 export async function importBackup(envelope: BackupEnvelope): Promise<ImportResult> {
-  const d = getDb();
+  const d = await getDb();
   let preview: ImportPreview = {
     added: 0,
     updated: 0,
@@ -789,7 +798,7 @@ export async function importBackup(envelope: BackupEnvelope): Promise<ImportResu
 }
 
 export async function listPendingNotificationSyncEntries(): Promise<Entry[]> {
-  const rows = await getDb().getAllAsync<any>(
+  const rows = await (await getDb()).getAllAsync<any>(
     `SELECT entries.* FROM notification_sync_queue
      JOIN entries ON entries.id = notification_sync_queue.entry_id
      ORDER BY notification_sync_queue.queued_at ASC`,
@@ -799,7 +808,7 @@ export async function listPendingNotificationSyncEntries(): Promise<Entry[]> {
 
 export async function clearPendingNotificationSync(entryIds: string[]): Promise<void> {
   if (entryIds.length === 0) return;
-  const d = getDb();
+  const d = await getDb();
   await d.withExclusiveTransactionAsync(async (txn) => {
     for (const entryId of entryIds) {
       await txn.runAsync('DELETE FROM notification_sync_queue WHERE entry_id=?', entryId);
@@ -810,7 +819,7 @@ export async function clearPendingNotificationSync(entryIds: string[]): Promise<
 /* ---------------- Export ---------------- */
 
 export async function exportMarkdown(): Promise<string> {
-  const d = getDb();
+  const d = await getDb();
   const [rows, profile, preferenceRows] = await Promise.all([
     d.getAllAsync<any>('SELECT * FROM entries ORDER BY created_at ASC'),
     getProfile(),

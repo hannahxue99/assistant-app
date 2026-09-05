@@ -14,7 +14,7 @@ import { migrateLegacyOnce } from '@/src/engine/migrate-legacy';
 import {
   configureNotificationHandler,
   ensurePermissions,
-  scheduleDailyNotifications,
+  refreshTaskDrivenNotifications,
   syncEntryReminders,
 } from '@/src/engine/notifications';
 import { retryFailedUnderstandings } from '@/src/engine/understand';
@@ -64,14 +64,18 @@ export default function RootLayout() {
       // 先请求权限再排通知：iOS/Android 13+ 未授权时 schedule 会静默失败
       const granted = await ensurePermissions();
       if (granted) {
-        await scheduleDailyNotifications(); // 依据画像开关重挂晨晚通知（晨问逐日续期）
+        await refreshTaskDrivenNotifications(); // 与任务变化共用串行队列
         const pendingReminderEntries = await listPendingNotificationSyncEntries();
         if (pendingReminderEntries.length > 0) {
           await syncEntryReminders(pendingReminderEntries);
           await clearPendingNotificationSync(pendingReminderEntries.map((entry) => entry.id));
         }
       }
-      // 联网补理解：LLM 开启时重跑上次失败的条目（fire-and-forget）
+    } catch (e) {
+      console.warn('通知同步失败，将在下次启动时重试', e);
+    }
+    try {
+      // 通知失败也必须继续补理解。
       const settings = await getSettings();
       if (settings.llmEnabled && settings.llmKey) {
         retryFailedUnderstandings(settings).catch(() => {});
