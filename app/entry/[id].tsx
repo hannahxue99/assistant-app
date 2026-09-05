@@ -27,6 +27,7 @@ export default function EntryDetailScreen() {
   const router = useRouter();
   const [entry, setEntry] = useState<Entry | null>(null);
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftBody, setDraftBody] = useState('');
 
@@ -68,11 +69,13 @@ export default function EntryDetailScreen() {
   }
 
   async function handleSave() {
-    if (!entry) return;
+    if (!entry || saving) return;
     if (!dirty) {
       setEditing(false); // 无改动：直接退出编辑态
       return;
     }
+    setSaving(true);
+    try {
     const updated = await applyCorrection(entry.id, {
       summary: draftTitle.trim(),
       rawText: draftBody.trim(),
@@ -81,6 +84,11 @@ export default function EntryDetailScreen() {
     if (updated) {
       setEntry(updated);
       await syncEntryReminder(updated);
+    }
+    } catch {
+      Alert.alert('保存失败', '修改尚未保存，请重试。');
+    } finally {
+      setSaving(false);
     }
   }
 

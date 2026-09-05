@@ -30,7 +30,7 @@ async function main() {
     listActiveTopics: async () => [],
     insertEntry: async (input, parsed) => (saved = { ...input, ...parsed, id: 'entry-1', done: 0 }),
     getEntry: async () => saved,
-    updateParsedResult: async (id, parsed, source) => { saved = { ...saved, ...parsed, parseSource: source }; },
+    updateParsedResult: async (id, parsed, source) => { saved = { ...saved, ...parsed, parseSource: source }; return true; },
     setParseStatus: async (id, status) => { saved.parseStatus = status; },
   };
   const notifications = load('src/engine/notifications.ts', {
@@ -57,6 +57,7 @@ async function main() {
       return { kind: 'task', summary: '模型标题', topic: '家庭采购', tags: [], persons: [] };
     } },
     './notifications': notifications,
+    './entry-events': { notifyEntryChanges() {} },
   });
   const settings = { llmEnabled: true, llmKey: 'test-only' };
   let finish;

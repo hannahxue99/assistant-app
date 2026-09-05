@@ -4,7 +4,8 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef } from 'react';
+import { subscribeEntryChanges } from '../../src/engine/entry-events';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -56,6 +57,8 @@ export default function HomeScreen() {
   const [memoTab, setMemoTab] = useState<MemoTab>('aggregate');
   const [query, setQuery] = useState('');
   const [voiceQuery, setVoiceQuery] = useState('');
+  const filters = useRef({ query: '', voiceQuery: '' });
+  const loadVersion = useRef(0);
   const [topics, setTopics] = useState<TopicGroup[]>([]);
   const [stream, setStream] = useState<Entry[]>([]);
   const [voiceLog, setVoiceLog] = useState<Entry[]>([]);
@@ -63,6 +66,8 @@ export default function HomeScreen() {
   const [shownVoice, setShownVoice] = useState<Entry[]>([]);
 
   const load = useCallback(async () => {
+    const version = ++loadVersion.current;
+    const activeFilters = { ...filters.current };
     const [s, week, long_, groups, all] = await Promise.all([
       getSettings(),
       listWeekTasks(),
@@ -70,19 +75,32 @@ export default function HomeScreen() {
       listTopicGroups(),
       listEntries({ query: '', kind: 'all', showDone: true }),
     ]);
+    async function search(text: string) {
+      const keyword = text.trim();
+      if (!keyword) return null;
+      const hits = await listEntries({ query: keyword, kind: 'all', showDone: true });
+      return hits.length ? hits : listByKeyword(keyword);
+    }
+    const [aggregateHits, voiceHits] = await Promise.all([
+      search(activeFilters.query), search(activeFilters.voiceQuery),
+    ]);
+    if (version !== loadVersion.current) return;
     setSettings(s);
     setWeekGroups(groupWeekTasks(week));
     setLongTerm(long_);
-    setTopics(groups);
+    setTopics(aggregateHits ? [] : groups);
     const topicIds = new Set(groups.flatMap((g) => g.entries.map((e) => e.id)));
-    setStream(all.filter((e) => !topicIds.has(e.id)));
+    setStream(aggregateHits ?? all.filter((e) => !topicIds.has(e.id)));
     setVoiceLog(all);
-    setShownVoice(all);
+    setShownVoice(voiceHits ?? all);
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      load();
+      const refresh = () => { void load().catch(() => console.warn('记录刷新失败')); };
+      refresh();
+      const unsubscribe = subscribeEntryChanges(refresh);
+      return () => { unsubscribe(); loadVersion.current++; };
     }, [load]),
   );
 
@@ -107,30 +125,15 @@ export default function HomeScreen() {
 
   async function handleSearch(q: string) {
     setQuery(q);
-    const kw = q.trim();
-    if (!kw) {
-      load();
-      return;
-    }
-    let list = await listEntries({ query: kw, kind: 'all', showDone: true });
-    if (list.length === 0) list = await listByKeyword(kw);
-    // 搜索态隐藏主题聚合卡，命中条目统一以时间流卡展示
-    setTopics([]);
-    setStream(list);
+    filters.current.query = q;
+    await load().catch(() => console.warn('搜索失败'));
   }
 
   // 用户原声页签搜索：FTS 命中后按原声列表顺序展示
   async function handleVoiceSearch(q: string) {
     setVoiceQuery(q);
-    const kw = q.trim();
-    if (!kw) {
-      setShownVoice(voiceLog);
-      return;
-    }
-    let hits = await listEntries({ query: kw, kind: 'all', showDone: true });
-    if (hits.length === 0) hits = await listByKeyword(kw);
-    const hitIds = new Set(hits.map((e) => e.id));
-    setShownVoice(voiceLog.filter((e) => hitIds.has(e.id)));
+    filters.current.voiceQuery = q;
+    await load().catch(() => console.warn('搜索失败'));
   }
 
   async function handleUnderstandingRetry(entry: Entry) {

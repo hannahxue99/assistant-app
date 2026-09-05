@@ -20,6 +20,7 @@ import {
   type ImportResult,
 } from './engine/import-merge';
 import { sortTopicGroups } from './engine/topic-order';
+import { deriveEditedEntry } from './engine/edit-derived';
 import { runSingleFlight, type SingleFlightState } from './engine/single-flight';
 
 type DatabaseGlobal = typeof globalThis & {
@@ -314,29 +315,37 @@ export async function updateParsedResult(
   id: string,
   parsed: { kind: EntryKind; summary: string; dueAt: number | null; tags: string[]; topic: string | null; persons: string[] },
   parseSource: 'rule' | 'llm',
-): Promise<void> {
+  expected: Entry,
+  status: 'ok' | 'failed' = 'ok',
+): Promise<boolean> {
   const d = await getDb();
-  await d.runAsync(
+  let applied = false;
+  await d.withExclusiveTransactionAsync(async (txn) => {
+  const result = await txn.runAsync(
     `UPDATE entries SET kind=?, summary=?, due_at=?, remind_at=?, topic=?, tags=?, persons=?,
-       parse_status='ok', parse_source=?, revision_at=?
-     WHERE id=?`,
+       parse_status=?, parse_source=?, revision_at=MAX(revision_at+1, ?)
+     WHERE id=? AND revision_at=? AND raw_text=? AND parse_status!='manual'`,
     parsed.kind, parsed.summary, parsed.dueAt, parsed.dueAt, parsed.topic,
-    JSON.stringify(parsed.tags), JSON.stringify(parsed.persons), parseSource, Date.now(), id,
+    JSON.stringify(parsed.tags), JSON.stringify(parsed.persons), status, parseSource, Date.now(), id,
+    expected.revisionAt, expected.rawText,
   );
-  await syncFts(id);
+  applied = result.changes > 0;
+  if (applied) await syncFtsWithDatabase(txn, id);
+  });
+  return applied;
 }
 
 /** 理解状态标记（LLM 失败但规则结果已回填 → failed，联网后可补理解） */
 export async function setParseStatus(id: string, status: 'pending' | 'failed' | 'ok'): Promise<void> {
   const d = await getDb();
-  await d.runAsync('UPDATE entries SET parse_status=?, revision_at=? WHERE id=?', status, Date.now(), id);
+  await d.runAsync("UPDATE entries SET parse_status=?, revision_at=MAX(revision_at+1, ?) WHERE id=? AND parse_status!='manual'", status, Date.now(), id);
 }
 
 /** 理解失败、待补理解的条目（启动时重试用） */
 export async function listParseFailed(limit = 50): Promise<Entry[]> {
   const d = await getDb();
   const rows = await d.getAllAsync<any>(
-    `SELECT * FROM entries WHERE parse_status='failed' ORDER BY updated_at DESC LIMIT ?`, limit,
+    `SELECT * FROM entries WHERE parse_status IN ('failed', 'pending') ORDER BY updated_at DESC LIMIT ?`, limit,
   );
   return rows.map(rowToEntry);
 }
@@ -348,36 +357,44 @@ export async function applyCorrection(
   id: string,
   patch: { kind?: EntryKind; summary?: string; rawText?: string; dueAt?: number | null; topic?: string | null; tags?: string[] },
 ): Promise<Entry | null> {
-  const prev = await getEntry(id);
-  if (!prev) return null;
+  const d = await getDb();
+  let updated: Entry | null = null;
+  await d.withExclusiveTransactionAsync(async (txn) => {
+  const row = await txn.getFirstAsync<any>('SELECT * FROM entries WHERE id=?', id);
+  if (!row) return;
+  const prev = rowToEntry(row);
   const snapshot = JSON.stringify({
     kind: prev.kind, summary: prev.summary, rawText: prev.rawText,
     dueAt: prev.dueAt, topic: prev.topic, tags: prev.tags,
   });
-  const d = await getDb();
   const changedAt = Date.now();
-  await d.runAsync(
+  const derived = deriveEditedEntry(prev, patch.summary ?? prev.summary, patch.rawText ?? prev.rawText, changedAt);
+  await txn.runAsync(
     `UPDATE entries SET kind=?, summary=?, raw_text=?, due_at=?, remind_at=?, topic=?, tags=?,
-       parse_status='manual', corrected_from=?, updated_at=?, revision_at=?
+       parse_status='manual', corrected_from=?, updated_at=?, revision_at=MAX(revision_at+1, ?)
      WHERE id=?`,
-    patch.kind ?? prev.kind,
-    patch.summary ?? prev.summary,
+    patch.kind ?? derived.kind ?? prev.kind,
+    derived.summary,
     patch.rawText ?? prev.rawText,
-    patch.dueAt !== undefined ? patch.dueAt : prev.dueAt,
-    patch.dueAt !== undefined ? patch.dueAt : prev.dueAt,
+    patch.dueAt !== undefined ? patch.dueAt : derived.dueAt !== undefined ? derived.dueAt : prev.dueAt,
+    patch.dueAt !== undefined ? patch.dueAt : derived.dueAt !== undefined ? derived.dueAt : prev.dueAt,
     patch.topic !== undefined ? patch.topic : prev.topic,
     JSON.stringify(patch.tags ?? prev.tags),
     snapshot, changedAt, changedAt, id,
   );
-  await syncFts(id);
-  return getEntry(id);
+  await syncFtsWithDatabase(txn, id);
+  await txn.runAsync(`INSERT INTO notification_sync_queue (entry_id, queued_at) VALUES (?, ?)
+    ON CONFLICT(entry_id) DO UPDATE SET queued_at=excluded.queued_at`, id, changedAt);
+  updated = rowToEntry(await txn.getFirstAsync<any>('SELECT * FROM entries WHERE id=?', id));
+  });
+  return updated;
 }
 
 export async function setDone(id: string, done: boolean): Promise<void> {
   const d = await getDb();
   const changedAt = Date.now();
   await d.runAsync(
-    'UPDATE entries SET done=?, done_at=?, revision_at=? WHERE id=?',
+    'UPDATE entries SET done=?, done_at=?, revision_at=MAX(revision_at+1, ?) WHERE id=?',
     done ? 1 : 0, done ? changedAt : null, changedAt, id,
   );
 }
@@ -599,7 +616,7 @@ export async function renameTopic(from: string, to: string): Promise<void> {
       null,
     );
 
-    await txn.runAsync('UPDATE entries SET topic=?, revision_at=? WHERE topic=?', target, Date.now(), from);
+    await txn.runAsync('UPDATE entries SET topic=?, revision_at=MAX(revision_at+1, ?) WHERE topic=?', target, Date.now(), from);
     await txn.runAsync('DELETE FROM topic_preferences WHERE topic IN (?, ?)', from, target);
     if (pinnedAt !== null) {
       await txn.runAsync(
@@ -635,7 +652,12 @@ function startOfToday(): number {
 /** 同步单条 entry 到 FTS（trigram 自动切词，中文无需分词器） */
 async function syncFts(id: string): Promise<void> {
   const d = await getDb();
-  const e = await getEntry(id);
+  await syncFtsWithDatabase(d, id);
+}
+
+async function syncFtsWithDatabase(d: SQLite.SQLiteDatabase, id: string): Promise<void> {
+  const row = await d.getFirstAsync<any>('SELECT * FROM entries WHERE id=?', id);
+  const e = row ? rowToEntry(row) : null;
   if (!e) return;
   // 先删旧
   await d.runAsync('DELETE FROM entries_fts WHERE entry_id=?', id);

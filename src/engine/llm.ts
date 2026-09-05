@@ -8,6 +8,8 @@ export interface LlmProviderConfig {
   baseUrl: string;
   key: string;
   model: string;
+  referenceAt?: number;
+  dueAt?: number | null;
   /** 近180天最多100个活跃主题，用于"新话题 or 已有主题更新"判断 */
   activeTopics?: { topic: string; count: number; latestText: string }[];
 }
@@ -32,6 +34,8 @@ export async function understandWithLlm(
     .join('\n');
 
   const system = [
+    `本条原声的参考日期：${new Date(cfg.referenceAt ?? Date.now()).toLocaleDateString('sv-SE')}（用户本地时区）。`,
+    cfg.dueAt != null ? `本地确定的待办日期：${new Date(cfg.dueAt).toLocaleDateString('sv-SE')}。标题日期必须与之相同。` : '本地未确定待办日期，不得凭空添加日期。',
     '你是个人助手的"信息理解"引擎，负责把用户极其口语化的随手记，整理成结构化数据。',
     '严格只输出 JSON，不要任何解释、代码块标记或额外文字。',
     '',
