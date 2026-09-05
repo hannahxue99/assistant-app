@@ -47,6 +47,8 @@ async function main() {
   const engine = load('src/engine/understand.ts');
   const createdAt = new Date(2026, 8, 5, 10).getTime();
   const settings = { llmEnabled: true, llmKey: 'fixture' };
+  await db.initDatabase();
+  assert.equal(await db.countEntries(), 0, '新库不自动注入个人记录');
   const create = async () => db.insertEntry({ rawText: '明天买牛肉', source: 'text', createdAt });
   const old = await create();
   let captured;
@@ -107,6 +109,29 @@ async function main() {
   await engine.retryFailedUnderstandings(settings);
   assert.ok(calls > 0);
   assert.equal((await db.getEntry(interrupted.id)).parseStatus, 'ok');
+
+  const pinned = await db.insertEntry({ rawText: '旧置顶记录', source: 'text', createdAt: 1000 }, {
+    topic: '旧置顶', summary: '旧置顶记录',
+  });
+  await db.setTopicPinned('旧置顶', true);
+  for (let i = 0; i < 205; i++) {
+    await db.insertEntry({ rawText: `新记录${i}`, source: 'text', createdAt: createdAt + i }, {
+      topic: '大量记录', summary: `新记录${i}`,
+    });
+  }
+  let groups = await db.listTopicGroups();
+  assert.equal(groups[0].topic, '旧置顶', '超过200条新记录后旧置顶仍排第一');
+  assert.equal(groups[0].latest.id, pinned.id);
+  assert.equal(groups.find(g => g.topic === '大量记录').count, 205);
+  assert.equal(groups.find(g => g.topic === '大量记录').latest.summary, '新记录204');
+  assert.equal((await db.listByTopic('大量记录')).length, 205, '卡片与详情条数一致');
+  for (let i = 0; i < 205; i++) {
+    await db.insertEntry({ rawText: `主题记录${i}`, source: 'text' }, { topic: `主题${i}` });
+  }
+  groups = await db.listTopicGroups();
+  assert.ok(groups.length > 200, '主题本身也不受原声200条截断');
+  assert.equal(groups[0].topic, '旧置顶');
+  console.log('聚合规模测试通过：空库、205条同主题、205个主题、旧置顶与详情计数');
   console.log('一致性集成测试通过：日期、模型竞争、编辑衍生、事务回滚、pending恢复');
   sqlite.close();
 }

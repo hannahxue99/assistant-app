@@ -74,7 +74,7 @@ export interface Settings {
 export interface TopicGroup {
   topic: string;
   latest: Entry;          // 最新一条（置顶展示）
-  entries: Entry[];       // 倒序时间线
+  count: number;          // 全主题真实条数；详情按需加载
   updatedAt: number;
   pinnedAt: number | null; // 主题级置顶时间；不改写条目本身
 }

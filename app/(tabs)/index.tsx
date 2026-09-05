@@ -89,8 +89,7 @@ export default function HomeScreen() {
     setWeekGroups(groupWeekTasks(week));
     setLongTerm(long_);
     setTopics(aggregateHits ? [] : groups);
-    const topicIds = new Set(groups.flatMap((g) => g.entries.map((e) => e.id)));
-    setStream(aggregateHits ?? all.filter((e) => !topicIds.has(e.id)));
+    setStream(aggregateHits ?? all.filter((e) => !e.topic));
     setVoiceLog(all);
     setShownVoice(voiceHits ?? all);
   }, []);
@@ -256,7 +255,7 @@ export default function HomeScreen() {
                         >
                           <Text style={styles.topicName}>#{g.topic}</Text>
                         </Pressable>
-                        <Text style={styles.topicCount}>{g.entries.length} 条</Text>
+                        <Text style={styles.topicCount}>{g.count} 条</Text>
                       </View>
                       <Pressable
                         style={styles.pinButton}

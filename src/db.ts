@@ -557,35 +557,27 @@ export async function listActiveTopics(
 }
 
 /** 主题分组视图 */
-export async function listTopicGroups(limit = 200): Promise<TopicGroup[]> {
+export async function listTopicGroups(): Promise<TopicGroup[]> {
   const d = await getDb();
-  const [rows, preferenceRows] = await Promise.all([
-    d.getAllAsync<any>(
-      `SELECT * FROM entries WHERE topic IS NOT NULL ORDER BY updated_at DESC LIMIT ?`,
-      limit,
-    ),
-    d.getAllAsync<{ topic: string; pinned_at: number | null }>(
-      'SELECT topic, pinned_at FROM topic_preferences WHERE pinned_at IS NOT NULL',
-    ),
-  ]);
-  const pinnedByTopic = new Map(preferenceRows.map((r) => [r.topic, r.pinned_at]));
-  const map = new Map<string, Entry[]>();
-  for (const r of rows) {
-    const t = r.topic;
-    if (!map.has(t)) map.set(t, []);
-    map.get(t)!.push(rowToEntry(r));
-  }
-  const groups: TopicGroup[] = [];
-  for (const [topic, entries] of map) {
-    groups.push({
-      topic,
-      entries,
-      latest: entries[0],
-      updatedAt: entries[0].updatedAt,
-      pinnedAt: pinnedByTopic.get(topic) ?? null,
-    });
-  }
-  return sortTopicGroups(groups);
+  const rows = await d.getAllAsync<any>(`
+    WITH counted AS (
+      SELECT topic, COUNT(*) AS entry_count FROM entries
+      WHERE topic IS NOT NULL AND TRIM(topic) != '' GROUP BY topic
+    )
+    SELECT e.*, counted.entry_count, p.pinned_at
+    FROM counted JOIN entries e ON e.id = (
+      SELECT latest.id FROM entries latest WHERE latest.topic = counted.topic
+      ORDER BY latest.updated_at DESC, latest.created_at DESC, latest.id DESC LIMIT 1
+    )
+    LEFT JOIN topic_preferences p ON p.topic = counted.topic
+  `);
+  return sortTopicGroups(rows.map((row) => {
+    const latest = rowToEntry(row);
+    return {
+      topic: row.topic, count: row.entry_count, latest,
+      updatedAt: latest.updatedAt, pinnedAt: row.pinned_at ?? null,
+    };
+  }));
 }
 
 /** 非空主题的所有条目 */

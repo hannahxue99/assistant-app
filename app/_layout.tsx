@@ -10,7 +10,6 @@ import {
   initDatabase,
   listPendingNotificationSyncEntries,
 } from '@/src/db';
-import { migrateLegacyOnce } from '@/src/engine/migrate-legacy';
 import {
   configureNotificationHandler,
   ensurePermissions,
@@ -49,8 +48,6 @@ export default function RootLayout() {
     setStartupState('loading');
     try {
       await initDatabase();
-      // 一次性迁移老 App 数据（已迁移/库非空时自动跳过）
-      await migrateLegacyOnce();
       setStartupState('ready');
     } catch (e) {
       console.warn('数据库初始化失败', e);
