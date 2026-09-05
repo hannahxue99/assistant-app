@@ -26,7 +26,7 @@ function entry(id: string, createdAt: number): Entry {
 
 function group(topic: string, updatedAt: number, pinnedAt: number | null): TopicGroup {
   const latest = entry(topic, updatedAt);
-  return { topic, latest, entries: [latest], updatedAt, pinnedAt };
+  return { topic, latest, count: 1, updatedAt, pinnedAt };
 }
 
 let passed = 0;
