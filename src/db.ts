@@ -54,7 +54,12 @@ export async function initDatabase(): Promise<void> {
 }
 
 async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
-  const database = await SQLite.openDatabaseAsync('assistant.db');
+  // Expo 57 的预关闭清理会枚举到 FTS5 内部语句；随后 FTS5 自行清理时可能重复释放。
+  // runAsync/get*Async 已用 finally 释放业务语句；将索引内部资源留给 SQLite 管理。
+  // 独占事务创建的连接会继承此选项。修改后必须完整 Reload，不能仅 Fast Refresh。
+  const database = await SQLite.openDatabaseAsync('assistant.db', {
+    finalizeUnusedStatementsBeforeClosing: false,
+  });
   await database.execAsync(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS entries (
