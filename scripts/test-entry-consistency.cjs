@@ -33,7 +33,11 @@ function load(file) {
   vm.runInNewContext(code, {
     exports, Date, Promise, Set, Map, console,
     require(name) {
-      if (name === 'expo-sqlite') return { openDatabaseAsync: async () => adapter };
+      if (name === 'expo-sqlite') return { openDatabaseAsync: async (_name, options) => {
+        assert.equal(options?.finalizeUnusedStatementsBeforeClosing, false,
+          'FTS5连接必须关闭Expo额外清理，防止关闭事务时重复释放');
+        return adapter;
+      } };
       const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), name)) + '.ts';
       if (resolved === 'src/engine/notifications.ts') return { syncEntryReminder: async () => {} };
       if (resolved === 'src/engine/llm.ts') return { understandWithLlm: (...args) => llm(...args) };
