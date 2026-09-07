@@ -86,6 +86,31 @@ function periodDefaultHour(text: string): number | null {
 
 const RELATIVE_DATE_RE = /下个月(?:第(?:一个|1个)|最后一个)(?:周|星期|礼拜)[一二三四五六日天]|下个月底|下月底|本月底|这个月底|月底|下下周[一二三四五六日天]?|下周[一二三四五六日天]?|下礼拜[一二三四五六日天]?|下星期[一二三四五六日天]?|(?:本周|这周|这个星期|本星期|本礼拜|这礼拜)[一二三四五六日天]|(?:周|星期|礼拜)[一二三四五六日天]|大后天|后天|明天|今晚|今天|周末/;
 
+export interface DateExpression {
+  text: string;
+  start: number;
+  end: number;
+}
+
+/** 返回文字中全部日期表达式，供编辑冲突检测；重叠表达式只保留最长命中。 */
+export function extractDateExpressions(text: string): DateExpression[] {
+  const found: DateExpression[] = [];
+  const patterns = [
+    /\d{1,2}月(?:\d{1,2}[日号])?/g,
+    new RegExp(RELATIVE_DATE_RE.source, 'g'),
+  ];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      const start = match.index ?? 0;
+      found.push({ text: match[0], start, end: start + match[0].length });
+    }
+  }
+  return found
+    .sort((a, b) => a.start - b.start || b.text.length - a.text.length)
+    .filter((candidate, index, all) => !all.some((other, otherIndex) => otherIndex < index
+      && candidate.start >= other.start && candidate.end <= other.end));
+}
+
 /** 找出标题中需要具体化的相对日期文本。 */
 export function extractRelativeDateExpression(text: string): string | null {
   return text.match(RELATIVE_DATE_RE)?.[0] ?? null;

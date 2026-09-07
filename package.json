@@ -50,7 +50,8 @@
     "test:import": "tsx scripts/test-import-merge.ts",
     "test:database-runtime": "tsx scripts/test-database-runtime.ts",
     "test:notification-isolation": "node scripts/test-notification-isolation.cjs",
-    "test:entry-consistency": "TZ=Asia/Shanghai node scripts/test-entry-consistency.cjs"
+    "test:entry-consistency": "TZ=Asia/Shanghai node scripts/test-entry-consistency.cjs",
+    "test:edit-date": "TZ=Asia/Shanghai tsx scripts/test-edit-date-decision.ts"
   },
   "private": true
 }
