@@ -4,6 +4,7 @@
 
 | 专题 | 内容 | 最近更新 |
 |---|---|---|
+| [SQLite FTS5 原生闪退](sqlite-fts-native-crash.md) | 连接关闭与内部语句清理、原生测试盲区、完整Reload及PR #12发布 | 2026-09-07 |
 | [原声一致性与主题规模](entry-consistency-and-topic-scale.md) | 日期基准、条件回填、编辑事务、完整计数与空白安装；PR #10/#11发布记录 | 2026-09-06 |
 | [数据库启动与通知异常隔离](database-startup-recovery.md) | 初始化等待、Fast Refresh、通知副作用隔离、补偿及发布记录 | 2026-09-05 |
 | [真机开发与连接](../../README.md#真机调试踩坑存档) | Dev Client、Tunnel、HTTPS、端口和原生模块排障 | 2026-09-03 |
