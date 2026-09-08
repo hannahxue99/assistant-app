@@ -2,7 +2,7 @@ import type { Entry } from '../src/types';
 import {
   analyzeEntryDateEdit,
   inspectDateEvidence,
-  replaceSingleDateExpression,
+  normalizeEntryDateTexts,
 } from '../src/engine/edit-date-decision';
 
 const at = (day: number) => new Date(2026, 8, day, 9).getTime();
@@ -68,5 +68,15 @@ equal(result.kind, 'conflict', '标题正文日期不一致');
 result = analyzeEntryDateEdit(previous('买菜', '买菜', null), '9月10日开会，9月12日交材料', '买菜', referenceAt);
 equal(result.kind, 'ambiguous', '单字段多个不同日期不自动猜测');
 
-equal(replaceSingleDateExpression('原定9月12日买菜', at(10)), '原定9月10日买菜');
+let normalized = normalizeEntryDateTexts('9月10日买菜', '9月12日下班买菜', at(12));
+equal(normalized.title, '9月12日买菜', '正文改日期后同步标题旧日期');
+equal(normalized.body, '9月12日下班买菜');
+
+normalized = normalizeEntryDateTexts('买菜', '明天买菜', at(8));
+equal(normalized.title, '9月8日买菜', '有待办日期时标题必须补具体日期');
+equal(normalized.body, '9月8日买菜', '正文相对日期必须固定成具体日期');
+
+normalized = normalizeEntryDateTexts('9月10日买菜', '下班买菜', at(12));
+equal(normalized.title, '9月12日买菜', '只改标题日期时使用最终日期');
+equal(normalized.body, '下班买菜', '正文没有日期时不凭空添加');
 console.log('编辑日期决策测试通过：标题、正文、联合编辑及有无日期组合');

@@ -22,7 +22,7 @@ import { wasEntryEdited } from '../../src/engine/entry-time';
 import {
   analyzeEntryDateEdit,
   formatEditDate,
-  replaceSingleDateExpression,
+  normalizeEntryDateTexts,
 } from '../../src/engine/edit-date-decision';
 import type { Entry } from '../../src/types';
 import { theme } from '../../src/theme';
@@ -105,7 +105,10 @@ export default function EntryDetailScreen() {
     const decision = analyzeEntryDateEdit(entry, title, body, Date.now());
 
     if (decision.kind === 'direct') {
-      void commitSave(title, body, decision.dueAt);
+      const normalized = decision.dueAt == null
+        ? { title, body }
+        : normalizeEntryDateTexts(title, body, decision.dueAt);
+      void commitSave(normalized.title, normalized.body, decision.dueAt);
       return;
     }
     if (decision.kind === 'ambiguous') {
@@ -119,24 +122,33 @@ export default function EntryDetailScreen() {
       const current = formatEditDate(entry.dueAt);
       Alert.alert('未检测到日期', `标题和正文里已没有日期，是否清除原待办日期 ${current}？`, [
         { text: '继续编辑', style: 'cancel' },
-        { text: `保留${current}`, onPress: () => void commitSave(title, body, entry.dueAt) },
+        {
+          text: `保留${current}`,
+          onPress: () => {
+            const normalized = normalizeEntryDateTexts(title, body, entry.dueAt!);
+            void commitSave(normalized.title, normalized.body, entry.dueAt);
+          },
+        },
         { text: '清除待办日期', onPress: () => void commitSave(title, body, null) },
       ]);
       return;
     }
     if (decision.kind === 'confirm-change') {
       const detected = formatEditDate(decision.dueAt);
-      const current = formatEditDate(entry.dueAt);
       const message = entry.dueAt == null
-        ? `检测到新的日期 ${detected}，是否设为待办日期？`
-        : `检测到日期从 ${current} 变为 ${detected}，是否同步调整待办日期？`;
-      Alert.alert('调整待办日期？', message, [
+        ? `检测到新的日期 ${detected}。确认后，标题、正文和待办将统一使用该日期。`
+        : `检测到日期从 ${formatEditDate(entry.dueAt)} 变为 ${detected}。确认后，标题、正文和待办将统一更新。`;
+      Alert.alert('统一待办日期', message, [
         { text: '继续编辑', style: 'cancel' },
         {
-          text: entry.dueAt == null ? '仅保存文字' : `保留${current}`,
-          onPress: () => void commitSave(title, body, entry.dueAt),
+          text: `统一为${detected}`,
+          onPress: () => {
+            const normalized = normalizeEntryDateTexts(title, body, decision.dueAt);
+            setDraftTitle(normalized.title);
+            setDraftBody(normalized.body);
+            void commitSave(normalized.title, normalized.body, decision.dueAt);
+          },
         },
-        { text: `同步为${detected}`, onPress: () => void commitSave(title, body, decision.dueAt) },
       ]);
       return;
     }
@@ -146,19 +158,21 @@ export default function EntryDetailScreen() {
     Alert.alert('日期不一致', `标题中的日期是 ${titleDate}，正文中的日期是 ${bodyDate}。请选择待办日期。`, [
       { text: '继续编辑', style: 'cancel' },
       {
-        text: `使用标题日期 ${titleDate}`,
+        text: `统一为${titleDate}`,
         onPress: () => {
-          const syncedBody = replaceSingleDateExpression(body, decision.title.dueAt);
-          setDraftBody(syncedBody);
-          void commitSave(title, syncedBody, decision.title.dueAt);
+          const normalized = normalizeEntryDateTexts(title, body, decision.title.dueAt);
+          setDraftTitle(normalized.title);
+          setDraftBody(normalized.body);
+          void commitSave(normalized.title, normalized.body, decision.title.dueAt);
         },
       },
       {
-        text: `使用正文日期 ${bodyDate}`,
+        text: `统一为${bodyDate}`,
         onPress: () => {
-          const syncedTitle = replaceSingleDateExpression(title, decision.body.dueAt);
-          setDraftTitle(syncedTitle);
-          void commitSave(syncedTitle, body, decision.body.dueAt);
+          const normalized = normalizeEntryDateTexts(title, body, decision.body.dueAt);
+          setDraftTitle(normalized.title);
+          setDraftBody(normalized.body);
+          void commitSave(normalized.title, normalized.body, decision.body.dueAt);
         },
       },
     ]);

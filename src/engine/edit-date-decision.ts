@@ -44,7 +44,9 @@ export function inspectDateEvidence(text: string, referenceAt: number): DateEvid
   if (uniqueDays.size === 0) return { kind: 'none' };
   if (uniqueDays.size > 1) return { kind: 'ambiguous' };
   const candidate = [...uniqueDays.values()][0];
-  return { kind: 'single', dueAt: candidate.dueAt, expression: candidate.expression.text };
+  // 用完整文字解析，以保留“9月10日下午3点”里的时刻；候选表达式只负责判断日期是否唯一。
+  const full = parseChineseTime(text, referenceAt);
+  return { kind: 'single', dueAt: full.dueAt ?? candidate.dueAt, expression: candidate.expression.text };
 }
 
 export function analyzeEntryDateEdit(
@@ -91,10 +93,21 @@ export function formatEditDate(timestamp: number | null): string {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
-/** 用户明确选择冲突一侧后，将另一侧唯一日期表达式同步到同一天。 */
-export function replaceSingleDateExpression(text: string, targetAt: number): string {
+/** 将文字内所有日期表达式统一为具体日期；标题没有日期时可补齐。 */
+export function normalizeDateText(text: string, targetAt: number, ensureDate = false): string {
   const expressions = extractDateExpressions(text);
-  if (expressions.length !== 1) return text;
-  const expression = expressions[0];
-  return `${text.slice(0, expression.start)}${formatEditDate(targetAt)}${text.slice(expression.end)}`;
+  const label = formatEditDate(targetAt);
+  if (expressions.length === 0) return ensureDate ? `${label}${text}` : text;
+  let result = text;
+  for (const expression of [...expressions].sort((a, b) => b.start - a.start)) {
+    result = `${result.slice(0, expression.start)}${label}${result.slice(expression.end)}`;
+  }
+  return result;
+}
+
+export function normalizeEntryDateTexts(title: string, body: string, targetAt: number) {
+  return {
+    title: normalizeDateText(title, targetAt, true),
+    body: normalizeDateText(body, targetAt),
+  };
 }
