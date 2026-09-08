@@ -1,6 +1,6 @@
 # GitHub CI 与本机 Git 工具链
 
-状态：PR #15 待验收；GitHub `validate` 已连续两次运行通过。
+状态：2026-09-08 用户确认验收，随 PR #15 发布；GitHub `validate` 已连续运行通过。
 
 ## 产品与工程决策
 
