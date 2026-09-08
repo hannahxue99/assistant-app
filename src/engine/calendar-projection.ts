@@ -30,7 +30,9 @@ export function calendarProjection(entry: Entry, owner: string) {
   const startDate = new Date(entry.dueAt);
   if (allDay) startDate.setHours(0, 0, 0, 0);
   const endDate = new Date(startDate);
-  if (allDay) endDate.setDate(endDate.getDate() + 1);
+  // EventKit/Apple Calendar renders an all-day end at next-day 00:00 on both
+  // dates in this integration. Keep the event inside the selected civil day.
+  if (allDay) endDate.setHours(23, 59, 59, 999);
   else endDate.setHours(endDate.getHours() + 1);
   return {
     title: `${entry.done ? '✓ ' : ''}${entry.summary}`, startDate, endDate, allDay,

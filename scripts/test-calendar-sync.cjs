@@ -69,8 +69,9 @@ async function main() {
   const event = [...events.values()][0];
   assert.equal(event.allDay, true, '默认9点必须是全天');
   assert.equal(new Date(event.startDate).getHours(), 0);
-  const nextDay = new Date(event.startDate); nextDay.setDate(nextDay.getDate() + 1);
-  assert.equal(+event.endDate, +nextDay);
+  const allDayEnd = new Date(event.endDate);
+  assert.equal(allDayEnd.toDateString(), new Date(event.startDate).toDateString(), '全天日程不得跨到次日');
+  assert.equal(allDayEnd.getHours(), 23);
   await db.applyCorrection(task.id, { summary: '买葡萄' }); await sync.syncCalendar();
   assert.equal(events.size, 1); assert.equal(event.title, '买葡萄');
   await db.setDone(task.id, true); await sync.syncCalendar(); assert.equal(event.title, '✓ 买葡萄');
@@ -94,7 +95,7 @@ async function main() {
   const timed = calendarProjection({ ...historical, dueAt: +clock, timePrecision: 'dateTime' }, 'test');
   assert.equal(timed.allDay, false); assert.equal(+timed.endDate - +timed.startDate, 3600000);
   const monthEnd = calendarProjection({ ...historical, dueAt: +new Date(2026, 8, 30, 9), timePrecision: 'date' }, 'test');
-  assert.equal(new Date(monthEnd.endDate).getMonth(), 9, '全天结束日期正确跨月');
+  assert.equal(new Date(monthEnd.endDate).getMonth(), 8, '月末全天日程不得显示到次月');
   sqlite.exec('BEGIN'); sqlite.prepare('UPDATE entries SET summary=? WHERE id=?').run('回滚', historical.id); sqlite.exec('ROLLBACK');
   assert.equal((await sync.calendarStatus()).pending, 0, '记录回滚时队列也回滚');
   sqlite.close(); console.log('Calendar integration passed: ownership, dedup, all-day, time, CRUD, permission, crash recovery, version race, disabled deletion, rollback.');
