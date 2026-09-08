@@ -45,7 +45,8 @@
       ],
       "expo-sqlite",
       "expo-speech-recognition",
-      "expo-sharing"
+      "expo-sharing",
+      ["expo-calendar", { "calendarPermission": "用于将私人助手待办同步到日历，并更新或删除对应日程。" }]
     ],
     "experiments": {
       "typedRoutes": true

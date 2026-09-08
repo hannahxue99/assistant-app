@@ -21,6 +21,7 @@ export interface Entry {
   kind: EntryKind;            // 意图
   summary: string;            // 规范化标题（理解结果；未理解时等于 rawText）
   dueAt: number | null;       // 截止/提醒时间（ms 时间戳）
+  timePrecision?: 'date' | 'dateTime'; // 老备份可缺省；绝不以默认9点推断明确时刻
   remindAt: number | null;    // 通知提醒时间（通常等于 dueAt）
   topic: string | null;       // 聚合主题；LLM 未成功理解时为空
   tags: string[];             // 主题标签

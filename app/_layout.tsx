@@ -1,7 +1,8 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import { syncCalendar } from '@/src/engine/calendar-sync';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -85,6 +86,15 @@ export default function RootLayout() {
   useEffect(() => {
     void bootstrap();
   }, [bootstrap, startupAttempt]);
+
+  useEffect(() => {
+    if (startupState !== 'ready') return;
+    const sync = (reconcile = false) => { void syncCalendar(reconcile).catch(() => {}); };
+    sync(true);
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') sync(true); });
+    const timer = setInterval(() => { if (AppState.currentState === 'active') sync(); }, 5000);
+    return () => { listener.remove(); clearInterval(timer); };
+  }, [startupState]);
 
   if (startupState === 'loading') {
     return (

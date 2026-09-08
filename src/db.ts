@@ -21,6 +21,8 @@ import {
 } from './engine/import-merge';
 import { sortTopicGroups } from './engine/topic-order';
 import { deriveEditedEntry } from './engine/edit-derived';
+import { calendarSchema } from './engine/calendar-schema';
+import { inferTimePrecision } from './engine/calendar-projection';
 import { runSingleFlight, type SingleFlightState } from './engine/single-flight';
 
 type DatabaseGlobal = typeof globalThis & {
@@ -156,6 +158,19 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
   if (!columns.some((column) => column.name === 'revision_at')) {
     await database.execAsync('ALTER TABLE entries ADD COLUMN revision_at INTEGER;');
   }
+  if (!columns.some((column) => column.name === 'time_precision')) {
+    await database.execAsync('ALTER TABLE entries ADD COLUMN time_precision TEXT;');
+    const legacy = await database.getAllAsync<any>('SELECT id,raw_text,due_at FROM entries');
+    for (const row of legacy) await database.runAsync('UPDATE entries SET time_precision=? WHERE id=?',
+      inferTimePrecision(row.raw_text, row.due_at), row.id);
+  }
+  await database.execAsync(calendarSchema);
+  // A development build may already have created the queue before retry_at was added.
+  // Keep startup compatible with that intermediate schema instead of failing every query.
+  const calendarJobColumns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(calendar_jobs)');
+  if (!calendarJobColumns.some((column) => column.name === 'retry_at')) {
+    await database.execAsync('ALTER TABLE calendar_jobs ADD COLUMN retry_at INTEGER NOT NULL DEFAULT 0;');
+  }
   await database.execAsync(`
     UPDATE entries SET updated_at = created_at WHERE updated_at IS NULL;
     UPDATE entries SET revision_at = updated_at WHERE revision_at IS NULL;
@@ -172,6 +187,10 @@ export async function queryFirst<T = any>(sql: string, ...args: any[]): Promise<
 /** 供引擎层使用的执行助手 */
 export async function runSql(sql: string, ...args: any[]): Promise<void> {
   await (await getDb()).runAsync(sql, ...args);
+}
+
+export async function queryAll<T>(sql: string, ...args: any[]): Promise<T[]> {
+  return (await getDb()).getAllAsync<T>(sql, ...args);
 }
 
 function getDb(): Promise<SQLite.SQLiteDatabase> {
@@ -197,6 +216,7 @@ function rowToEntry(r: any): Entry {
     kind: r.kind as EntryKind,
     summary: r.summary,
     dueAt: r.due_at,
+    timePrecision: r.time_precision ?? inferTimePrecision(r.raw_text, r.due_at),
     remindAt: r.remind_at,
     topic: typeof r.topic === 'string' && r.topic.trim() ? r.topic.trim() : null,
     tags: safeParse(r.tags),
@@ -245,6 +265,8 @@ async function insertImportedEntry(d: SQLite.SQLiteDatabase, entry: Entry): Prom
     entry.parseStatus, entry.parseSource, entry.correctedFrom, entry.createdAt,
     entry.updatedAt, entry.revisionAt, entry.done, entry.doneAt, entry.source,
   );
+  await d.runAsync('UPDATE entries SET time_precision=? WHERE id=?',
+    entry.timePrecision ?? inferTimePrecision(entry.rawText, entry.dueAt), entry.id);
 }
 
 async function updateImportedEntry(d: SQLite.SQLiteDatabase, entry: Entry): Promise<void> {
@@ -259,6 +281,8 @@ async function updateImportedEntry(d: SQLite.SQLiteDatabase, entry: Entry): Prom
     entry.parseSource, entry.correctedFrom, entry.createdAt, entry.updatedAt,
     entry.revisionAt, entry.done, entry.doneAt, entry.source, entry.id,
   );
+  await d.runAsync('UPDATE entries SET time_precision=? WHERE id=?',
+    entry.timePrecision ?? inferTimePrecision(entry.rawText, entry.dueAt), entry.id);
 }
 
 async function rebuildFtsWithDatabase(d: SQLite.SQLiteDatabase): Promise<void> {
@@ -656,6 +680,9 @@ async function syncFtsWithDatabase(d: SQLite.SQLiteDatabase, id: string): Promis
   const row = await d.getFirstAsync<any>('SELECT * FROM entries WHERE id=?', id);
   const e = row ? rowToEntry(row) : null;
   if (!e) return;
+  const precision = inferTimePrecision(e.rawText, e.dueAt) === 'dateTime'
+    || (e.parseStatus === 'manual' && inferTimePrecision(e.summary, e.dueAt) === 'dateTime') ? 'dateTime' : 'date';
+  await d.runAsync('UPDATE entries SET time_precision=? WHERE id=?', precision, id);
   // 先删旧
   await d.runAsync('DELETE FROM entries_fts WHERE entry_id=?', id);
   await d.runAsync(

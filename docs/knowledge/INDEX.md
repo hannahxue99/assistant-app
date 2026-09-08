@@ -4,6 +4,7 @@
 
 | 专题 | 内容 | 最近更新 |
 |---|---|---|
+| [苹果日历同步](calendar-sync.md) | 全天/定时、设备映射、删除墓碑、重试、跨日坑与PR #14发布 | 2026-09-08 |
 | [原声编辑与待办日期强一致性](entry-date-edit-consistency.md) | 单次确认、标题/正文/dueAt同步、M.D解析、PR #13发布与回滚 | 2026-09-08 |
 | [SQLite FTS5 原生闪退](sqlite-fts-native-crash.md) | 连接关闭与内部语句清理、原生测试盲区、完整Reload及PR #12发布 | 2026-09-07 |
 | [原声一致性与主题规模](entry-consistency-and-topic-scale.md) | 日期基准、条件回填、编辑事务、完整计数与空白安装；PR #10/#11发布记录 | 2026-09-06 |

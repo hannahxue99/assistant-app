@@ -21,6 +21,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EditAction } from '../../src/components/EditAction';
+import { CalendarSyncSetting } from '../../src/components/CalendarSyncSetting';
 import { ImportFeedbackModal } from '../../src/components/ImportFeedbackModal';
 import { ImportPreviewModal } from '../../src/components/ImportPreviewModal';
 import {
@@ -306,6 +307,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        <CalendarSyncSetting />
         <Text style={styles.sectionLabel}>数据管理</Text>
         <View style={styles.dataCard}>
           <Pressable
