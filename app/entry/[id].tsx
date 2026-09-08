@@ -19,6 +19,11 @@ import {
 } from '../../src/engine/notifications';
 import { logTimestamp } from '../../src/engine/schedule';
 import { wasEntryEdited } from '../../src/engine/entry-time';
+import {
+  analyzeEntryDateEdit,
+  formatEditDate,
+  normalizeEntryDateTexts,
+} from '../../src/engine/edit-date-decision';
 import type { Entry } from '../../src/types';
 import { theme } from '../../src/theme';
 
@@ -68,28 +73,109 @@ export default function EntryDetailScreen() {
     setEditing(true);
   }
 
-  async function handleSave() {
+  async function commitSave(title: string, body: string, dueAt: number | null) {
     if (!entry || saving) return;
-    if (!dirty) {
-      setEditing(false); // 无改动：直接退出编辑态
-      return;
-    }
     setSaving(true);
     try {
-    const updated = await applyCorrection(entry.id, {
-      summary: draftTitle.trim(),
-      rawText: draftBody.trim(),
-    });
-    setEditing(false);
-    if (updated) {
-      setEntry(updated);
-      await syncEntryReminder(updated);
-    }
+      const updated = await applyCorrection(entry.id, {
+        summary: title,
+        rawText: body,
+        dueAt,
+      });
+      setEditing(false);
+      if (updated) {
+        setEntry(updated);
+        await syncEntryReminder(updated);
+      }
     } catch {
       Alert.alert('保存失败', '修改尚未保存，请重试。');
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleSave() {
+    if (!entry || saving) return;
+    if (!dirty) {
+      setEditing(false); // 无改动：直接退出编辑态
+      return;
+    }
+    const title = draftTitle.trim();
+    const body = draftBody.trim();
+    const decision = analyzeEntryDateEdit(entry, title, body, Date.now());
+
+    if (decision.kind === 'direct') {
+      const normalized = decision.dueAt == null
+        ? { title, body }
+        : normalizeEntryDateTexts(title, body, decision.dueAt);
+      void commitSave(normalized.title, normalized.body, decision.dueAt);
+      return;
+    }
+    if (decision.kind === 'ambiguous') {
+      const label = decision.field === 'both' ? '标题和正文' : decision.field === 'title' ? '标题' : '正文';
+      Alert.alert('检测到多个日期', `${label}里有多个不同日期。请保留一个待办日期后再完成编辑。`, [
+        { text: '继续编辑', style: 'cancel' },
+      ]);
+      return;
+    }
+    if (decision.kind === 'confirm-clear') {
+      const current = formatEditDate(entry.dueAt);
+      Alert.alert('未检测到日期', `标题和正文里已没有日期，是否清除原待办日期 ${current}？`, [
+        { text: '继续编辑', style: 'cancel' },
+        {
+          text: `保留${current}`,
+          onPress: () => {
+            const normalized = normalizeEntryDateTexts(title, body, entry.dueAt!);
+            void commitSave(normalized.title, normalized.body, entry.dueAt);
+          },
+        },
+        { text: '清除待办日期', onPress: () => void commitSave(title, body, null) },
+      ]);
+      return;
+    }
+    if (decision.kind === 'confirm-change') {
+      const detected = formatEditDate(decision.dueAt);
+      const message = entry.dueAt == null
+        ? `检测到新的日期 ${detected}。确认后，标题、正文和待办将统一使用该日期。`
+        : `检测到日期从 ${formatEditDate(entry.dueAt)} 变为 ${detected}。确认后，标题、正文和待办将统一更新。`;
+      Alert.alert('统一待办日期', message, [
+        { text: '继续编辑', style: 'cancel' },
+        {
+          text: `统一为${detected}`,
+          onPress: () => {
+            const normalized = normalizeEntryDateTexts(title, body, decision.dueAt);
+            setDraftTitle(normalized.title);
+            setDraftBody(normalized.body);
+            void commitSave(normalized.title, normalized.body, decision.dueAt);
+          },
+        },
+      ]);
+      return;
+    }
+
+    const titleDate = formatEditDate(decision.title.dueAt);
+    const bodyDate = formatEditDate(decision.body.dueAt);
+    Alert.alert('日期不一致', `标题中的日期是 ${titleDate}，正文中的日期是 ${bodyDate}。请选择待办日期。`, [
+      { text: '继续编辑', style: 'cancel' },
+      {
+        text: `统一为${titleDate}`,
+        onPress: () => {
+          const normalized = normalizeEntryDateTexts(title, body, decision.title.dueAt);
+          setDraftTitle(normalized.title);
+          setDraftBody(normalized.body);
+          void commitSave(normalized.title, normalized.body, decision.title.dueAt);
+        },
+      },
+      {
+        text: `统一为${bodyDate}`,
+        onPress: () => {
+          const normalized = normalizeEntryDateTexts(title, body, decision.body.dueAt);
+          setDraftTitle(normalized.title);
+          setDraftBody(normalized.body);
+          void commitSave(normalized.title, normalized.body, decision.body.dueAt);
+        },
+      },
+    ]);
   }
 
   function confirmDelete() {

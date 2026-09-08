@@ -74,7 +74,7 @@ async function main() {
   const job = engine.understandEntry(pending, settings);
   assert.equal(engine.understandEntry(pending, settings), job, '同一条不得并发请求');
   await ready;
-  await db.applyCorrection(pending.id, { summary: '我的标题', rawText: '9月7日买牛肉' });
+  await db.applyCorrection(pending.id, { summary: '我的标题', rawText: '9月7日买牛肉', dueAt: new Date(2026, 8, 7, 9).getTime() });
   release({ kind: 'task', summary: '旧标题', topic: '旧主题', tags: [], persons: [] });
   assert.equal(await job, 'stale');
   assert.equal((await db.getEntry(pending.id)).summary, '我的标题');
@@ -88,16 +88,22 @@ async function main() {
   assert.equal((await db.getEntry(old.id)).topic, '家庭采购');
 
   await db.setDone(old.id, true);
-  await db.applyCorrection(old.id, { rawText: '9月7日买牛肉' });
+  await db.applyCorrection(old.id, { rawText: '9月7日买牛肉', dueAt: new Date(2026, 8, 7, 9).getTime() });
   const edited = await db.getEntry(old.id);
   assert.equal(edited.topic, '家庭采购');
   assert.equal(edited.done, 1);
-  assert.equal(edited.summary, '9月7日买牛肉');
+  assert.equal(edited.summary, '9月6日买牛肉', '修改正文不得自动改标题');
   await db.applyCorrection(old.id, { summary: '手工标题' });
   assert.equal((await db.getEntry(old.id)).dueAt, edited.dueAt);
-  await db.applyCorrection(old.id, { rawText: '买牛肉' });
+  await db.applyCorrection(old.id, { rawText: '买牛肉', dueAt: null });
   assert.equal((await db.getEntry(old.id)).dueAt, null);
   assert.equal((await db.getEntry(old.id)).kind, 'task');
+
+  const promoted = await db.insertEntry({ rawText: '参加会议', source: 'text', createdAt }, {
+    kind: 'info', summary: '参加会议', dueAt: null,
+  });
+  await db.applyCorrection(promoted.id, { dueAt: new Date(2026, 8, 12, 9).getTime() });
+  assert.equal((await db.getEntry(promoted.id)).kind, 'task', '用户确认新日期后记录必须进入待办');
 
   const before = await db.getEntry(old.id);
   rejectQueue = true;
