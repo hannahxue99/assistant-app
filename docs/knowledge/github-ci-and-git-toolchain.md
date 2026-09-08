@@ -1,6 +1,6 @@
 # GitHub CI 与本机 Git 工具链
 
-状态：PR #15 开发中；GitHub `validate` 首次运行通过。
+状态：PR #15 待验收；GitHub `validate` 已连续两次运行通过。
 
 ## 产品与工程决策
 
@@ -22,4 +22,4 @@ GitHub workflow 文件比普通代码多要求 OAuth `workflow` scope。`gh api`
 
 ## 验证与回滚
 
-本地 `npm run ci` 通过；PR #15 的 GitHub `validate` 在 Ubuntu/Node 22 干净环境首次运行通过。CI 配置和分支保护无 App、数据库、原生权限或设备影响。回滚 PR 可移除工作流；调整分支保护前先确认不会失去 `main` 的质量门禁。
+本地 `npm run ci` 通过；PR #15 的 GitHub `validate` 在 Ubuntu/Node 22 干净环境连续运行通过。当前私有仓库套餐调用 Branch Protection API 返回 HTTP 403，要求升级 GitHub Pro 或将仓库公开；在未获得用户对付费/公开的明确授权前，不做这两类外部变更，`AGENTS.md` 规则作为人工门禁。CI 配置无 App、数据库、原生权限或设备影响。回滚 PR 可移除工作流；调整分支保护前先确认不会失去 `main` 的质量门禁。
