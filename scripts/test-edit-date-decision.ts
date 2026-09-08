@@ -22,6 +22,9 @@ function equal<T>(actual: T, expected: T, message?: string): void {
 equal(inspectDateEvidence('9月10日开会', referenceAt).kind, 'single');
 equal(inspectDateEvidence('9月10日开会，9月12日交材料', referenceAt).kind, 'ambiguous');
 equal(inspectDateEvidence('今天9月7日开会', referenceAt).kind, 'single', '同一天的重复表达不算冲突');
+const dotted = inspectDateEvidence('10.1买牛肉', referenceAt);
+equal(dotted.kind, 'single', 'M.D 格式必须识别为日期');
+if (dotted.kind === 'single') equal(new Date(dotted.dueAt).getDate(), 1, '10.1 应解析为10月1日');
 
 let result = analyzeEntryDateEdit(previous('9月10日买菜', '买菜', at(10)), '9月10日买水果', '买菜', referenceAt);
 equal(result.kind, 'direct', '只改标题措辞且日期不变');
@@ -79,4 +82,10 @@ equal(normalized.body, '9月8日买菜', '正文相对日期必须固定成具�
 normalized = normalizeEntryDateTexts('9月10日买菜', '下班买菜', at(12));
 equal(normalized.title, '9月12日买菜', '只改标题日期时使用最终日期');
 equal(normalized.body, '下班买菜', '正文没有日期时不凭空添加');
+
+result = analyzeEntryDateEdit(previous('10月1日买菜', '10.1买菜', new Date(2026, 9, 1, 9).getTime()), '10月2日买菜', '10.1买菜', referenceAt);
+equal(result.kind, 'conflict', '修改标题日期时必须识别正文 M.D 旧日期');
+normalized = normalizeEntryDateTexts('10月2日买菜', '10.1买菜', new Date(2026, 9, 2, 9).getTime());
+equal(normalized.title, '10月2日买菜');
+equal(normalized.body, '10月2日买菜', '标题日期变化后正文 M.D 日期必须同步');
 console.log('编辑日期决策测试通过：标题、正文、联合编辑及有无日期组合');

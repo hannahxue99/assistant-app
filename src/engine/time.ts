@@ -97,6 +97,7 @@ export function extractDateExpressions(text: string): DateExpression[] {
   const found: DateExpression[] = [];
   const patterns = [
     /\d{1,2}月(?:\d{1,2}[日号])?/g,
+    /\d{1,2}[.．]\d{1,2}/g,
     new RegExp(RELATIVE_DATE_RE.source, 'g'),
   ];
   for (const pattern of patterns) {
@@ -154,20 +155,21 @@ export function parseChineseTime(text: string, now = Date.now()): TimeParseResul
 
   // 1) 具体日期 + 时间：8月30号下午3点 / 10月15日 14:00
   const dateMatch = t.match(/(?:(\d{1,2})[月])(?:(\d{1,2})[日号])?/);
+  const dottedDateMatch = dateMatch ? null : t.match(/(?:^|[^\d])(\d{1,2})[.．](\d{1,2})(?=$|[^\d])/);
   const clock = parseClock(t);
   let base: Date | null = null;
   let matched: string | null = null;
   let dateSpecified = false;
   let rollBareWeekday = false;
 
-  if (dateMatch && dateMatch[1]) {
-    const month = +dateMatch[1];
-    const day = dateMatch[2] ? +dateMatch[2] : null;
+  if ((dateMatch && dateMatch[1]) || dottedDateMatch) {
+    const month = +(dateMatch?.[1] ?? dottedDateMatch![1]);
+    const day = dateMatch ? (dateMatch[2] ? +dateMatch[2] : null) : +dottedDateMatch![2];
     if (month >= 1 && month <= 12 && (day === null || (day >= 1 && day <= 31))) {
       base = new Date(now);
       base.setMonth(month - 1);
       if (day) base.setDate(day);
-      matched = dateMatch[0];
+      matched = dateMatch?.[0] ?? dottedDateMatch![0].trim();
       dateSpecified = true;
     }
   }
@@ -277,5 +279,5 @@ function weekdayNum(c: string): number {
 /** 判断文本是否含明显时间信息 */
 export function hasTimeHint(text: string): boolean {
   return RELATIVE_DATE_RE.test(text)
-    || /[0-9]{1,2}[点時]|[0-9]{1,2}[:：][0-9]{2}|\d{1,2}月(\d{1,2}[日号])?/.test(text);
+    || /[0-9]{1,2}[点時]|[0-9]{1,2}[:：][0-9]{2}|\d{1,2}月(\d{1,2}[日号])?|(?:^|[^\d])\d{1,2}[.．]\d{1,2}(?=$|[^\d])/.test(text);
 }

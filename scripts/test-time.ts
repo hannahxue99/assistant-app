@@ -34,6 +34,8 @@ const cases: Case[] = [
   { input: '今晚10点跟美国团队开会', now: FRI, expect: ts(2026, 7, 28, 22, 0) },
   { input: '下周三下午跟小王碰方案', now: FRI, expect: ts(2026, 8, 2, 14, 0) },
   { input: '10月15日老婆生日', now: FRI, expect: ts(2026, 9, 15, 9, 0) },
+  { input: '10.1买牛肉', now: FRI, expect: ts(2026, 9, 1, 9, 0) },
+  { input: '10．2买水果', now: FRI, expect: ts(2026, 9, 2, 9, 0) },
   { input: '明天上午9点半提醒我给老师回电话', now: FRI, expect: ts(2026, 7, 29, 9, 30) },
   { input: '明天下午跟小王碰一下方案的事别忘了', now: FRI, expect: ts(2026, 7, 29, 14, 0) },
   { input: '有个想法：做个语音助手', now: FRI, expect: null, expectHint: false },
