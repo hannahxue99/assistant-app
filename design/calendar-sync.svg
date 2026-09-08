@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1020" height="650" viewBox="0 0 1020 650">
+<rect width="1020" height="650" fill="#f6f3ee"/><g font-family="PingFang SC, sans-serif" fill="#292824">
+<text x="36" y="48" font-size="26" font-weight="600">待办同步到苹果日历 · 提案</text>
+<rect x="30" y="78" width="450" height="320" rx="24" fill="white"/>
+<text x="54" y="120" font-size="22">我的</text><text x="54" y="177" font-size="19">同步到苹果日历</text><rect x="386" y="153" width="62" height="34" rx="17" fill="#df7940"/><circle cx="431" cy="170" r="13" fill="white"/>
+<text x="54" y="224" font-size="16" fill="#77736d">目标日历：私人助手</text><text x="54" y="254" font-size="16" fill="#77736d">已同步 · 修改待办会同步更新日程</text>
+<text x="54" y="300" font-size="16">首次开启：授权 → 确认日历 → 开始同步</text><text x="54" y="344" font-size="16" fill="#df7940">需要处理时：日历未同步 · 重试 / 去设置</text>
+<rect x="510" y="78" width="480" height="320" rx="24" fill="white"/>
+<text x="534" y="120" font-size="22">苹果日历中的效果</text><text x="534" y="166" font-size="17" fill="#77736d">9月12日 · 私人助手</text>
+<rect x="534" y="190" width="430" height="68" rx="12" fill="#fff0e4"/><text x="550" y="218" font-size="17">全天　9月12日买牛肉</text><text x="550" y="242" font-size="14" fill="#77736d">备注：下班后买3斤牛肉</text>
+<rect x="534" y="276" width="430" height="68" rx="12" fill="#fff0e4"/><text x="550" y="304" font-size="17">15:00–16:00　9月12日看牙医</text><text x="550" y="328" font-size="14" fill="#77736d">明确说了时间，才安排定时日程</text>
+<rect x="30" y="428" width="960" height="180" rx="24" fill="white"/>
+<text x="54" y="468" font-size="20">运行流程</text><text x="54" y="512" font-size="18">保存待办 → 写入同步队列 → 创建 / 更新同一日程 → 标记已同步</text>
+<text x="54" y="552" font-size="16" fill="#77736d">失败：待办照常保存，保留队列；下次启动或回到前台重试。</text><text x="54" y="581" font-size="16" fill="#77736d">关闭同步：停止写入，保留已有日程。仅管理私人助手创建的日程。</text>
+</g></svg>

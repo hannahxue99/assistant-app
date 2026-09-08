@@ -19,6 +19,7 @@ import {
 } from '../../src/engine/notifications';
 import { logTimestamp } from '../../src/engine/schedule';
 import { wasEntryEdited } from '../../src/engine/entry-time';
+import { editedDueTime } from '../../src/engine/calendar-projection';
 import {
   analyzeEntryDateEdit,
   formatEditDate,
@@ -80,7 +81,7 @@ export default function EntryDetailScreen() {
       const updated = await applyCorrection(entry.id, {
         summary: title,
         rawText: body,
-        dueAt,
+        dueAt: editedDueTime(entry, title, body, dueAt),
       });
       setEditing(false);
       if (updated) {

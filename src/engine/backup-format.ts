@@ -78,6 +78,9 @@ function validateEntry(value: unknown, index: number): Entry {
   if (value.done !== 0 && value.done !== 1) invalid(`第 ${index + 1} 条记录完成状态无效`);
   if (!isNullableTimestamp(value.doneAt)) invalid(`第 ${index + 1} 条记录完成时间无效`);
   if (source !== 'text' && source !== 'voice') invalid(`第 ${index + 1} 条记录输入来源无效`);
+  if (value.timePrecision !== undefined && value.timePrecision !== 'date' && value.timePrecision !== 'dateTime') {
+    invalid(`第 ${index + 1} 条记录时间精度无效`);
+  }
   return value as unknown as Entry;
 }
 

@@ -38,6 +38,7 @@ export function entriesHaveSameContent(left: Entry, right: Entry): boolean {
     entry.kind,
     entry.summary,
     entry.dueAt,
+    entry.timePrecision ?? 'date',
     entry.remindAt,
     entry.topic,
     entry.tags,
