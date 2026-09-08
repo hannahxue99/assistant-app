@@ -12,6 +12,7 @@ For every new product or feature request, follow this sequence:
 3. Wait for the user to confirm the design and approach before changing production code.
 4. Implement code on a dedicated Git branch and deliver it through a PR. Do not overwrite or discard prior versions; preserve commit history so the change can be reviewed and rolled back.
 5. Run relevant automated checks and provide a concise change summary, test results, and PR information.
+   Run `npm run ci` before delivery. Every new automated test must be added to the aggregated `npm test` command so local and GitHub checks stay identical.
 6. After acceptance, capture reusable knowledge in the repository before closing the work. Record the product decision, root cause or key trade-off, pitfalls, reusable implementation pattern, verification method, and rollback point. Update the knowledge index so future work can discover it without relying on chat history.
 
 # PR continuation and release workflow
@@ -24,6 +25,8 @@ For every new product or feature request, follow this sequence:
   - A Bundle ID change creates a different App identity and requires an explicit data migration plan.
 - Do not expose internal component previews, debug tools, test data, or developer-only copy in user-facing navigation, including Debug builds used for product acceptance. Keep such tools behind internal routes or developer tooling.
 - Automated checks only make a change ready for device acceptance; they do not by themselves complete release.
+- GitHub's required `CI / validate` check must pass before merging to `main`. Do not bypass it to compensate for a missing test registration or a failing check; diagnose and fix the cause.
+- Before GitHub workflow changes, preflight the actual Git binary (`command -v git`, `git --version`), `gh auth status`, and the token's `workflow` scope. On this host, do not use the obsolete `/usr/local/bin/git` 2.6.4; use `/usr/bin/git` 2.50.1 or a newer Homebrew Git. If GitHub API auth succeeds but workflow pushes are rejected, inspect credential-helper precedence and explicitly route the push through `gh auth git-credential` instead of repeatedly reauthorizing.
 - Before merging an accepted PR, collect and report: requirement scope, PR and commit, automated checks, device/OS/build type, manual cases verified, native/data migration impact, unresolved risks, knowledge documents, and rollback point.
 - Release closure order is: user acceptance → release information collection → knowledge/rule updates → PR merge → local `main` sync → device/release build delivery when required → final release record.
 
