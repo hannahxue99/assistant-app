@@ -1,0 +1,251 @@
+<title>A+ 意境 · 三稿对比</title>
+<style>
+  :root{
+    --paper:#F6F3EE;
+    --surface:#FFFFFF;
+    --ink:#2B2622;
+    --ink-soft:#5F5B54;
+    --ink-faint:#8A837B;
+    --accent:#E0733A;
+    --rule:#E2DCCF;
+    --ground:var(--paper);
+    --fg:var(--ink);
+    --fg-soft:var(--ink-soft);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#211F1B; --surface:#2A2721; --ink:#ECE7DC; --ink-soft:#B8B2A5;
+      --ink-faint:#8A837B; --accent:#E5854F; --rule:#3A362E;
+      --ground:#211F1B; --fg:#ECE7DC; --fg-soft:#B8B2A5;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#211F1B; --surface:#2A2721; --ink:#ECE7DC; --ink-soft:#B8B2A5;
+    --ink-faint:#8A837B; --accent:#E5854F; --rule:#3A362E;
+    --ground:#211F1B; --fg:#ECE7DC; --fg-soft:#B8B2A5;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--ground); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+    font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
+    padding:0 0 4rem;
+  }
+  .wrap{max-width:1060px; margin:0 auto; padding:0 1.5rem;}
+  .display{font-family:"Noto Serif SC",Georgia,"Songti SC",serif; font-weight:700; text-wrap:balance;}
+  header{padding:3.4rem 0 2rem; border-bottom:1px solid var(--rule);}
+  .eyebrow{font-size:.75rem; letter-spacing:.22em; color:var(--ink-faint); margin-bottom:.8rem; font-variant-numeric:tabular-nums;}
+  h1.display{font-size:clamp(1.9rem,4vw,2.6rem); line-height:1.1; margin:0 0 .9rem;}
+  .lede{font-size:1.05rem; color:var(--fg-soft); max-width:62ch; margin:0;}
+
+  section{padding:2.2rem 0 0;}
+  .sec-h{
+    font-size:.8rem; letter-spacing:.2em; color:var(--ink-faint);
+    display:flex; align-items:baseline; gap:1rem; margin-bottom:1.3rem; font-variant-numeric:tabular-nums;
+  }
+  .sec-h::after{content:""; flex:1; height:1px; background:var(--rule);}
+
+  .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:1.4rem;}
+  @media (max-width:860px){ .grid{grid-template-columns:1fr;} }
+  .card{
+    background:var(--surface); border:1px solid var(--rule); border-radius:20px;
+    padding:1.6rem; display:flex; flex-direction:column; gap:1rem;
+  }
+  .card.rec{border-color:color-mix(in srgb,var(--accent) 45%,var(--rule));}
+  .card-head{display:flex; align-items:baseline; gap:.6rem; flex-wrap:wrap;}
+  .card-name{font-family:"Noto Serif SC",Georgia,serif; font-size:1.2rem; font-weight:700; margin:0;}
+  .card-tag{font-size:.72rem; color:var(--accent); border:1px solid color-mix(in srgb,var(--accent) 45%,transparent); padding:.08rem .5rem; border-radius:99px;}
+  .card p{font-size:.88rem; color:var(--fg-soft); margin:0;}
+
+  .stage-row{display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;}
+  .stage-col{display:flex; flex-direction:column; gap:.45rem; align-items:center;}
+  .stage{border-radius:14px; overflow:hidden; box-shadow:0 6px 16px -8px rgba(43,38,34,.3), inset 0 0 0 1px var(--rule); flex:none;}
+  .stage svg{display:block;}
+  .stage-cap{font-size:.7rem; color:var(--ink-faint); font-variant-numeric:tabular-nums;}
+
+  .foot{font-size:.8rem; color:var(--ink-faint); margin-top:.8rem;}
+  .foot b{color:var(--fg); font-weight:600;}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700&display=swap">
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">A + 意境 · 三稿探索 · 2026-09-09</div>
+  <h1 class="display">特粗勾的骨架上，加一层大尺寸意境</h1>
+  <p class="lede">三稿共同骨架：A 版的亮纸底 + 特粗深橙勾（60px 主屏硬指标不动）。意境层的设计纪律是<b>大尺寸可赏、60px 自然隐去</b>——元素只落在勾的「外围」，永不反噬主屏清晰度。缩小窗口或退后一步，看 60px 列三稿是否依然同样干净。</p>
+</header>
+
+<section>
+  <div class="sec-h">三稿对比 · 全级缩放</div>
+  <div class="grid">
+
+    <!-- 稿1：笔意·出锋 -->
+    <div class="card">
+      <div class="card-head"><h2 class="card-name">笔意 · 出锋</h2><span class="card-tag">书卷气</span></div>
+      <p>勾尾两处变化：短臂起笔加一个淡淡的顿笔圆点（墨落纸上的重量）；长臂收笔延长出锋、笔宽自然收窄——像钢笔划完提起的瞬间。「一勾即安」的「落笔」有了重量与余韵。</p>
+      <div class="stage-row">
+        <div class="stage-col">
+          <div class="stage" style="width:140px;height:140px;">
+            <svg viewBox="0 0 1024 1024" width="140" height="140">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <circle cx="336" cy="578" r="34" fill="#C95F28" opacity="0.55"/>
+              <g transform="scale(1.18) translate(-78.9,-78.9)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round"/>
+              </g>
+              <path d="M 872 282 L 948 210" stroke="#C95F28" stroke-width="46" stroke-linecap="round" opacity="0.9"/>
+            </svg>
+          </div>
+          <div class="stage-cap">1024</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:60px;height:60px;border-radius:13px;">
+            <svg viewBox="0 0 1024 1024" width="60" height="60">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <circle cx="336" cy="578" r="34" fill="#C95F28" opacity="0.55"/>
+              <g transform="scale(1.18) translate(-78.9,-78.9)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round"/>
+              </g>
+              <path d="M 872 282 L 948 210" stroke="#C95F28" stroke-width="46" stroke-linecap="round" opacity="0.9"/>
+            </svg>
+          </div>
+          <div class="stage-cap">60px</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:29px;height:29px;border-radius:6.5px;">
+            <svg viewBox="0 0 1024 1024" width="29" height="29">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <g transform="scale(1.18) translate(-78.9,-78.9)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="205" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="165" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">29px</div>
+        </div>
+      </div>
+      <div class="foot">60px 下：顿笔隐没、出锋缩成勾尾小延伸——<b>不损清晰度</b>。</div>
+    </div>
+
+    <!-- 稿2：日课·一笔一页 -->
+    <div class="card rec">
+      <div class="card-head"><h2 class="card-name">日课 · 一笔一页</h2><span class="card-tag">推荐</span></div>
+      <p>勾的右下衬一张极淡的对角纸影（错开半层的第二页），左上留大面积素纸。意象：勾过一页，翻向新页——「3 秒记下」之后日子继续往前走的松弛感。纸影只用两层近似色，无任何细线。</p>
+      <div class="stage-row">
+        <div class="stage-col">
+          <div class="stage" style="width:140px;height:140px;">
+            <svg viewBox="0 0 1024 1024" width="140" height="140">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <path d="M 834 620 L 948 734 L 948 948 L 734 948 L 620 834 Z" fill="#EDE5D8" opacity="0.85"/>
+              <g transform="scale(1.18) translate(-78.9,-78.9)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">1024</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:60px;height:60px;border-radius:13px;">
+            <svg viewBox="0 0 1024 1024" width="60" height="60">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <path d="M 834 620 L 948 734 L 948 948 L 734 948 L 620 834 Z" fill="#EDE5D8" opacity="0.85"/>
+              <g transform="scale(1.18) translate(-78.9,-78.9)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">60px</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:29px;height:29px;border-radius:6.5px;">
+            <svg viewBox="0 0 1024 1024" width="29" height="29">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <g transform="scale(1.18) translate(-78.9,-78.9)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="205" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="165" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">29px</div>
+        </div>
+      </div>
+      <div class="foot">60px 下：纸影与亮纸几乎同色——<b>安静隐去</b>，只剩勾。</div>
+    </div>
+
+    <!-- 稿3：晨光·留白 -->
+    <div class="card">
+      <div class="card-head"><h2 class="card-name">晨光 · 留白</h2><span class="card-tag">安静</span></div>
+      <p>左上角一轮极淡的暖阳（径向渐变晕），勾如常落笔。意象：晨起一笔划掉昨天的挂心事——呼应产品早 8:00 晨间提醒的「轻松开始今天」。全渐变无线条，唯一「光」的语言。</p>
+      <div class="stage-row">
+        <div class="stage-col">
+          <div class="stage" style="width:140px;height:140px;">
+            <svg viewBox="0 0 1024 1024" width="140" height="140">
+              <defs>
+                <radialGradient id="sun" cx="0.22" cy="0.2" r="0.5">
+                  <stop offset="0%" stop-color="#F0DFC0" stop-opacity="0.9"/>
+                  <stop offset="55%" stop-color="#EFDFC2" stop-opacity="0.4"/>
+                  <stop offset="100%" stop-color="#F7F3EC" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <rect width="1024" height="1024" fill="url(#sun)"/>
+              <g transform="scale(1.18) translate(-78.9,-78.9)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">1024</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:60px;height:60px;border-radius:13px;">
+            <svg viewBox="0 0 1024 1024" width="60" height="60">
+              <defs>
+                <radialGradient id="sun60" cx="0.22" cy="0.2" r="0.5">
+                  <stop offset="0%" stop-color="#F0DFC0" stop-opacity="0.9"/>
+                  <stop offset="55%" stop-color="#EFDFC2" stop-opacity="0.4"/>
+                  <stop offset="100%" stop-color="#F7F3EC" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <rect width="1024" height="1024" fill="url(#sun60)"/>
+              <g transform="scale(1.18) translate(-78.9,-78.9)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">60px</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:29px;height:29px;border-radius:6.5px;">
+            <svg viewBox="0 0 1024 1024" width="29" height="29">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <g transform="scale(1.18) translate(-78.9,-78.9)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="205" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="165" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">29px</div>
+        </div>
+      </div>
+      <div class="foot">60px 下：光晕淡化为纸底的一点暖调——<b>只见微光不见形</b>。</div>
+    </div>
+
+  </div>
+</section>
+
+<section>
+  <div class="sec-h">选型说明</div>
+  <p style="font-size:.92rem; color:var(--fg-soft); max-width:68ch; margin:0 0 .8rem;">
+    三稿的意境层元素全部遵循同一条纪律：<b>只占勾的「外围」，且不产生细于 6px 的线</b>——这是它们在 60px 位安静隐去、不反噬清晰度的保证。推荐「日课 · 一笔一页」：纸影与品牌纸色同族、错层构图有呼吸感，且与 App 内「备忘卡」的视觉母语（白卡 + 纸底）一脉相承。「笔意」最有书卷气但出锋方向需要精修；「晨光」最安静但渐变在不同壁纸下的表现略难预期。
+  </p>
+  <p class="foot">定稿后：更新 scripts/generate-icons.py 渲染逻辑 → 全套资产重新生成 → 构建装机 → 提交 PR 修订。</p>
+</section>
+
+</div>

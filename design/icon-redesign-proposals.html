@@ -1,0 +1,481 @@
+<title>口袋秘书 · 图标方向提案</title>
+<style>
+  :root{
+    --paper:#F6F3EE;
+    --paper-deep:#E8E2D9;
+    --surface:#FFFFFF;
+    --ink:#2B2622;
+    --ink-soft:#5F5B54;
+    --ink-faint:#8A837B;
+    --accent:#E0733A;
+    --accent-soft:#F9E8DD;
+    --gold:#C99A2E;
+    --rule:#E2DCCF;
+    --ground:var(--paper);
+    --fg:var(--ink);
+    --fg-soft:var(--ink-soft);
+    --tile-light:#F1EFE8;
+    --tile-dark:#1C1B19;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#211F1B;
+      --paper-deep:#2A2721;
+      --surface:#2A2721;
+      --ink:#ECE7DC;
+      --ink-soft:#B8B2A5;
+      --ink-faint:#8A837B;
+      --accent:#E5854F;
+      --accent-soft:#3A2E24;
+      --gold:#D4A94E;
+      --rule:#3A362E;
+      --ground:#211F1B;
+      --fg:#ECE7DC;
+      --fg-soft:#B8B2A5;
+      --tile-light:#F1EFE8;
+      --tile-dark:#1C1B19;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#211F1B; --paper-deep:#2A2721; --surface:#2A2721;
+    --ink:#ECE7DC; --ink-soft:#B8B2A5; --ink-faint:#8A837B;
+    --accent:#E5854F; --accent-soft:#3A2E24; --gold:#D4A94E;
+    --rule:#3A362E; --ground:#211F1B; --fg:#ECE7DC; --fg-soft:#B8B2A5;
+    --tile-light:#F1EFE8; --tile-dark:#1C1B19;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--ground); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+    font-size:16px; line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+    padding:0 0 5rem;
+  }
+  .wrap{max-width:1020px; margin:0 auto; padding:0 1.5rem;}
+  .display{
+    font-family:"Noto Serif SC",Georgia,"Songti SC",serif;
+    font-weight:700; letter-spacing:-.01em; text-wrap:balance;
+  }
+  header{padding:4rem 0 2.4rem; border-bottom:1px solid var(--rule);}
+  .eyebrow{
+    font-size:.75rem; letter-spacing:.22em; color:var(--ink-faint);
+    font-variant-numeric:tabular-nums; margin-bottom:.9rem;
+  }
+  h1.display{font-size:clamp(2rem,4.6vw,3.1rem); line-height:1.08; margin:0 0 1rem;}
+  .lede{font-size:1.08rem; color:var(--fg-soft); max-width:52ch; margin:0;}
+  .kv{display:flex; flex-wrap:wrap; gap:2.2rem; margin-top:1.8rem;}
+  .kv div{font-size:.85rem; color:var(--ink-faint); font-variant-numeric:tabular-nums;}
+  .kv b{display:block; font-weight:600; color:var(--fg); font-size:.95rem; margin-bottom:.1rem;}
+
+  section{padding:2.6rem 0 0;}
+  .sec-h{
+    font-size:.8rem; letter-spacing:.2em; color:var(--ink-faint);
+    display:flex; align-items:baseline; gap:1rem; margin-bottom:1.6rem;
+    font-variant-numeric:tabular-nums;
+  }
+  .sec-h::after{content:""; flex:1; height:1px; background:var(--rule);}
+
+  .dir{
+    background:var(--surface); border:1px solid var(--rule); border-radius:20px;
+    padding:1.9rem; display:grid; grid-template-columns:300px 1fr; gap:2rem;
+  }
+  @media (max-width:760px){ .dir{grid-template-columns:1fr;} }
+  .dir-head{display:flex; align-items:baseline; gap:.8rem; flex-wrap:wrap;}
+  .dir-name{font-family:"Noto Serif SC",Georgia,serif; font-size:1.5rem; font-weight:700; margin:0;}
+  .dir-tag{
+    font-size:.78rem; color:var(--accent); border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);
+    padding:.1rem .55rem; border-radius:99px; letter-spacing:.05em;
+  }
+  .thesis{font-size:1rem; color:var(--fg-soft); margin:.7rem 0 1rem; max-width:56ch;}
+  .thesis b{color:var(--fg); font-weight:600;}
+  .pros{display:grid; grid-template-columns:1fr 1fr; gap:1rem 1.6rem; margin:0; padding:0;}
+  @media (max-width:560px){ .pros{grid-template-columns:1fr;} }
+  .pros div{font-size:.9rem; color:var(--fg-soft); line-height:1.55;}
+  .pros h4{font-size:.78rem; letter-spacing:.14em; color:var(--ink-faint); margin:0 0 .35rem; font-weight:600;}
+  .pros ul{margin:0; padding-left:1.1em;}
+  .pros li{margin-bottom:.25rem;}
+  .pros li:last-child{margin-bottom:0;}
+  .chips{display:flex; gap:.45rem; flex-wrap:wrap; margin-top:1.2rem;}
+  .chip{
+    display:inline-flex; align-items:center; gap:.4rem;
+    font-size:.72rem; color:var(--ink-faint); font-variant-numeric:tabular-nums;
+    border:1px solid var(--rule); border-radius:99px; padding:.18rem .6rem .18rem .3rem;
+  }
+  .sw{width:16px; height:16px; border-radius:50%; box-shadow:inset 0 0 0 1px var(--rule);}
+
+  .stage-col{display:flex; flex-direction:column; gap:1rem; align-items:center;}
+  .stage{
+    width:264px; height:264px; border-radius:58px; overflow:hidden;
+    box-shadow:0 14px 34px -14px rgba(43,38,34,.28), inset 0 0 0 1px var(--rule);
+    flex:none;
+  }
+  .stage svg{width:100%; height:100%; display:block;}
+  .stage-cap{font-size:.76rem; color:var(--ink-faint); font-variant-numeric:tabular-nums;}
+
+  .reals{margin-top:1.6rem; padding-top:1.2rem; border-top:1px dashed var(--rule);
+    display:flex; flex-wrap:wrap; gap:1.6rem 2.4rem; align-items:flex-end;}
+  .real-group{display:flex; flex-direction:column; gap:.55rem;}
+  .real-row{display:flex; gap:.55rem; align-items:center;}
+  .tile{border-radius:13px; display:grid; place-items:center; flex:none; position:relative;}
+  .tile.light{background:var(--tile-light); box-shadow:inset 0 0 0 1px #D3D1C7;}
+  .tile.dark{background:var(--tile-dark); box-shadow:inset 0 0 0 1px #323027;}
+  .t60{width:60px; height:60px;}
+  .t60 svg{width:54px; height:54px; border-radius:12px; display:block;}
+  .t29{width:34px; height:34px;}
+  .t29 svg{width:29px; height:29px; border-radius:6.5px; display:block;}
+  .real-label{font-size:.72rem; color:var(--ink-faint); font-variant-numeric:tabular-nums; text-align:left;}
+
+  table.matrix{width:100%; border-collapse:collapse; font-size:.88rem;}
+  table.matrix th, table.matrix td{padding:.6rem .7rem; text-align:left; border-bottom:1px solid var(--rule);}
+  table.matrix th{font-size:.76rem; letter-spacing:.1em; color:var(--ink-faint); font-weight:600;}
+  table.matrix td.name{font-family:"Noto Serif SC",Georgia,serif; font-weight:600; white-space:nowrap;}
+  table.matrix td.c{text-align:center; font-variant-numeric:tabular-nums; letter-spacing:.15em; color:var(--fg-soft);}
+  table.matrix tr.rec td{background:color-mix(in srgb,var(--accent) 7%,transparent);}
+  .legend{font-size:.78rem; color:var(--ink-faint); margin-top:.7rem;}
+
+  .reco{
+    background:var(--surface); border:1px solid color-mix(in srgb,var(--accent) 40%,var(--rule));
+    border-radius:20px; padding:1.9rem; display:grid; grid-template-columns:220px 1fr; gap:1.8rem; align-items:center;
+  }
+  @media (max-width:760px){ .reco{grid-template-columns:1fr;} }
+  .reco .stage{width:200px; height:200px; border-radius:44px; box-shadow:0 12px 28px -12px rgba(43,38,34,.3), inset 0 0 0 1px var(--rule);}
+  .reco h3{font-family:"Noto Serif SC",Georgia,serif; margin:.2rem 0 .6rem; font-size:1.3rem;}
+  .reco p{margin:.4rem 0; font-size:.94rem; color:var(--fg-soft); max-width:58ch;}
+  .splashrow{display:flex; gap:1.2rem; margin-top:1.4rem; flex-wrap:wrap;}
+  .phone{
+    width:150px; height:300px; border-radius:30px; background:#F6F3EE;
+    box-shadow:inset 0 0 0 1px #D9D2C4, 0 10px 24px -10px rgba(43,38,34,.25);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1rem; flex:none;
+  }
+  .phone svg{width:78px; height:78px; border-radius:17px; display:block; box-shadow:0 6px 14px -6px rgba(43,38,34,.28);}
+  .phone .appname{font-family:"Noto Serif SC",Georgia,serif; font-size:.9rem; color:#2B2622; font-weight:600; letter-spacing:.28em; text-indent:.28em;}
+  .phone.dark{background:#1C1B19; box-shadow:inset 0 0 0 1px #323027, 0 10px 24px -10px rgba(0,0,0,.4);}
+  .phone.dark .appname{color:#ECE7DC;}
+  .phone-cap{font-size:.72rem; color:var(--ink-faint); text-align:center;}
+
+  .next{font-size:.9rem; color:var(--fg-soft);}
+  .next ol{padding-left:1.2rem; margin:.5rem 0 0;}
+  .next li{margin-bottom:.3rem;}
+  footer{margin-top:3rem; padding-top:1.4rem; border-top:1px solid var(--rule);
+    font-size:.78rem; color:var(--ink-faint); font-variant-numeric:tabular-nums;}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&display=swap">
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">私人助手 · APP ICON 重设计 · 提案 V1 · 2026-09-09</div>
+  <h1 class="display">四个图标方向，<br>一条「口袋秘书」的视觉主张</h1>
+  <p class="lede">现行图标是「折角备忘卡：纯白底 + 颗粒纸感 + 琥珀勾选」。本次重设计不动品牌色（暖纸 + 橙），差异化全部押在<b>形体与构图</b>上——每个方向回答同一个问题：这张 60px 的小图，要替产品说出哪一句话。</p>
+  <div class="kv">
+    <div><b>产品一句话</b>口袋里的外置秘书：3 秒记下任何事</div>
+    <div><b>视觉底座</b>暖纸 #F6F3EE · 墨 #2B2622 · 橙 #E0733A</div>
+    <div><b>验收硬指标</b>29px 通知位可辨 · 深/浅壁纸不塌 · Android 三件套可派生</div>
+  </div>
+</header>
+
+<section>
+  <div class="sec-h">方向一 · 稳妥迭代</div>
+  <div class="dir">
+    <div class="stage-col">
+      <div class="stage">
+        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+          <rect width="1024" height="1024" fill="#E6DFD2"/>
+          <g transform="rotate(-3 512 512)">
+            <rect x="222" y="186" width="600" height="680" rx="52" fill="#D6CCBB" transform="translate(12,16)"/>
+            <rect x="212" y="172" width="600" height="680" rx="52" fill="#FFFFFF"/>
+            <path d="M 692 172 L 812 172 L 812 292 Z" fill="#E6DFD2"/>
+            <path d="M 692 172 L 692 292 L 812 292 Z" fill="#EBE1CE"/>
+            <rect x="300" y="286" width="330" height="18" rx="9" fill="#E8E2D9"/>
+            <rect x="300" y="330" width="220" height="18" rx="9" fill="#EDE7DC"/>
+            <path d="M 352 505 L 472 635 L 682 405" fill="none" stroke="#E0733A" stroke-width="92" stroke-linecap="round" stroke-linejoin="round"/>
+          </g>
+        </svg>
+      </div>
+      <div class="stage-cap">1024 画布 · 等比预览</div>
+    </div>
+    <div>
+      <div class="dir-head"><h2 class="dir-name">折角卡 · 二代</h2><span class="dir-tag">最稳 · 保留存量认知</span></div>
+      <p class="thesis"><b>论点：办完的卡片，被折角归档。</b>不换隐喻、不换识别度，只修三处硬伤：底色从纯白加深为深纸（白壁纸上不再「消失」）、勾形加粗到 92（29px 位仍可辨）、卡上补两行摘要灰条让「备忘卡」身份更实。</p>
+      <div class="pros">
+        <div><h4>优势</h4><ul>
+          <li>老用户零迁移成本，商店替换无感知断层</li>
+          <li>形体只有卡 + 折角 + 勾三个元素，小尺寸天然稳</li>
+          <li>monochrome 派生最容易（勾的剪影）</li>
+        </ul></div>
+        <div><h4>风险</h4><ul>
+          <li>与系统「备忘录」类 App 撞脸的风险仍在</li>
+          <li>是「改良」不是「重设计」，惊喜感最弱</li>
+        </ul></div>
+      </div>
+      <div class="chips">
+        <span class="chip"><span class="sw" style="background:#E6DFD2"></span>底 #E6DFD2</span>
+        <span class="chip"><span class="sw" style="background:#FFFFFF"></span>卡 #FFFFFF</span>
+        <span class="chip"><span class="sw" style="background:#E0733A"></span>勾 #E0733A</span>
+        <span class="chip"><span class="sw" style="background:#E8E2D9"></span>摘要 #E8E2D9</span>
+      </div>
+    </div>
+    <div class="reals" style="grid-column:1 / -1;">
+      <div class="real-group">
+        <div class="real-row">
+          <div class="tile light t60"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#E6DFD2"/><g transform="rotate(-3 512 512)"><rect x="212" y="172" width="600" height="680" rx="52" fill="#FFFFFF"/><path d="M 692 172 L 692 292 L 812 292 Z" fill="#EBE1CE"/><path d="M 692 172 L 812 172 L 812 292 Z" fill="#E6DFD2"/><path d="M 352 505 L 472 635 L 682 405" fill="none" stroke="#E0733A" stroke-width="92" stroke-linecap="round" stroke-linejoin="round"/></g></svg></div>
+          <div class="tile dark t60"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#E6DFD2"/><g transform="rotate(-3 512 512)"><rect x="212" y="172" width="600" height="680" rx="52" fill="#FFFFFF"/><path d="M 692 172 L 692 292 L 812 292 Z" fill="#EBE1CE"/><path d="M 692 172 L 812 172 L 812 292 Z" fill="#E6DFD2"/><path d="M 352 505 L 472 635 L 682 405" fill="none" stroke="#E0733A" stroke-width="92" stroke-linecap="round" stroke-linejoin="round"/></g></svg></div>
+        </div>
+        <div class="real-label">主屏 60px · 浅底 / 深底</div>
+      </div>
+      <div class="real-group">
+        <div class="real-row">
+          <div class="tile light t29"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#E6DFD2"/><rect x="212" y="172" width="600" height="680" rx="52" fill="#FFFFFF"/><path d="M 352 505 L 472 635 L 682 405" fill="none" stroke="#E0733A" stroke-width="100" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="tile dark t29"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#E6DFD2"/><rect x="212" y="172" width="600" height="680" rx="52" fill="#FFFFFF"/><path d="M 352 505 L 472 635 L 682 405" fill="none" stroke="#E0733A" stroke-width="100" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        </div>
+        <div class="real-label">通知 29px · 勾仍可辨</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-h">方向二 · 极简一勾</div>
+  <div class="dir">
+    <div class="stage-col">
+      <div class="stage">
+        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+          <rect width="1024" height="1024" fill="#EFE6D8"/>
+          <g stroke="#E0D5C2" stroke-width="6">
+            <line x1="150" y1="330" x2="874" y2="330"/>
+            <line x1="150" y1="450" x2="874" y2="450"/>
+            <line x1="150" y1="770" x2="874" y2="770"/>
+            <line x1="150" y1="890" x2="874" y2="890"/>
+          </g>
+          <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#E0733A" stroke-width="132" stroke-linecap="round"/>
+          <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#E0733A" stroke-width="106" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="stage-cap">1024 画布 · 等比预览</div>
+    </div>
+    <div>
+      <div class="dir-head"><h2 class="dir-name">一勾即安</h2><span class="dir-tag">推荐 · 最强主张</span></div>
+      <p class="thesis"><b>论点：焦虑被一笔划掉。</b>整张画布就是一页备忘纸——四条极淡的横格线交代「纸」的身份，一枝粗壮的橙勾占满画面。别的待办 App 的勾待在按钮里，这张图标里的勾「已经打完了」：产品给用户的正是那个落勾瞬间的安心。</p>
+      <div class="pros">
+        <div><h4>优势</h4><ul>
+          <li>29px 位只剩「纸底 + 橙勾」两个信息，缩放最稳</li>
+          <li>横格线是别的勾形图标没有的Memo语境，不撞脸</li>
+          <li>落地面最广：iOS / Android / monochrome / splash 同一形体通吃</li>
+        </ul></div>
+        <div><h4>风险</h4><ul>
+          <li>与现行版隐喻断层最大，商店里是「换脸」</li>
+          <li>勾形笔触走向需在 1024 稿上再打磨弧度（此处为方向示意）</li>
+        </ul></div>
+      </div>
+      <div class="chips">
+        <span class="chip"><span class="sw" style="background:#EFE6D8"></span>纸 #EFE6D8</span>
+        <span class="chip"><span class="sw" style="background:#E0D5C2"></span>格线 #E0D5C2</span>
+        <span class="chip"><span class="sw" style="background:#E0733A"></span>勾 #E0733A</span>
+      </div>
+    </div>
+    <div class="reals" style="grid-column:1 / -1;">
+      <div class="real-group">
+        <div class="real-row">
+          <div class="tile light t60"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#EFE6D8"/><g stroke="#E0D5C2" stroke-width="6"><line x1="150" y1="330" x2="874" y2="330"/><line x1="150" y1="450" x2="874" y2="450"/><line x1="150" y1="770" x2="874" y2="770"/><line x1="150" y1="890" x2="874" y2="890"/></g><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#E0733A" stroke-width="132" stroke-linecap="round"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#E0733A" stroke-width="106" stroke-linecap="round"/></svg></div>
+          <div class="tile dark t60"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#EFE6D8"/><g stroke="#E0D5C2" stroke-width="6"><line x1="150" y1="330" x2="874" y2="330"/><line x1="150" y1="450" x2="874" y2="450"/><line x1="150" y1="770" x2="874" y2="770"/><line x1="150" y1="890" x2="874" y2="890"/></g><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#E0733A" stroke-width="132" stroke-linecap="round"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#E0733A" stroke-width="106" stroke-linecap="round"/></svg></div>
+        </div>
+        <div class="real-label">主屏 60px · 浅底 / 深底</div>
+      </div>
+      <div class="real-group">
+        <div class="real-row">
+          <div class="tile light t29"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#EFE6D8"/><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#E0733A" stroke-width="132" stroke-linecap="round"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#E0733A" stroke-width="106" stroke-linecap="round"/></svg></div>
+          <div class="tile dark t29"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#EFE6D8"/><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#E0733A" stroke-width="132" stroke-linecap="round"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#E0733A" stroke-width="106" stroke-linecap="round"/></svg></div>
+        </div>
+        <div class="real-label">通知 29px · 格线自然隐去</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-h">方向三 · 深底口袋</div>
+  <div class="dir">
+    <div class="stage-col">
+      <div class="stage">
+        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+          <rect width="1024" height="1024" fill="#2B2622"/>
+          <g transform="rotate(8 512 380)">
+            <rect x="342" y="120" width="360" height="400" rx="30" fill="#171310" transform="translate(10,14)"/>
+            <rect x="332" y="110" width="360" height="400" rx="30" fill="#FCFAF6"/>
+            <path d="M 408 260 L 458 318 L 548 214" fill="none" stroke="#E0733A" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+          </g>
+          <path d="M 272 430 H 752 V 772 Q 752 842 682 842 H 342 Q 272 842 272 772 Z" fill="#3B342C"/>
+          <path d="M 306 492 H 718" stroke="#57503F" stroke-width="6" stroke-dasharray="20 16" fill="none"/>
+        </svg>
+      </div>
+      <div class="stage-cap">1024 画布 · 等比预览</div>
+    </div>
+    <div>
+      <div class="dir-head"><h2 class="dir-name">口袋收条</h2><span class="dir-tag">唯一深底 · 表达「收下」</span></div>
+      <p class="thesis"><b>论点：说一声，它收进口袋。</b>整个提案里唯一的大胆尝试：深墨底上一只暖色口袋，一张白卡正插进去，卡上那笔橙勾已经打好。这是产品核心动作「3 秒收下任何事」的静帧——别的方向说「记好了」，这个方向说「正在替你收着」。</p>
+      <div class="pros">
+        <div><h4>优势</h4><ul>
+          <li>深墨底在一片浅色壁纸里存在感最强</li>
+          <li>「口袋」直接呼应产品名「口袋里的外置秘书」</li>
+          <li>与 App 内暖纸 UI 形成内外互文：图标是深色「外套」</li>
+        </ul></div>
+        <div><h4>风险</h4><ul>
+          <li>口袋 + 卡 + 勾三层结构，29px 位退化为「深底白块」</li>
+          <li>深底图标与浅色系统主题并排时偏重</li>
+          <li>形体最多，切图与 monochrome 派生成本最高</li>
+        </ul></div>
+      </div>
+      <div class="chips">
+        <span class="chip"><span class="sw" style="background:#2B2622"></span>底 #2B2622</span>
+        <span class="chip"><span class="sw" style="background:#3B342C"></span>袋 #3B342C</span>
+        <span class="chip"><span class="sw" style="background:#FCFAF6"></span>卡 #FCFAF6</span>
+        <span class="chip"><span class="sw" style="background:#E0733A"></span>勾 #E0733A</span>
+      </div>
+    </div>
+    <div class="reals" style="grid-column:1 / -1;">
+      <div class="real-group">
+        <div class="real-row">
+          <div class="tile light t60"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#2B2622"/><g transform="rotate(8 512 380)"><rect x="332" y="110" width="360" height="400" rx="30" fill="#FCFAF6"/><path d="M 408 260 L 458 318 L 548 214" fill="none" stroke="#E0733A" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/></g><path d="M 272 430 H 752 V 772 Q 752 842 682 842 H 342 Q 272 842 272 772 Z" fill="#3B342C"/></svg></div>
+          <div class="tile dark t60"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#2B2622"/><g transform="rotate(8 512 380)"><rect x="332" y="110" width="360" height="400" rx="30" fill="#FCFAF6"/><path d="M 408 260 L 458 318 L 548 214" fill="none" stroke="#E0733A" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/></g><path d="M 272 430 H 752 V 772 Q 752 842 682 842 H 342 Q 272 842 272 772 Z" fill="#3B342C"/></svg></div>
+        </div>
+        <div class="real-label">主屏 60px · 浅底 / 深底</div>
+      </div>
+      <div class="real-group">
+        <div class="real-row">
+          <div class="tile light t29"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#2B2622"/><g transform="rotate(8 512 380)"><rect x="332" y="110" width="360" height="400" rx="30" fill="#FCFAF6"/><path d="M 408 260 L 458 318 L 548 214" fill="none" stroke="#E0733A" stroke-width="66" stroke-linecap="round" stroke-linejoin="round"/></g><path d="M 272 430 H 752 V 772 Q 752 842 682 842 H 342 Q 272 842 272 772 Z" fill="#3B342C"/></svg></div>
+          <div class="tile dark t29"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#2B2622"/><g transform="rotate(8 512 380)"><rect x="332" y="110" width="360" height="400" rx="30" fill="#FCFAF6"/><path d="M 408 260 L 458 318 L 548 214" fill="none" stroke="#E0733A" stroke-width="66" stroke-linecap="round" stroke-linejoin="round"/></g><path d="M 272 430 H 752 V 772 Q 752 842 682 842 H 342 Q 272 842 272 772 Z" fill="#3B342C"/></svg></div>
+        </div>
+        <div class="real-label">通知 29px · 简化验证</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-h">方向四 · 手书墨勾</div>
+  <div class="dir">
+    <div class="stage-col">
+      <div class="stage">
+        <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+          <rect width="1024" height="1024" fill="#F3EEE4"/>
+          <g transform="rotate(-6 512 512)">
+            <rect x="252" y="222" width="540" height="600" rx="36" fill="#E2DACB" transform="translate(10,14)"/>
+            <rect x="242" y="212" width="540" height="600" rx="36" fill="#FFFFFF"/>
+            <rect x="310" y="292" width="180" height="14" rx="7" fill="#EDE6DA"/>
+            <path d="M 388 556 C 424 606 458 644 488 672" fill="none" stroke="#2B2622" stroke-width="78" stroke-linecap="round"/>
+            <path d="M 488 672 C 566 560 640 458 712 372" fill="none" stroke="#2B2622" stroke-width="52" stroke-linecap="round"/>
+            <circle cx="742" cy="352" r="26" fill="#E0733A"/>
+          </g>
+        </svg>
+      </div>
+      <div class="stage-cap">1024 画布 · 等比预览</div>
+    </div>
+    <div>
+      <div class="dir-head"><h2 class="dir-name">手书墨勾</h2><span class="dir-tag">最有人味 · 主人的笔迹</span></div>
+      <p class="thesis"><b>论点：这是主人亲手落下的笔。</b>斜贴的白纸条上，一枝墨色手书勾——短臂粗、长臂细，是钢笔收锋的力道；句尾一枚橙点，像记完账画的句号。「主人的备忘录」的口吻由此而来：不是工具的 UI，是被记下的痕迹本身。</p>
+      <div class="pros">
+        <div><h4>优势</h4><ul>
+          <li>墨 + 纸的「手写」质感在图标里罕见，区隔度最高</li>
+          <li>那枚橙句点是全提案最小的大胆尝试：一处点睛，全局克制</li>
+          <li>纸条微倾带来松弛感，与 App「零摩擦」气质一致</li>
+        </ul></div>
+        <div><h4>风险</h4><ul>
+          <li>墨勾 + 橙点在 29px 位会糊成一个深色图形</li>
+          <li>斜构图的视觉重心需要逐尺寸校准</li>
+          <li>手书笔触对最终 1024 稿的曲线质量要求最高</li>
+        </ul></div>
+      </div>
+      <div class="chips">
+        <span class="chip"><span class="sw" style="background:#F3EEE4"></span>底 #F3EEE4</span>
+        <span class="chip"><span class="sw" style="background:#FFFFFF"></span>纸条 #FFFFFF</span>
+        <span class="chip"><span class="sw" style="background:#2B2622"></span>墨 #2B2622</span>
+        <span class="chip"><span class="sw" style="background:#E0733A"></span>句点 #E0733A</span>
+      </div>
+    </div>
+    <div class="reals" style="grid-column:1 / -1;">
+      <div class="real-group">
+        <div class="real-row">
+          <div class="tile light t60"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#F3EEE4"/><g transform="rotate(-6 512 512)"><rect x="242" y="212" width="540" height="600" rx="36" fill="#FFFFFF"/><path d="M 388 556 C 424 606 458 644 488 672" fill="none" stroke="#2B2622" stroke-width="78" stroke-linecap="round"/><path d="M 488 672 C 566 560 640 458 712 372" fill="none" stroke="#2B2622" stroke-width="52" stroke-linecap="round"/><circle cx="742" cy="352" r="26" fill="#E0733A"/></g></svg></div>
+          <div class="tile dark t60"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#F3EEE4"/><g transform="rotate(-6 512 512)"><rect x="242" y="212" width="540" height="600" rx="36" fill="#FFFFFF"/><path d="M 388 556 C 424 606 458 644 488 672" fill="none" stroke="#2B2622" stroke-width="78" stroke-linecap="round"/><path d="M 488 672 C 566 560 640 458 712 372" fill="none" stroke="#2B2622" stroke-width="52" stroke-linecap="round"/><circle cx="742" cy="352" r="26" fill="#E0733A"/></g></svg></div>
+        </div>
+        <div class="real-label">主屏 60px · 浅底 / 深底</div>
+      </div>
+      <div class="real-group">
+        <div class="real-row">
+          <div class="tile light t29"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#F3EEE4"/><g transform="rotate(-6 512 512)"><rect x="242" y="212" width="540" height="600" rx="36" fill="#FFFFFF"/><path d="M 388 556 C 424 606 458 644 488 672" fill="none" stroke="#2B2622" stroke-width="90" stroke-linecap="round"/><path d="M 488 672 C 566 560 640 458 712 372" fill="none" stroke="#2B2622" stroke-width="62" stroke-linecap="round"/></g></svg></div>
+          <div class="tile dark t29"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#F3EEE4"/><g transform="rotate(-6 512 512)"><rect x="242" y="212" width="540" height="600" rx="36" fill="#FFFFFF"/><path d="M 388 556 C 424 606 458 644 488 672" fill="none" stroke="#2B2622" stroke-width="90" stroke-linecap="round"/><path d="M 488 672 C 566 560 640 458 712 372" fill="none" stroke="#2B2622" stroke-width="62" stroke-linecap="round"/></g></svg></div>
+        </div>
+        <div class="real-label">通知 29px · 橙点隐去保墨勾</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-h">对比与推荐</div>
+  <table class="matrix">
+    <thead><tr>
+      <th>方向</th><th>29px 可辨</th><th>浅壁纸存在感</th><th>深壁纸成立</th><th>与备忘录类 App 区隔</th><th>派生成本</th>
+    </tr></thead>
+    <tbody>
+      <tr><td class="name">折角卡 · 二代</td><td class="c">●●●</td><td class="c">●●</td><td class="c">●●●</td><td class="c">●</td><td class="c">低</td></tr>
+      <tr class="rec"><td class="name">一勾即安</td><td class="c">●●●</td><td class="c">●●●</td><td class="c">●●●</td><td class="c">●●●</td><td class="c">低</td></tr>
+      <tr><td class="name">口袋收条</td><td class="c">●</td><td class="c">●●●</td><td class="c">●●</td><td class="c">●●●</td><td class="c">高</td></tr>
+      <tr><td class="name">手书墨勾</td><td class="c">●●</td><td class="c">●●</td><td class="c">●●●</td><td class="c">●●●</td><td class="c">中</td></tr>
+    </tbody>
+  </table>
+  <p class="legend">● 越多越好；派生成本 = 切 1024 主图 + Android adaptive 前景/背景/monochrome + splash 的工作量。</p>
+
+  <div style="margin-top:1.8rem;" class="reco">
+    <div class="stage">
+      <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+        <rect width="1024" height="1024" fill="#EFE6D8"/>
+        <g stroke="#E0D5C2" stroke-width="6">
+          <line x1="150" y1="330" x2="874" y2="330"/>
+          <line x1="150" y1="450" x2="874" y2="450"/>
+          <line x1="150" y1="770" x2="874" y2="770"/>
+          <line x1="150" y1="890" x2="874" y2="890"/>
+        </g>
+        <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#E0733A" stroke-width="132" stroke-linecap="round"/>
+        <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#E0733A" stroke-width="106" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <h3>推荐：方向二「一勾即安」，方向四作备选</h3>
+      <p>推荐理由：图标的第一战场是主屏 60px 与通知 29px，「一勾即安」是四个方向里唯一在所有缩放位都稳的；同时它把「格线纸」这个 Memo 语汇带进了勾形图标，避开了与系统备忘录的撞脸。备选「手书墨勾」——如果更想强调「主人的笔迹」这层人味，它是更性格化的选择，但需要接受 29px 位的衰减。</p>
+      <div class="splashrow">
+        <div>
+          <div class="phone">
+            <svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#EFE6D8"/><g stroke="#E0D5C2" stroke-width="6"><line x1="150" y1="330" x2="874" y2="330"/><line x1="150" y1="450" x2="874" y2="450"/><line x1="150" y1="770" x2="874" y2="770"/><line x1="150" y1="890" x2="874" y2="890"/></g><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#E0733A" stroke-width="132" stroke-linecap="round"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#E0733A" stroke-width="106" stroke-linecap="round"/></svg>
+            <div class="appname">私人助手</div>
+          </div>
+          <div class="phone-cap">splash · 浅色</div>
+        </div>
+        <div>
+          <div class="phone dark">
+            <svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#EFE6D8"/><g stroke="#E0D5C2" stroke-width="6"><line x1="150" y1="330" x2="874" y2="330"/><line x1="150" y1="450" x2="874" y2="450"/><line x1="150" y1="770" x2="874" y2="770"/><line x1="150" y1="890" x2="874" y2="890"/></g><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#E0733A" stroke-width="132" stroke-linecap="round"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#E0733A" stroke-width="106" stroke-linecap="round"/></svg>
+            <div class="appname">私人助手</div>
+          </div>
+          <div class="phone-cap">splash · 深色壁纸示意</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="next" style="margin-top:1.8rem;">
+    <b style="color:var(--fg)">定稿后的落地路径（届时才动生产资产）：</b>
+    <ol>
+      <li>在选定方向内打磨 1024 母稿（勾形弧度、格线间距、光学重心逐项校准）</li>
+      <li>派生全套：iOS icon.png / splash-icon.png / favicon，Android adaptive 前景、背景、monochrome 三图</li>
+      <li>属于原生资产变更：走 dev client 重新构建安装验收，Metro Reload 不生效</li>
+      <li>验收清单：主屏深/浅壁纸截图、通知中心 29px、设置页小图标、splash 启动静帧逐项核对</li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  提案性质文档 · 未改任何生产代码与资产 · 确认方向后按仓库规范开分支走 PR ·
+  设计语言沿用 DESIGN_SYSTEM.md 令牌，仅图标画布内作尺寸级微调
+</footer>
+
+</div>
