@@ -1,0 +1,241 @@
+<title>细线意境 · 三稿对比</title>
+<style>
+  :root{
+    --paper:#F6F3EE;
+    --surface:#FFFFFF;
+    --ink:#2B2622;
+    --ink-soft:#5F5B54;
+    --ink-faint:#8A837B;
+    --accent:#E0733A;
+    --rule:#E2DCCF;
+    --ground:var(--paper);
+    --fg:var(--ink);
+    --fg-soft:var(--ink-soft);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#211F1B; --surface:#2A2721; --ink:#ECE7DC; --ink-soft:#B8B2A5;
+      --ink-faint:#8A837B; --accent:#E5854F; --rule:#3A362E;
+      --ground:#211F1B; --fg:#ECE7DC; --fg-soft:#B8B2A5;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#211F1B; --surface:#2A2721; --ink:#ECE7DC; --ink-soft:#B8B2A5;
+    --ink-faint:#8A837B; --accent:#E5854F; --rule:#3A362E;
+    --ground:#211F1B; --fg:#ECE7DC; --fg-soft:#B8B2A5;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--ground); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+    font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
+    padding:0 0 4rem;
+  }
+  .wrap{max-width:1060px; margin:0 auto; padding:0 1.5rem;}
+  .display{font-family:"Noto Serif SC",Georgia,"Songti SC",serif; font-weight:700; text-wrap:balance;}
+  header{padding:3.4rem 0 2rem; border-bottom:1px solid var(--rule);}
+  .eyebrow{font-size:.75rem; letter-spacing:.22em; color:var(--ink-faint); margin-bottom:.8rem; font-variant-numeric:tabular-nums;}
+  h1.display{font-size:clamp(1.9rem,4vw,2.6rem); line-height:1.1; margin:0 0 .9rem;}
+  .lede{font-size:1.05rem; color:var(--fg-soft); max-width:62ch; margin:0;}
+
+  section{padding:2.2rem 0 0;}
+  .sec-h{
+    font-size:.8rem; letter-spacing:.2em; color:var(--ink-faint);
+    display:flex; align-items:baseline; gap:1rem; margin-bottom:1.3rem; font-variant-numeric:tabular-nums;
+  }
+  .sec-h::after{content:""; flex:1; height:1px; background:var(--rule);}
+
+  .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:1.4rem;}
+  @media (max-width:860px){ .grid{grid-template-columns:1fr;} }
+  .card{
+    background:var(--surface); border:1px solid var(--rule); border-radius:20px;
+    padding:1.6rem; display:flex; flex-direction:column; gap:1rem;
+  }
+  .card-head{display:flex; align-items:baseline; gap:.6rem; flex-wrap:wrap;}
+  .card-name{font-family:"Noto Serif SC",Georgia,serif; font-size:1.2rem; font-weight:700; margin:0;}
+  .card p{font-size:.88rem; color:var(--fg-soft); margin:0;}
+
+  .stage-row{display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;}
+  .stage-col{display:flex; flex-direction:column; gap:.45rem; align-items:center;}
+  .stage{border-radius:14px; overflow:hidden; box-shadow:0 6px 16px -8px rgba(43,38,34,.3), inset 0 0 0 1px var(--rule); flex:none;}
+  .stage svg{display:block;}
+  .stage-cap{font-size:.7rem; color:var(--ink-faint); font-variant-numeric:tabular-nums;}
+
+  .foot{font-size:.8rem; color:var(--ink-faint); margin-top:.8rem;}
+  .foot b{color:var(--fg); font-weight:600;}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700&display=swap">
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">细线意境 · 三稿探索 · 2026-09-09</div>
+  <h1 class="display">细线回来了——但这次不抢勾</h1>
+  <p class="lede">格线版（B）的问题不是细线本身，而是<b>四条满幅横线</b>贴着勾、在 60px 下与纸底混成灰雾。这三稿把细线改造成勾的「外物」：要么离勾远、要么短、要么只暗示边界——大尺寸有纸的秩序感，60px 位细线先于勾隐没（线比勾细一个量级，缩放时它先糊掉，勾仍清晰）。</p>
+</header>
+
+<section>
+  <div class="sec-h">三稿对比 · 全级缩放</div>
+  <div class="grid">
+
+    <!-- 稿1：留白横线（上下边线） -->
+    <div class="card">
+      <div class="card-head"><h2 class="card-name">纸的边界</h2></div>
+      <p>勾的上下各一条短横线（只到画布 2/3 宽，居中），像一页备忘纸的上下留白线。细线只有 14px 宽（勾的 1/13），离勾最远——60px 下线宽不足 1px 率先隐没，勾毫发无损。</p>
+      <div class="stage-row">
+        <div class="stage-col">
+          <div class="stage" style="width:140px;height:140px;">
+            <svg viewBox="0 0 1024 1024" width="140" height="140">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <line x1="362" y1="180" x2="662" y2="180" stroke="#D9CFBE" stroke-width="14" stroke-linecap="round"/>
+              <line x1="362" y1="844" x2="662" y2="844" stroke="#D9CFBE" stroke-width="14" stroke-linecap="round"/>
+              <g transform="scale(1.18) translate(-78.9,-78.9)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">1024</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:60px;height:60px;border-radius:13px;">
+            <svg viewBox="0 0 1024 1024" width="60" height="60">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <line x1="362" y1="180" x2="662" y2="180" stroke="#D9CFBE" stroke-width="14" stroke-linecap="round"/>
+              <line x1="362" y1="844" x2="662" y2="844" stroke="#D9CFBE" stroke-width="14" stroke-linecap="round"/>
+              <g transform="scale(1.18) translate(-78.9,-78.9)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">60px</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:29px;height:29px;border-radius:6.5px;">
+            <svg viewBox="0 0 1024 1024" width="29" height="29">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <g transform="scale(1.18) translate(-78.9,-78.9)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="205" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="165" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">29px</div>
+        </div>
+      </div>
+      <div class="foot">意象：一页纸的<b>天头地脚</b>——纸的秩序感回来了，但只在勾的外围。</div>
+    </div>
+
+    <!-- 稿2：远处三行细线 -->
+    <div class="card">
+      <div class="card-head"><h2 class="card-name">远处三行</h2></div>
+      <p>勾占上方 2/3，底部留白处三行渐短的细线（备忘条目抽象），由近及远渐淡。像一页写满的纸只拍到最后一笔——「记完的都沉下去了，眼前只有这一勾」。</p>
+      <div class="stage-row">
+        <div class="stage-col">
+          <div class="stage" style="width:140px;height:140px;">
+            <svg viewBox="0 0 1024 1024" width="140" height="140">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <line x1="300" y1="856" x2="724" y2="856" stroke="#DAD0C0" stroke-width="13" stroke-linecap="round"/>
+              <line x1="340" y1="900" x2="640" y2="900" stroke="#E0D8C9" stroke-width="13" stroke-linecap="round"/>
+              <line x1="382" y1="944" x2="560" y2="944" stroke="#E6DFD2" stroke-width="13" stroke-linecap="round"/>
+              <g transform="scale(1.13) translate(-66.4,-66.4)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">1024</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:60px;height:60px;border-radius:13px;">
+            <svg viewBox="0 0 1024 1024" width="60" height="60">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <line x1="300" y1="856" x2="724" y2="856" stroke="#DAD0C0" stroke-width="13" stroke-linecap="round"/>
+              <line x1="340" y1="900" x2="640" y2="900" stroke="#E0D8C9" stroke-width="13" stroke-linecap="round"/>
+              <line x1="382" y1="944" x2="560" y2="944" stroke="#E6DFD2" stroke-width="13" stroke-linecap="round"/>
+              <g transform="scale(1.13) translate(-66.4,-66.4)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">60px</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:29px;height:29px;border-radius:6.5px;">
+            <svg viewBox="0 0 1024 1024" width="29" height="29">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <g transform="scale(1.13) translate(-66.4,-66.4)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="205" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="165" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">29px</div>
+        </div>
+      </div>
+      <div class="foot">意象：<b>沉底的事项</b>与悬在上面的一笔——层次最丰富。</div>
+    </div>
+
+    <!-- 稿3：上下呼应双线 -->
+    <div class="card">
+      <div class="card-head"><h2 class="card-name">双行余白</h2></div>
+      <p>勾的左上一条、右下一条短细线（对角呼应，都在远离勾的角落）。像纸页角落的批注线，给满幅的勾一个「画框外的呼吸位」。</p>
+      <div class="stage-row">
+        <div class="stage-col">
+          <div class="stage" style="width:140px;height:140px;">
+            <svg viewBox="0 0 1024 1024" width="140" height="140">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <line x1="212" y1="208" x2="452" y2="208" stroke="#D9CFBE" stroke-width="14" stroke-linecap="round"/>
+              <line x1="572" y1="816" x2="812" y2="816" stroke="#D9CFBE" stroke-width="14" stroke-linecap="round"/>
+              <g transform="scale(1.18) translate(-78.9,-78.9)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">1024</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:60px;height:60px;border-radius:13px;">
+            <svg viewBox="0 0 1024 1024" width="60" height="60">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <line x1="212" y1="208" x2="452" y2="208" stroke="#D9CFBE" stroke-width="14" stroke-linecap="round"/>
+              <line x1="572" y1="816" x2="812" y2="816" stroke="#D9CFBE" stroke-width="14" stroke-linecap="round"/>
+              <g transform="scale(1.18) translate(-78.9,-78.9)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">60px</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:29px;height:29px;border-radius:6.5px;">
+            <svg viewBox="0 0 1024 1024" width="29" height="29">
+              <rect width="1024" height="1024" fill="#F7F3EC"/>
+              <g transform="scale(1.18) translate(-78.9,-78.9)">
+                <path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="205" stroke-linecap="round"/>
+                <path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="165" stroke-linecap="round"/>
+              </g>
+            </svg>
+          </div>
+          <div class="stage-cap">29px</div>
+        </div>
+      </div>
+      <div class="foot">意象：对角的<b>批注余白</b>——最克制的一稿。</div>
+    </div>
+
+  </div>
+</section>
+
+<section>
+  <div class="sec-h">和格线版（B）的本质区别</div>
+  <p style="font-size:.92rem; color:var(--fg-soft); max-width:68ch; margin:0 0 .8rem;">
+    B 版的四条格线<b>横贯整幅、贴着勾穿过</b>，60px 下与勾争像素才造成灰雾。这三稿的细线：①宽度只有勾的 1/13（线先糊勾后糊，缩放时序天然安全）；②都短、都远离勾；③数量 ≤ 3。同是细线，一个在勾的「身位」里捣乱，一个在勾的「场外」布景。
+  </p>
+  <p class="foot">选稿后：更新 scripts/generate-icons.py → 全套重生成 → 构建装机 → PR 修订提交。</p>
+</section>
+
+</div>

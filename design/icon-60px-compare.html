@@ -1,0 +1,235 @@
+<title>60px 定稿对比 · 两版方案</title>
+<style>
+  :root{
+    --paper:#F6F3EE;
+    --surface:#FFFFFF;
+    --ink:#2B2622;
+    --ink-soft:#5F5B54;
+    --ink-faint:#8A837B;
+    --accent:#E0733A;
+    --rule:#E2DCCF;
+    --ground:var(--paper);
+    --fg:var(--ink);
+    --fg-soft:var(--ink-soft);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#211F1B; --surface:#2A2721; --ink:#ECE7DC; --ink-soft:#B8B2A5;
+      --ink-faint:#8A837B; --accent:#E5854F; --rule:#3A362E;
+      --ground:#211F1B; --fg:#ECE7DC; --fg-soft:#B8B2A5;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#211F1B; --surface:#2A2721; --ink:#ECE7DC; --ink-soft:#B8B2A5;
+    --ink-faint:#8A837B; --accent:#E5854F; --rule:#3A362E;
+    --ground:#211F1B; --fg:#ECE7DC; --fg-soft:#B8B2A5;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--ground); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+    font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
+    padding:0 0 4rem;
+  }
+  .wrap{max-width:1060px; margin:0 auto; padding:0 1.5rem;}
+  .display{font-family:"Noto Serif SC",Georgia,"Songti SC",serif; font-weight:700; text-wrap:balance;}
+  header{padding:3.6rem 0 2.2rem; border-bottom:1px solid var(--rule);}
+  .eyebrow{font-size:.75rem; letter-spacing:.22em; color:var(--ink-faint); margin-bottom:.8rem; font-variant-numeric:tabular-nums;}
+  h1.display{font-size:clamp(1.9rem,4vw,2.8rem); line-height:1.1; margin:0 0 .9rem;}
+  .lede{font-size:1.05rem; color:var(--fg-soft); max-width:60ch; margin:0;}
+
+  section{padding:2.4rem 0 0;}
+  .sec-h{
+    font-size:.8rem; letter-spacing:.2em; color:var(--ink-faint);
+    display:flex; align-items:baseline; gap:1rem; margin-bottom:1.4rem; font-variant-numeric:tabular-nums;
+  }
+  .sec-h::after{content:""; flex:1; height:1px; background:var(--rule);}
+
+  .compare{display:grid; grid-template-columns:1fr 1fr; gap:1.6rem;}
+  @media (max-width:760px){ .compare{grid-template-columns:1fr;} }
+  .plan{
+    background:var(--surface); border:1px solid var(--rule); border-radius:20px;
+    padding:1.8rem; display:flex; flex-direction:column; gap:1.2rem;
+  }
+  .plan.rec{border-color:color-mix(in srgb,var(--accent) 45%,var(--rule));}
+  .plan-head{display:flex; align-items:baseline; gap:.7rem; flex-wrap:wrap;}
+  .plan-name{font-family:"Noto Serif SC",Georgia,serif; font-size:1.3rem; font-weight:700; margin:0;}
+  .plan-tag{font-size:.75rem; color:var(--accent); border:1px solid color-mix(in srgb,var(--accent) 45%,transparent); padding:.1rem .55rem; border-radius:99px;}
+  .plan p{font-size:.92rem; color:var(--fg-soft); margin:0; max-width:46ch;}
+
+  .stage-row{display:flex; gap:1.4rem; flex-wrap:wrap; align-items:flex-end;}
+  .stage-col{display:flex; flex-direction:column; gap:.5rem; align-items:center;}
+  .stage{border-radius:14px; overflow:hidden; box-shadow:0 6px 16px -8px rgba(43,38,34,.3), inset 0 0 0 1px var(--rule); flex:none;}
+  .stage svg{display:block;}
+  .stage-cap{font-size:.72rem; color:var(--ink-faint); font-variant-numeric:tabular-nums;}
+
+  /* 主屏还原：壁纸底 + 网格图标 */
+  .home-mock{
+    width:300px; padding:1.4rem 1.2rem 1.6rem; border-radius:24px;
+    display:grid; grid-template-columns:repeat(4,1fr); gap:1.3rem .5rem; justify-items:center;
+  }
+  .home-mock.warm{background:linear-gradient(160deg,#F2D9C4 0%,#E8BFA8 55%,#D9A98E 100%);}
+  .home-mock.cool{background:linear-gradient(160deg,#232A33 0%,#1B2530 60%,#141C26 100%);}
+  .app-cell{display:flex; flex-direction:column; align-items:center; gap:.35rem; width:100%;}
+  .app-cell svg{width:54px; height:54px; border-radius:12px; display:block; box-shadow:0 2px 5px rgba(0,0,0,.18);}
+  .app-label{font-size:.6rem; color:rgba(255,255,255,.95); font-weight:500; text-shadow:0 1px 2px rgba(0,0,0,.35); max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .home-mock.warm .app-label{color:rgba(60,40,28,.85); text-shadow:0 1px 2px rgba(255,255,255,.3);}
+  .app-cell.ghost svg{background:rgba(255,255,255,.28);}
+  .app-cell.ghost .app-label{visibility:hidden;}
+
+  .verdict{display:grid; grid-template-columns:1fr 1fr; gap:1rem;}
+  @media (max-width:560px){ .verdict{grid-template-columns:1fr;} }
+  .verdict div{font-size:.88rem; color:var(--fg-soft); line-height:1.55;}
+  .verdict h4{font-size:.76rem; letter-spacing:.14em; color:var(--ink-faint); margin:0 0 .3rem; font-weight:600;}
+
+  .foot{font-size:.82rem; color:var(--ink-faint); margin-top:1.2rem;}
+  .foot b{color:var(--fg); font-weight:600;}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700&display=swap">
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">60px 定稿对比 · 方案 A vs 方案 B · 2026-09-09</div>
+  <h1 class="display">主屏 60px，两版对勾方案对比</h1>
+  <p class="lede">iOS 26 只允许单一 1024px 图标，主屏 60px 由系统缩放——所以这版源图是什么样，主屏就是什么样。以下所有预览均为<b>精确等比还原</b>：格线版（当前装机）与特粗勾版（方案 A），各含 1024 画布、主屏 60px 双壁纸、通知 29px 三级缩放。</p>
+</header>
+
+<section>
+  <div class="sec-h">两版设计 · 全级缩放对比</div>
+  <div class="compare">
+    <div class="plan">
+      <div class="plan-head"><h2 class="plan-name">方案 B · 格线完整版</h2><span class="plan-tag">当前装机</span></div>
+      <p>纸底 #EFE6D8 + 四条格线 + 勾（臂宽 148/118，占画布 54%）。大尺寸叙事完整；60px 下格线退化为灰雾，勾被挤细。</p>
+      <div class="stage-row">
+        <div class="stage-col">
+          <div class="stage" style="width:150px;height:150px;">
+            <svg viewBox="0 0 1024 1024" width="150" height="150"><rect width="1024" height="1024" fill="#EFE6D8"/><g stroke="#E0D5C2" stroke-width="6"><line x1="150" y1="330" x2="874" y2="330"/><line x1="150" y1="450" x2="874" y2="450"/><line x1="150" y1="770" x2="874" y2="770"/><line x1="150" y1="890" x2="874" y2="890"/></g><g><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="148" stroke-linecap="round" transform="scale(1.0826) translate(-38.9,-38.9)"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="118" stroke-linecap="round" transform="scale(1.0826) translate(-38.9,-38.9)"/></g></svg>
+          </div>
+          <div class="stage-cap">1024 · App Store / splash</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:60px;height:60px;border-radius:13px;">
+            <svg viewBox="0 0 1024 1024" width="60" height="60"><rect width="1024" height="1024" fill="#EFE6D8"/><g stroke="#E0D5C2" stroke-width="8"><line x1="150" y1="330" x2="874" y2="330"/><line x1="150" y1="450" x2="874" y2="450"/><line x1="150" y1="770" x2="874" y2="770"/><line x1="150" y1="890" x2="874" y2="890"/></g><g><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="148" stroke-linecap="round" transform="scale(1.0826) translate(-38.9,-38.9)"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="118" stroke-linecap="round" transform="scale(1.0826) translate(-38.9,-38.9)"/></g></svg>
+          </div>
+          <div class="stage-cap">60px · 主屏</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:29px;height:29px;border-radius:6.5px;">
+            <svg viewBox="0 0 1024 1024" width="29" height="29"><rect width="1024" height="1024" fill="#EFE6D8"/><g><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="160" stroke-linecap="round" transform="scale(1.0826) translate(-38.9,-38.9)"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="130" stroke-linecap="round" transform="scale(1.0826) translate(-38.9,-38.9)"/></g></svg>
+          </div>
+          <div class="stage-cap">29px · 通知</div>
+        </div>
+      </div>
+      <div class="verdict">
+        <div><h4>大尺寸</h4>格线 + 勾双层叙事完整，「备忘纸被一笔划掉」的意象成立。</div>
+        <div><h4>60px 主屏</h4>格线缩成 0.35px 灰线与纸底混色 → 灰蒙感；勾细、存在感弱——即你现在看到的「糊、不亮堂」。</div>
+      </div>
+    </div>
+
+    <div class="plan rec">
+      <div class="plan-head"><h2 class="plan-name">方案 A · 特粗勾版</h2><span class="plan-tag">推荐</span></div>
+      <p>亮纸底 #F7F3EC + <b>无格线</b> + 特粗勾（臂宽 190/150，占画布 69%，橙色覆盖 14.9%）。只保留一个信息：一枝深橙粗勾。</p>
+      <div class="stage-row">
+        <div class="stage-col">
+          <div class="stage" style="width:150px;height:150px;">
+            <svg viewBox="0 0 1024 1024" width="150" height="150"><rect width="1024" height="1024" fill="#F7F3EC"/><g><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round" transform="scale(1.18) translate(-78.9,-78.9)"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round" transform="scale(1.18) translate(-78.9,-78.9)"/></g></svg>
+          </div>
+          <div class="stage-cap">1024 · App Store / splash</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:60px;height:60px;border-radius:13px;">
+            <svg viewBox="0 0 1024 1024" width="60" height="60"><rect width="1024" height="1024" fill="#F7F3EC"/><g><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round" transform="scale(1.18) translate(-78.9,-78.9)"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round" transform="scale(1.18) translate(-78.9,-78.9)"/></g></svg>
+          </div>
+          <div class="stage-cap">60px · 主屏</div>
+        </div>
+        <div class="stage-col">
+          <div class="stage" style="width:29px;height:29px;border-radius:6.5px;">
+            <svg viewBox="0 0 1024 1024" width="29" height="29"><rect width="1024" height="1024" fill="#F7F3EC"/><g><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="205" stroke-linecap="round" transform="scale(1.18) translate(-78.9,-78.9)"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="165" stroke-linecap="round" transform="scale(1.18) translate(-78.9,-78.9)"/></g></svg>
+          </div>
+          <div class="stage-cap">29px · 通知</div>
+        </div>
+      </div>
+      <div class="verdict">
+        <div><h4>大尺寸</h4>格线消失，只剩勾本身——形体完整、干净有力；少了「纸」的语境铺垫。</div>
+        <div><h4>60px 主屏</h4>无灰雾来源，勾比 B 版粗 28%、底色更亮——这正是「亮堂、扎实」要的效果。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-h">主屏还原 · 双壁纸效果</div>
+  <div class="compare">
+    <div>
+      <div class="home-mock warm">
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#EFE6D8"/><g stroke="#E0D5C2" stroke-width="8"><line x1="150" y1="330" x2="874" y2="330"/><line x1="150" y1="450" x2="874" y2="450"/><line x1="150" y1="770" x2="874" y2="770"/><line x1="150" y1="890" x2="874" y2="890"/></g><g><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="148" stroke-linecap="round" transform="scale(1.0826) translate(-38.9,-38.9)"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="118" stroke-linecap="round" transform="scale(1.0826) translate(-38.9,-38.9)"/></g></svg><span class="app-label">B 格线版</span></div>
+        <div class="app-cell"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#F7F3EC"/><g><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round" transform="scale(1.18) translate(-78.9,-78.9)"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round" transform="scale(1.18) translate(-78.9,-78.9)"/></g></svg><span class="app-label">A 特粗版</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+      </div>
+      <div class="foot" style="text-align:center;margin-top:.6rem;">暖色壁纸</div>
+    </div>
+    <div>
+      <div class="home-mock cool">
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#EFE6D8"/><g stroke="#E0D5C2" stroke-width="8"><line x1="150" y1="330" x2="874" y2="330"/><line x1="150" y1="450" x2="874" y2="450"/><line x1="150" y1="770" x2="874" y2="770"/><line x1="150" y1="890" x2="874" y2="890"/></g><g><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="148" stroke-linecap="round" transform="scale(1.0826) translate(-38.9,-38.9)"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="118" stroke-linecap="round" transform="scale(1.0826) translate(-38.9,-38.9)"/></g></svg><span class="app-label">B 格线版</span></div>
+        <div class="app-cell"><svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#F7F3EC"/><g><path d="M 300 545 C 352 602 408 656 452 704" fill="none" stroke="#C95F28" stroke-width="190" stroke-linecap="round" transform="scale(1.18) translate(-78.9,-78.9)"/><path d="M 452 704 C 540 566 636 462 738 368" fill="none" stroke="#C95F28" stroke-width="150" stroke-linecap="round" transform="scale(1.18) translate(-78.9,-78.9)"/></g></svg><span class="app-label">A 特粗版</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+        <div class="app-cell ghost"><svg viewBox="0 0 60 60"></svg><span class="app-label">·</span></div>
+      </div>
+      <div class="foot" style="text-align:center;margin-top:.6rem;">深色壁纸</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-h">取舍一览</div>
+  <table style="width:100%; border-collapse:collapse; font-size:.9rem;">
+    <thead><tr>
+      <th style="text-align:left;padding:.55rem .6rem;border-bottom:1px solid var(--rule);font-size:.76rem;letter-spacing:.1em;color:var(--ink-faint);">维度</th>
+      <th style="text-align:left;padding:.55rem .6rem;border-bottom:1px solid var(--rule);font-size:.76rem;letter-spacing:.1em;color:var(--ink-faint);">B · 格线完整版</th>
+      <th style="text-align:left;padding:.55rem .6rem;border-bottom:1px solid var(--rule);font-size:.76rem;letter-spacing:.1em;color:var(--ink-faint);">A · 特粗勾版</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td style="padding:.55rem .6rem;border-bottom:1px solid var(--rule);">60px 主屏</td>
+        <td style="padding:.55rem .6rem;border-bottom:1px solid var(--rule);color:var(--fg-soft);">灰雾感，勾细（现状）</td>
+        <td style="padding:.55rem .6rem;border-bottom:1px solid var(--rule);color:var(--fg-soft);"><b style="color:var(--fg)">干净亮堂</b>，勾粗 28%</td>
+      </tr>
+      <tr>
+        <td style="padding:.55rem .6rem;border-bottom:1px solid var(--rule);">29px 通知</td>
+        <td style="padding:.55rem .6rem;border-bottom:1px solid var(--rule);color:var(--fg-soft);">勉强可辨</td>
+        <td style="padding:.55rem .6rem;border-bottom:1px solid var(--rule);color:var(--fg-soft);"><b style="color:var(--fg)">清晰可辨</b></td>
+      </tr>
+      <tr>
+        <td style="padding:.55rem .6rem;border-bottom:1px solid var(--rule);">1024 大尺寸</td>
+        <td style="padding:.55rem .6rem;border-bottom:1px solid var(--rule);color:var(--fg-soft);"><b style="color:var(--fg)">格线叙事完整</b></td>
+        <td style="padding:.55rem .6rem;border-bottom:1px solid var(--rule);color:var(--fg-soft);">只剩勾，少一层语境</td>
+      </tr>
+      <tr>
+        <td style="padding:.55rem .6rem;">与 App 内 UI 一致性</td>
+        <td style="padding:.55rem .6rem;">纸色 #EFE6D8 = UI 背景</td>
+        <td style="padding:.55rem .6rem;">亮纸 #F7F3EC（同族更亮）</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="foot" style="margin-top:1rem;">iOS 26 平台限制：appiconset 仅接受单一 1024px 图，60px 由系统缩放——两版不可并存于同一 App。选定后源图唯一。<b>浏览器窗口缩小到手机宽度，或退后一步看屏幕</b>，60px 那一列最接近主屏真实观感。</p>
+</section>
+
+</div>
