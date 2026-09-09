@@ -4,6 +4,7 @@
 
 | 专题 | 内容 | 最近更新 |
 |---|---|---|
+| [App 图标重设计](app-icon-redesign.md) | 一勾即安定稿、60px对比度诊断、iOS 26单尺寸限制与prebuild连环坑 | 2026-09-09 |
 | [苹果日历同步](calendar-sync.md) | 全天/定时、设备映射、删除墓碑、重试、跨日坑与PR #14发布 | 2026-09-08 |
 | [GitHub CI 与 Git 工具链](github-ci-and-git-toolchain.md) | PR自动门禁、Git版本抢占、workflow scope与凭据helper优先级 | 2026-09-08 |
 | [原声编辑与待办日期强一致性](entry-date-edit-consistency.md) | 单次确认、标题/正文/dueAt同步、M.D解析、PR #13发布与回滚 | 2026-09-08 |
