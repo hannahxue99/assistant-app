@@ -2,6 +2,9 @@ export type AssistantRole = 'user' | 'assistant';
 export type AssistantMessageStatus = 'saved' | 'sending' | 'failed';
 export type AssistantMessageSource = 'text' | 'voice' | 'legacy' | 'contextual' | 'assistant';
 export type AssistantRequestStatus = 'pending' | 'succeeded' | 'failed';
+export type AssistantEngineStatus = 'configured' | 'unconfigured' | 'unknown';
+export type AssistantInitialLoadStatus = 'loading' | 'ready' | 'error';
+export type AssistantOlderLoadStatus = 'idle' | 'loading' | 'error';
 
 export interface AssistantMessage {
   id: string;
@@ -14,6 +17,7 @@ export interface AssistantMessage {
   createdAt: number;
   updatedAt: number;
   legacyEntryId: string | null;
+  errorCode: string | null;
 }
 
 export interface AssistantMessageCursor {

@@ -1,14 +1,16 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { assistantFailureLabel } from '../assistant/ui-state';
 import type { AssistantMessage } from '../assistant/types';
 import { theme } from '../theme';
 
 interface AssistantMessageBubbleProps {
   message: AssistantMessage;
   onRetry: (requestId: string) => void;
+  canRetry?: boolean;
 }
 
-export function AssistantMessageBubble({ message, onRetry }: AssistantMessageBubbleProps) {
+export function AssistantMessageBubble({ message, onRetry, canRetry = false }: AssistantMessageBubbleProps) {
   const isUser = message.role === 'user';
   return (
     <View style={[styles.row, isUser ? styles.userRow : styles.assistantRow]}>
@@ -23,14 +25,20 @@ export function AssistantMessageBubble({ message, onRetry }: AssistantMessageBub
         </View>
       ) : null}
       {isUser && message.status === 'failed' ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="重新发送这条消息"
-          onPress={() => onRetry(message.requestId)}
-          style={({ pressed }) => [styles.retry, pressed && styles.retryPressed]}
-        >
-          <Text style={styles.retryText}>小知暂时没回复 · 重试</Text>
-        </Pressable>
+        canRetry ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="重新发送这条消息"
+            onPress={() => onRetry(message.requestId)}
+            style={({ pressed }) => [styles.retry, pressed && styles.retryPressed]}
+          >
+            <Text style={styles.retryText}>{assistantFailureLabel(message, true)}</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.retry}>
+            <Text style={styles.statusText}>{assistantFailureLabel(message, false)}</Text>
+          </View>
+        )
       ) : null}
     </View>
   );

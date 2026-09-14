@@ -112,7 +112,7 @@ export function AssistantComposer({ onSend, disabled = false }: AssistantCompose
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.composer}>
+      <View style={[styles.composer, disabled && styles.composerDisabled]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={listening ? '松开结束语音输入' : '按住说话'}
@@ -192,6 +192,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.card,
     padding: 5,
   },
+  composerDisabled: { opacity: 0.48 },
   input: {
     flex: 1,
     minHeight: 40,

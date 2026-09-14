@@ -49,6 +49,7 @@ function rowToMessage(row: any): AssistantMessage {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     legacyEntryId: row.legacy_entry_id ?? null,
+    errorCode: row.request_error_code ?? row.error_code ?? null,
   };
 }
 
@@ -211,9 +212,43 @@ export async function failTurn(requestId: string, errorCode: string, updatedAt =
   });
 }
 
+/**
+ * App 冷启动时，进程内请求已经不存在；把遗留 pending 恢复为可重试状态。
+ */
+export async function recoverInterruptedAssistantRequests(updatedAt = Date.now()): Promise<number> {
+  return withExclusiveDatabaseTransaction(async (txn) => {
+    const pending = await txn.getFirstAsync<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM assistant_requests WHERE status='pending'",
+    );
+    const count = Number(pending?.count ?? 0);
+    if (count === 0) return 0;
+    await txn.runAsync(
+      `UPDATE assistant_messages
+       SET status='failed', updated_at=?
+       WHERE role='user' AND request_id IN (
+         SELECT id FROM assistant_requests WHERE status='pending'
+       )`,
+      updatedAt,
+    );
+    await txn.runAsync(
+      `UPDATE assistant_requests
+       SET status='failed', error_code='interrupted', updated_at=?
+       WHERE status='pending'`,
+      updatedAt,
+    );
+    return count;
+  });
+}
+
 export async function getMessage(id: string): Promise<AssistantMessage | null> {
   return withDatabaseConnection(async (database) => {
-    const row = await database.getFirstAsync<any>('SELECT * FROM assistant_messages WHERE id=?', id);
+    const row = await database.getFirstAsync<any>(
+      `SELECT m.*, r.error_code AS request_error_code
+       FROM assistant_messages m
+       LEFT JOIN assistant_requests r ON r.id=m.request_id
+       WHERE m.id=?`,
+      id,
+    );
     return row ? rowToMessage(row) : null;
   });
 }
@@ -234,7 +269,7 @@ export async function getRequestState(requestId: string): Promise<AssistantReque
     return {
       id: request.id,
       status: request.status,
-      userMessage: rowToMessage(userRow),
+      userMessage: rowToMessage({ ...userRow, request_error_code: request.error_code }),
       assistantMessage: assistantRow ? rowToMessage(assistantRow) : null,
     };
   });
@@ -248,13 +283,18 @@ export async function listMessages(options: {
   return withDatabaseConnection(async (database) => {
     const rows = options.before
       ? await database.getAllAsync<any>(
-        `SELECT * FROM assistant_messages
-         WHERE created_at < ? OR (created_at = ? AND id < ?)
-         ORDER BY created_at DESC, id DESC LIMIT ?`,
+        `SELECT m.*, r.error_code AS request_error_code
+         FROM assistant_messages m
+         LEFT JOIN assistant_requests r ON r.id=m.request_id
+         WHERE m.created_at < ? OR (m.created_at = ? AND m.id < ?)
+         ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
         options.before.createdAt, options.before.createdAt, options.before.id, limit,
       )
       : await database.getAllAsync<any>(
-        'SELECT * FROM assistant_messages ORDER BY created_at DESC, id DESC LIMIT ?',
+        `SELECT m.*, r.error_code AS request_error_code
+         FROM assistant_messages m
+         LEFT JOIN assistant_requests r ON r.id=m.request_id
+         ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
         limit,
       );
     return rows.reverse().map(rowToMessage);

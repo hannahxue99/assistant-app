@@ -19,6 +19,7 @@ import {
 } from '@/src/engine/notifications';
 import { retryFailedUnderstandings } from '@/src/engine/understand';
 import { migrateLegacyEntriesToAssistantHistory } from '@/src/assistant/migration';
+import { recoverInterruptedAssistantRequests } from '@/src/assistant/store';
 import { theme } from '@/src/theme';
 
 export {
@@ -28,6 +29,10 @@ export {
 
 export const unstable_settings = {
   initialRouteName: '(tabs)',
+};
+
+const assistantStartupRuntime = globalThis as typeof globalThis & {
+  __assistantPendingRecoveryComplete?: boolean;
 };
 
 const appTheme = {
@@ -50,6 +55,10 @@ export default function RootLayout() {
     setStartupState('loading');
     try {
       await initDatabase();
+      if (!assistantStartupRuntime.__assistantPendingRecoveryComplete) {
+        await recoverInterruptedAssistantRequests();
+        assistantStartupRuntime.__assistantPendingRecoveryComplete = true;
+      }
       try {
         await migrateLegacyEntriesToAssistantHistory();
       } catch (e) {

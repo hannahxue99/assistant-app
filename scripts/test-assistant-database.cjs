@@ -117,7 +117,20 @@ async function main() {
   await store.failTurn('request-2', 'network');
   const failedRow = await store.getMessage(failedUser.id);
   assert.equal(failedRow.status, 'failed', '失败请求应保留用户消息并标记可重试');
+  assert.equal(failedRow.errorCode, 'network', '失败原因应能随消息读取，用于局部提示');
   assert.equal((await store.listMessages({ limit: 20 })).filter(item => item.requestId === 'request-2').length, 1);
+
+  const interruptedUser = await store.saveUserTurn({
+    requestId: 'request-interrupted',
+    content: 'App 关闭前还在等待回复',
+    source: 'text',
+    createdAt: 6000,
+  });
+  assert.equal(await store.recoverInterruptedAssistantRequests(7000), 1, '冷启动应恢复遗留 pending 请求');
+  const interruptedRow = await store.getMessage(interruptedUser.id);
+  assert.equal(interruptedRow.status, 'failed', '遗留用户消息应变为可重试失败态');
+  assert.equal(interruptedRow.errorCode, 'interrupted', '遗留请求应记录明确的中断原因');
+  assert.equal(await store.recoverInterruptedAssistantRequests(8000), 0, '重复恢复应保持幂等');
 
   await db.insertEntry({ rawText: '旧原声一', source: 'text', createdAt: 100 });
   await db.insertEntry({ rawText: '旧原声二', source: 'voice', createdAt: 200 });

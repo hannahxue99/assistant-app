@@ -12,12 +12,23 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { mergeAssistantMessages } from '../../src/assistant/ui-state';
+import {
+  canRetryAssistantMessage,
+  canLoadOlderAssistantMessages,
+  isAssistantComposerDisabled,
+  mergeAssistantMessages,
+} from '../../src/assistant/ui-state';
 import { retryAssistantTurn, sendAssistantTurn } from '../../src/assistant/orchestrator';
 import { getRequestState, listMessages, saveUserTurn } from '../../src/assistant/store';
-import type { AssistantMessage } from '../../src/assistant/types';
+import type {
+  AssistantEngineStatus,
+  AssistantInitialLoadStatus,
+  AssistantMessage,
+  AssistantOlderLoadStatus,
+} from '../../src/assistant/types';
 import { AssistantComposer } from '../../src/components/AssistantComposer';
 import { AssistantEmptyState } from '../../src/components/AssistantEmptyState';
+import { AssistantLoadErrorState } from '../../src/components/AssistantLoadErrorState';
 import { AssistantMessageBubble } from '../../src/components/AssistantMessageBubble';
 import { getSettings } from '../../src/db';
 import { theme } from '../../src/theme';
@@ -32,89 +43,109 @@ export default function AssistantScreen() {
   const router = useRouter();
   const listRef = useRef<FlatList<AssistantMessage>>(null);
   const mountedRef = useRef(true);
-  const loadingOlderRef = useRef(false);
+  const loadedOnceRef = useRef(false);
+  const olderLoadRef = useRef<AssistantOlderLoadStatus>('idle');
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [initialLoad, setInitialLoad] = useState<AssistantInitialLoadStatus>('loading');
+  const [retryingInitialLoad, setRetryingInitialLoad] = useState(false);
+  const [olderLoad, setOlderLoad] = useState<AssistantOlderLoadStatus>('idle');
   const [hasOlder, setHasOlder] = useState(false);
-  const [configured, setConfigured] = useState(true);
-  const [pageError, setPageError] = useState<string | null>(null);
+  const [engineStatus, setEngineStatus] = useState<AssistantEngineStatus>('unknown');
 
   const loadLatest = useCallback(async (scroll = false) => {
-    const [page, settings] = await Promise.all([listMessages({ limit: PAGE_SIZE }), getSettings()]);
+    const [page, settings] = await Promise.all([
+      listMessages({ limit: PAGE_SIZE }),
+      getSettings().catch(() => null),
+    ]);
     if (!mountedRef.current) return;
     setMessages(current => mergeAssistantMessages(current, page));
     setHasOlder(page.length === PAGE_SIZE);
-    setConfigured(!!settings.llmEnabled && !!settings.llmKey);
-    setLoading(false);
+    setEngineStatus(settings
+      ? (settings.llmEnabled && settings.llmKey ? 'configured' : 'unconfigured')
+      : 'unknown');
+    loadedOnceRef.current = true;
+    setInitialLoad('ready');
     if (scroll) requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       mountedRef.current = true;
-      setLoading(true);
+      olderLoadRef.current = 'idle';
+      setOlderLoad('idle');
+      if (!loadedOnceRef.current) setInitialLoad('loading');
       void loadLatest(true).catch(() => {
-        if (mountedRef.current) {
-          setLoading(false);
-          setPageError('对话暂时无法加载，请稍后重试。');
-        }
+        if (mountedRef.current && !loadedOnceRef.current) setInitialLoad('error');
       });
       return () => { mountedRef.current = false; };
     }, [loadLatest]),
   );
 
-  async function loadOlder() {
-    if (!hasOlder || loadingOlderRef.current || messages.length === 0) return;
-    loadingOlderRef.current = true;
-    setLoadingOlder(true);
+  async function loadOlder(force = false) {
+    if (!hasOlder || messages.length === 0 || initialLoad !== 'ready') return;
+    if (!canLoadOlderAssistantMessages(olderLoadRef.current, force)) return;
+    olderLoadRef.current = 'loading';
+    setOlderLoad('loading');
     try {
       const page = await listMessages({ limit: PAGE_SIZE, before: messages[0] });
       if (!mountedRef.current) return;
       setMessages(current => mergeAssistantMessages(current, page));
       setHasOlder(page.length === PAGE_SIZE);
+      olderLoadRef.current = 'idle';
+      setOlderLoad('idle');
+    } catch {
+      if (!mountedRef.current) return;
+      olderLoadRef.current = 'error';
+      setOlderLoad('error');
     } finally {
-      loadingOlderRef.current = false;
-      if (mountedRef.current) setLoadingOlder(false);
+      if (!mountedRef.current) olderLoadRef.current = 'idle';
     }
   }
 
+  function retryInitialLoad() {
+    if (retryingInitialLoad) return;
+    setRetryingInitialLoad(true);
+    void loadLatest(true)
+      .catch(() => {})
+      .finally(() => { if (mountedRef.current) setRetryingInitialLoad(false); });
+  }
+
   async function send(content: string, source: 'text' | 'voice') {
-    setPageError(null);
     const requestId = makeRequestId();
     await saveUserTurn({ requestId, content, source });
     await loadLatest(true);
     const job = sendAssistantTurn({ requestId, content, source });
     try {
       await job;
-    } catch (error: any) {
+    } catch (error) {
       const saved = await getRequestState(requestId).catch(() => null);
       if (!saved) throw error;
-      setPageError(error?.code === 'missing-key'
-        ? '先开启理解引擎，小知才能回复。你的消息已经保存。'
-        : '小知暂时没有回复，消息已经保存，可以稍后重试。');
     } finally {
       await loadLatest(true).catch(() => {});
     }
   }
 
   function retry(requestId: string) {
-    setPageError(null);
+    setMessages(current => current.map(item => (
+      item.requestId === requestId && item.role === 'user'
+        ? { ...item, status: 'sending', errorCode: null, updatedAt: Date.now() }
+        : item
+    )));
     void (async () => {
       try {
         const job = retryAssistantTurn({ requestId });
         await Promise.resolve();
         await loadLatest(false);
         await job;
-      } catch (error: any) {
-        setPageError(error?.code === 'missing-key'
-          ? '先开启理解引擎，再重试这条消息。'
-          : '还是没有回复。消息保留着，网络恢复后可以再试。');
+      } catch {
+        // 错误状态由对应消息承载，不再重复显示页面级错误。
       } finally {
         await loadLatest(true).catch(() => {});
       }
     })();
   }
+
+  const composerDisabled = isAssistantComposerDisabled(initialLoad, messages);
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
@@ -130,7 +161,7 @@ export default function AssistantScreen() {
           </View>
         </View>
 
-        {!configured && !loading ? (
+        {engineStatus === 'unconfigured' && initialLoad === 'ready' ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="前往配置理解引擎"
@@ -142,23 +173,37 @@ export default function AssistantScreen() {
           </Pressable>
         ) : null}
 
-        {pageError ? (
-          <View style={styles.errorBanner} accessibilityRole="alert">
-            <Text style={styles.errorText}>{pageError}</Text>
-          </View>
-        ) : null}
-
-        {loading ? (
+        {initialLoad === 'loading' ? (
           <View style={styles.loading}><ActivityIndicator color={theme.colors.accent} /></View>
+        ) : initialLoad === 'error' ? (
+          <AssistantLoadErrorState retrying={retryingInitialLoad} onRetry={retryInitialLoad} />
         ) : (
           <FlatList
             ref={listRef}
             data={messages}
             keyExtractor={item => item.id}
-            renderItem={({ item }) => <AssistantMessageBubble message={item} onRetry={retry} />}
+            renderItem={({ item }) => (
+              <AssistantMessageBubble
+                message={item}
+                onRetry={retry}
+                canRetry={canRetryAssistantMessage(item, messages, engineStatus)}
+              />
+            )}
             contentContainerStyle={[styles.listContent, messages.length === 0 && styles.emptyList]}
             ListEmptyComponent={<AssistantEmptyState />}
-            ListHeaderComponent={loadingOlder ? <ActivityIndicator color={theme.colors.accent} style={styles.olderSpinner} /> : null}
+            ListHeaderComponent={olderLoad === 'loading' ? (
+              <ActivityIndicator color={theme.colors.accent} style={styles.olderSpinner} />
+            ) : olderLoad === 'error' ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="重新加载更早记录"
+                onPress={() => { void loadOlder(true); }}
+                style={({ pressed }) => [styles.olderError, pressed && styles.pressed]}
+              >
+                <Text style={styles.olderErrorText}>更早记录暂时加载不了</Text>
+                <Text style={styles.olderRetryText}>重试</Text>
+              </Pressable>
+            ) : null}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
@@ -170,7 +215,7 @@ export default function AssistantScreen() {
         )}
 
         <View style={styles.composerWrap}>
-          <AssistantComposer onSend={send} />
+          <AssistantComposer onSend={send} disabled={composerDisabled} />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -186,12 +231,13 @@ const styles = StyleSheet.create({
   configBanner: { minHeight: 44, marginHorizontal: theme.spacing.md, marginBottom: 6, paddingHorizontal: 12, borderRadius: 12, backgroundColor: theme.colors.goldSoft, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   configText: { color: theme.colors.text, fontSize: theme.font.small, flex: 1 },
   configAction: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
-  errorBanner: { marginHorizontal: theme.spacing.md, marginBottom: 6, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12, backgroundColor: '#F8E8E5' },
-  errorText: { color: theme.colors.red, fontSize: theme.font.small, lineHeight: 19 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   listContent: { paddingHorizontal: theme.spacing.md, paddingTop: 5, paddingBottom: 12 },
   emptyList: { flexGrow: 1 },
   olderSpinner: { marginVertical: 8 },
+  olderError: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 },
+  olderErrorText: { color: theme.colors.textDim, fontSize: theme.font.small },
+  olderRetryText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
   composerWrap: { paddingHorizontal: 12, paddingTop: 7, paddingBottom: 8, borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.bg },
   pressed: { opacity: 0.72 },
 });
