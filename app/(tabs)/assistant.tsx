@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { mergeAssistantMessages } from '../../src/assistant/ui-state';
 import { retryAssistantTurn, sendAssistantTurn } from '../../src/assistant/orchestrator';
-import { getRequestState, listMessages } from '../../src/assistant/store';
+import { getRequestState, listMessages, saveUserTurn } from '../../src/assistant/store';
 import type { AssistantMessage } from '../../src/assistant/types';
 import { AssistantComposer } from '../../src/components/AssistantComposer';
 import { AssistantEmptyState } from '../../src/components/AssistantEmptyState';
@@ -82,9 +82,9 @@ export default function AssistantScreen() {
   async function send(content: string, source: 'text' | 'voice') {
     setPageError(null);
     const requestId = makeRequestId();
+    await saveUserTurn({ requestId, content, source });
+    await loadLatest(true);
     const job = sendAssistantTurn({ requestId, content, source });
-    await Promise.resolve();
-    await loadLatest(true).catch(() => {});
     try {
       await job;
     } catch (error: any) {

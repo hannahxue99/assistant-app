@@ -57,7 +57,7 @@
 
 **Step 2: 运行并确认失败**
 
-Run: `npm run test:assistant-db`  
+Run: `npm run test:assistant-db`
 Expected: FAIL，提示表或仓储函数不存在。
 
 **Step 3: 最小实现**
@@ -85,12 +85,12 @@ export interface AssistantMessage {
 
 **Step 4: 运行测试**
 
-Run: `npm run test:assistant-db`  
+Run: `npm run test:assistant-db`
 Expected: PASS。
 
 **Step 5: 注册聚合测试并提交**
 
-把 `test:assistant-db` 加入 `npm test`。  
+把 `test:assistant-db` 加入 `npm test`。
 Commit: `feat: add assistant conversation storage`
 
 ## Task 2：实现可度量的上下文选择器
@@ -118,7 +118,7 @@ Commit: `feat: add assistant conversation storage`
 
 **Step 2: 运行并确认失败**
 
-Run: `npm run test:assistant-context`  
+Run: `npm run test:assistant-context`
 Expected: FAIL，模块不存在。
 
 **Step 3: 最小实现**
@@ -140,8 +140,8 @@ buildAssistantContext({
 
 **Step 4: 运行测试并提交**
 
-Run: `npm run test:assistant-context`  
-Expected: PASS。  
+Run: `npm run test:assistant-context`
+Expected: PASS。
 Commit: `feat: add bounded multi-turn context selection`
 
 ## Task 3：实现小知模型协议与解析校验
@@ -160,7 +160,7 @@ Commit: `feat: add bounded multi-turn context selection`
 
 **Step 2: 运行并确认失败**
 
-Run: `npm run test:assistant-protocol`  
+Run: `npm run test:assistant-protocol`
 Expected: FAIL。
 
 **Step 3: 最小实现**
@@ -171,7 +171,7 @@ Expected: FAIL。
 interface AssistantTurnOutput {
   reply: string;
   segment: {
-    action: 'continue' | 'start_new';
+    action: 'continue' | 'split_before_user';
     summary?: string;
   };
 }
@@ -180,15 +180,15 @@ interface AssistantTurnOutput {
 系统提示明确：
 
 - 自然回复使用中文，不暴露内部分类或摘要。
-- 仅在语义明显切换或当前段过长时 `start_new`。
+- 仅在语义明显切换或当前段过长时 `split_before_user`。
 - 摘要只保留事实、决定、未决问题与用户当前立场，最多 240 个中文字符。
 - 不声称已经建立待办、事件或记忆；这些操作尚未接入。
 - 最近原话与摘要冲突时采用最近原话。
 
 **Step 4: 运行测试并提交**
 
-Run: `npm run test:assistant-protocol`  
-Expected: PASS。  
+Run: `npm run test:assistant-protocol`
+Expected: PASS。
 Commit: `feat: add structured assistant turn protocol`
 
 ## Task 4：实现单轮编排、幂等与恢复
@@ -208,12 +208,12 @@ Commit: `feat: add structured assistant turn protocol`
 - 同一 request ID 并发发送只产生一次模型调用和一条助手回复。
 - 模型失败后用户消息标记 `failed`，点击重试复用原 request ID 和原消息。
 - 保存助手结果失败时事务回滚，不出现虚假回复。
-- `start_new` 时旧段摘要更新，新回复进入新段。
+- `split_before_user` 时旧段摘要更新，当前用户消息和新回复进入新段。
 - 页面卸载只取消 UI 等待，不删除已保存消息；重进可恢复失败状态。
 
 **Step 2: 运行并确认失败**
 
-Run: `npm run test:assistant-turn`  
+Run: `npm run test:assistant-turn`
 Expected: FAIL。
 
 **Step 3: 最小实现**
@@ -228,8 +228,8 @@ Expected: FAIL。
 
 **Step 4: 运行测试并提交**
 
-Run: `npm run test:assistant-turn`  
-Expected: PASS。  
+Run: `npm run test:assistant-turn`
+Expected: PASS。
 Commit: `feat: orchestrate durable assistant turns`
 
 ## Task 5：实现“小知”页面
@@ -259,7 +259,7 @@ Commit: `feat: orchestrate durable assistant turns`
 
 **Step 3: TypeScript 与状态测试**
 
-Run: `npm run typecheck && npm run test:assistant-ui`  
+Run: `npm run typecheck && npm run test:assistant-ui`
 Expected: PASS。
 
 **Step 4: 提交**
@@ -272,7 +272,8 @@ Commit: `feat: add Xiaozhi continuous conversation tab`
 
 - Create: `src/assistant/migration.ts`
 - Create: `src/assistant/retrieval.ts`
-- Create: `scripts/test-assistant-migration.cjs`
+- Modify: `scripts/test-assistant-database.cjs`
+- Modify: `scripts/test-assistant-retrieval.ts`
 - Modify: `src/db.ts`
 - Modify: `app/_layout.tsx`
 - Modify: `package.json`
@@ -287,8 +288,8 @@ Commit: `feat: add Xiaozhi continuous conversation tab`
 
 **Step 3: 测试并提交**
 
-Run: `npm run test:assistant-migration`  
-Expected: PASS。  
+Run: `npm run test:assistant-db && npm run test:assistant-retrieval`
+Expected: PASS。
 Commit: `feat: migrate legacy entries into assistant history`
 
 ## Task 7：效果评估与观测
@@ -314,7 +315,7 @@ Commit: `feat: migrate legacy entries into assistant history`
 
 **Step 2: 注册并运行聚合测试**
 
-Run: `npm test`  
+Run: `npm test`
 Expected: 所有旧测试与新增测试 PASS。
 
 **Step 3: 提交**
@@ -329,7 +330,7 @@ Commit: `test: add Xiaozhi multi-turn quality fixtures`
 
 **Step 1: 自动检查**
 
-Run: `npm run ci`  
+Run: `npm run ci`
 Expected: typecheck 和完整 `npm test` 均通过。
 
 **Step 2: 真机检查**
