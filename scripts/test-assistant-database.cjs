@@ -121,8 +121,9 @@ async function main() {
 
   await db.insertEntry({ rawText: '旧原声一', source: 'text', createdAt: 100 });
   await db.insertEntry({ rawText: '旧原声二', source: 'voice', createdAt: 200 });
-  assert.equal(await store.projectLegacyEntries(), 2, '首次迁移应投影两条旧原声');
-  assert.equal(await store.projectLegacyEntries(), 0, '重复迁移不得产生重复消息');
+  assert.equal(await store.projectLegacyEntries(1), 1, '首批迁移应遵守批次上限');
+  assert.equal(await store.projectLegacyEntries(1), 1, '中断后再次执行应续迁下一条');
+  assert.equal(await store.projectLegacyEntries(1), 0, '重复迁移不得产生重复消息');
   const legacy = (await store.listMessages({ limit: 20 })).filter(item => item.legacyEntryId);
   assert.deepEqual(legacy.map(item => item.content), ['旧原声一', '旧原声二']);
 

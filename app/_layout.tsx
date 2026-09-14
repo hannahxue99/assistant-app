@@ -18,6 +18,7 @@ import {
   syncEntryReminders,
 } from '@/src/engine/notifications';
 import { retryFailedUnderstandings } from '@/src/engine/understand';
+import { migrateLegacyEntriesToAssistantHistory } from '@/src/assistant/migration';
 import { theme } from '@/src/theme';
 
 export {
@@ -49,6 +50,12 @@ export default function RootLayout() {
     setStartupState('loading');
     try {
       await initDatabase();
+      try {
+        await migrateLegacyEntriesToAssistantHistory();
+      } catch (e) {
+        // 旧表仍是事实来源；迁移失败不阻塞 App，下次启动从未迁移条目继续。
+        console.warn('旧原声迁移未完成，将在下次启动续跑', e);
+      }
       setStartupState('ready');
     } catch (e) {
       console.warn('数据库初始化失败', e);
