@@ -32,7 +32,7 @@ export function scoreTextRelevance(query: string, text: string): number {
 }
 
 export function rankRelevantSegments(query: string, segments: ConversationSegment[]) {
-  return segments
+  const ranked = segments
     .map(segment => ({
       id: segment.id,
       summary: segment.summary,
@@ -41,10 +41,12 @@ export function rankRelevantSegments(query: string, segments: ConversationSegmen
     }))
     .filter(item => item.relevance >= 0.2)
     .sort((left, right) => right.relevance - left.relevance || right.updatedAt - left.updatedAt);
+  const best = ranked[0]?.relevance ?? 0;
+  return ranked.filter(item => item.relevance >= Math.max(0.2, best * 0.65));
 }
 
 export function rankRelevantEntries(query: string, entries: Entry[]) {
-  return entries
+  const ranked = entries
     .map(entry => ({
       id: entry.id,
       text: entry.rawText.trim() === entry.summary.trim()
@@ -59,4 +61,6 @@ export function rankRelevantEntries(query: string, entries: Entry[]) {
     }))
     .filter(item => item.relevance >= 0.2)
     .sort((left, right) => right.relevance - left.relevance || right.updatedAt - left.updatedAt);
+  const best = ranked[0]?.relevance ?? 0;
+  return ranked.filter(item => item.relevance >= Math.max(0.2, best * 0.65));
 }

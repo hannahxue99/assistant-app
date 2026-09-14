@@ -49,9 +49,13 @@ async function findRelatedEntries(query: string) {
   const keyword = query.trim().slice(0, 80);
   if (!keyword) return [];
   try {
-    const fts = await listEntries({ query: keyword, kind: 'all', showDone: true }, 20);
-    const hits = fts.length ? fts : await listByKeyword(keyword, 20);
-    return rankRelevantEntries(keyword, hits);
+    const [fts, fallback, recent] = await Promise.all([
+      listEntries({ query: keyword, kind: 'all', showDone: true }, 20).catch(() => []),
+      listByKeyword(keyword, 20).catch(() => []),
+      listEntries({ query: '', kind: 'all', showDone: true }, 500),
+    ]);
+    const unique = new Map([...fts, ...fallback, ...recent].map(entry => [entry.id, entry]));
+    return rankRelevantEntries(keyword, [...unique.values()]);
   } catch {
     return [];
   }
