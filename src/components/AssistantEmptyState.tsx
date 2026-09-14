@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { ASSISTANT_EMPTY_DESCRIPTION } from '../assistant/ui-copy';
 import { theme } from '../theme';
 
 export function AssistantEmptyState() {
@@ -10,7 +11,7 @@ export function AssistantEmptyState() {
         <MaterialCommunityIcons name="robot-happy-outline" size={34} color={theme.colors.accent} />
       </View>
       <Text style={styles.title}>有什么想法，直接告诉小知</Text>
-      <Text style={styles.description}>不用先区分记录、待办还是困惑，我会在对话里和你一起理清。</Text>
+      <Text style={styles.description}>{ASSISTANT_EMPTY_DESCRIPTION}</Text>
       <View style={styles.examples}>
         <Text style={styles.example}>“周四晚上提醒我整理照片”</Text>
         <Text style={styles.example}>“最近这个项目总是推进不动”</Text>

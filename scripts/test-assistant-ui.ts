@@ -1,4 +1,5 @@
 import { mergeAssistantMessages } from '../src/assistant/ui-state';
+import { ASSISTANT_EMPTY_DESCRIPTION } from '../src/assistant/ui-copy';
 import type { AssistantMessage } from '../src/assistant/types';
 
 function check(condition: unknown, message: string): asserts condition {
@@ -28,5 +29,11 @@ check(merged[1].content === '新内容', '相同 id 应采用 updatedAt 不更�
 
 const sameTime = mergeAssistantMessages([message('z', 10)], [message('a', 10)]);
 check(sameTime.map(item => item.id).join(',') === 'a,z', '同一时间使用 id 保证稳定顺序');
+
+check(
+  ASSISTANT_EMPTY_DESCRIPTION === '我会记住前后文，陪你把事情一步步理清。',
+  '首次进入说明应使用已确认的用户语言',
+);
+check(!/记录|待办|困惑/.test(ASSISTANT_EMPTY_DESCRIPTION), '首次进入说明不应暴露内部分类');
 
 console.log('assistant UI state tests passed');
