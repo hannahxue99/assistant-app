@@ -12,6 +12,13 @@ import type {
   ConversationSegment,
 } from './types';
 
+export interface AssistantRequestState {
+  id: string;
+  status: 'pending' | 'succeeded' | 'failed';
+  userMessage: AssistantMessage;
+  assistantMessage: AssistantMessage | null;
+}
+
 type UserTurnInput = {
   requestId: string;
   content: string;
@@ -211,6 +218,28 @@ export async function getMessage(id: string): Promise<AssistantMessage | null> {
   });
 }
 
+export async function getRequestState(requestId: string): Promise<AssistantRequestState | null> {
+  return withDatabaseConnection(async (database) => {
+    const request = await database.getFirstAsync<any>('SELECT * FROM assistant_requests WHERE id=?', requestId);
+    if (!request) return null;
+    const userRow = await database.getFirstAsync<any>(
+      "SELECT * FROM assistant_messages WHERE request_id=? AND role='user'",
+      requestId,
+    );
+    if (!userRow) return null;
+    const assistantRow = await database.getFirstAsync<any>(
+      "SELECT * FROM assistant_messages WHERE request_id=? AND role='assistant'",
+      requestId,
+    );
+    return {
+      id: request.id,
+      status: request.status,
+      userMessage: rowToMessage(userRow),
+      assistantMessage: assistantRow ? rowToMessage(assistantRow) : null,
+    };
+  });
+}
+
 export async function listMessages(options: {
   limit?: number;
   before?: AssistantMessageCursor;
@@ -238,6 +267,18 @@ export async function getCurrentSegment(): Promise<ConversationSegment | null> {
       "SELECT * FROM conversation_segments WHERE status='current' LIMIT 1",
     );
     return row ? rowToSegment(row) : null;
+  });
+}
+
+export async function listClosedSegments(limit = 100): Promise<ConversationSegment[]> {
+  return withDatabaseConnection(async (database) => {
+    const rows = await database.getAllAsync<any>(
+      `SELECT * FROM conversation_segments
+       WHERE status='closed' AND summary!=''
+       ORDER BY updated_at DESC LIMIT ?`,
+      Math.max(1, Math.min(limit, 500)),
+    );
+    return rows.map(rowToSegment);
   });
 }
 
