@@ -42,7 +42,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "ci": "npm run typecheck && npm test",
-    "test": "npm run test:time && npm run test:schedule && npm run test:notifications && npm run test:understanding && npm run test:topics && npm run test:entry-time && npm run test:backup && npm run test:import && npm run test:database-runtime && npm run test:notification-isolation && npm run test:entry-consistency && npm run test:edit-date && npm run test:calendar",
+    "test": "npm run test:time && npm run test:schedule && npm run test:notifications && npm run test:understanding && npm run test:topics && npm run test:entry-time && npm run test:backup && npm run test:import && npm run test:database-runtime && npm run test:notification-isolation && npm run test:entry-consistency && npm run test:edit-date && npm run test:calendar && npm run test:assistant-db",
     "test:time": "tsx scripts/test-time.ts",
     "test:schedule": "tsx scripts/test-schedule.ts",
     "test:notifications": "tsx scripts/test-notification-copy.ts",
@@ -55,7 +55,8 @@
     "test:notification-isolation": "node scripts/test-notification-isolation.cjs",
     "test:entry-consistency": "TZ=Asia/Shanghai node scripts/test-entry-consistency.cjs",
     "test:edit-date": "TZ=Asia/Shanghai tsx scripts/test-edit-date-decision.ts",
-    "test:calendar": "TZ=Asia/Shanghai node scripts/test-calendar-sync.cjs"
+    "test:calendar": "TZ=Asia/Shanghai node scripts/test-calendar-sync.cjs",
+    "test:assistant-db": "TZ=Asia/Shanghai node scripts/test-assistant-database.cjs"
   },
   "private": true
 }
