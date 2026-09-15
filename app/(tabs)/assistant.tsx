@@ -1,5 +1,6 @@
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -44,6 +45,22 @@ function makeRequestId(): string {
 
 export default function AssistantScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    contextKind?: 'event' | 'todo' | 'reminder';
+    contextId?: string;
+    contextLabel?: string;
+    contextState?: string;
+  }>();
+  const launchContext = useMemo(() => (
+    params.contextKind && params.contextId && params.contextLabel
+      ? {
+        kind: params.contextKind,
+        id: params.contextId,
+        label: params.contextLabel,
+        state: params.contextState,
+      }
+      : null
+  ), [params.contextId, params.contextKind, params.contextLabel, params.contextState]);
   const listRef = useRef<FlatList<AssistantMessage>>(null);
   const mountedRef = useRef(true);
   const loadedOnceRef = useRef(false);
@@ -132,7 +149,7 @@ export default function AssistantScreen() {
       setMessages(current => mergeAssistantMessages(current, [userMessage]));
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
     }
-    const job = sendAssistantTurn({ requestId, content, source });
+    const job = sendAssistantTurn({ requestId, content, source, launchContext });
     try {
       await job;
     } catch (error) {
@@ -151,7 +168,7 @@ export default function AssistantScreen() {
     )));
     void (async () => {
       try {
-        const job = retryAssistantTurn({ requestId });
+        const job = retryAssistantTurn({ requestId, launchContext });
         await Promise.resolve();
         await loadLatest(false);
         await job;
@@ -209,6 +226,24 @@ export default function AssistantScreen() {
             <Text style={styles.configText}>开启理解引擎后，小知才能回复</Text>
             <Text style={styles.configAction}>去配置 ›</Text>
           </Pressable>
+        ) : null}
+
+        {launchContext ? (
+          <View style={styles.contextBanner}>
+            <Ionicons name="git-branch-outline" size={17} color={theme.colors.accent} />
+            <View style={styles.contextTextWrap}>
+              <Text style={styles.contextLabel}>正在聊这件事</Text>
+              <Text style={styles.contextTitle} numberOfLines={1}>{launchContext.label}</Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="退出事件上下文"
+              onPress={() => router.replace('/assistant')}
+              style={styles.contextClose}
+            >
+              <Ionicons name="close" size={20} color={theme.colors.textDim} />
+            </Pressable>
+          </View>
         ) : null}
 
         {initialLoad === 'loading' ? (
@@ -277,6 +312,11 @@ const styles = StyleSheet.create({
   configBanner: { minHeight: 44, marginHorizontal: theme.spacing.md, marginBottom: 6, paddingHorizontal: 12, borderRadius: 12, backgroundColor: theme.colors.goldSoft, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   configText: { color: theme.colors.text, fontSize: theme.font.small, flex: 1 },
   configAction: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
+  contextBanner: { minHeight: 52, marginHorizontal: theme.spacing.md, marginBottom: 6, paddingLeft: 12, borderRadius: 13, backgroundColor: theme.colors.accentSoft, flexDirection: 'row', alignItems: 'center', gap: 9 },
+  contextTextWrap: { flex: 1, paddingVertical: 7 },
+  contextLabel: { color: theme.colors.textDim, fontSize: 11 },
+  contextTitle: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold, marginTop: 1 },
+  contextClose: { width: theme.touchTarget, height: theme.touchTarget, alignItems: 'center', justifyContent: 'center' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   listContent: { paddingHorizontal: theme.spacing.md, paddingTop: 5, paddingBottom: 12 },
   emptyList: { flexGrow: 1 },

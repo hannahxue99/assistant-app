@@ -25,6 +25,20 @@ export interface AssistantEventUpdate {
   undoneAt: number | null;
 }
 
+export interface AssistantEventTodo {
+  id: string;
+  text: string;
+  dueAt: number | null;
+  done: boolean;
+  updatedAt: number;
+}
+
+export interface AssistantEventDetail {
+  event: AssistantEvent;
+  todos: AssistantEventTodo[];
+  updates: AssistantEventUpdate[];
+}
+
 export interface AssistantObjectRelation {
   id: string;
   fromType: AssistantObjectType;

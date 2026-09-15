@@ -209,6 +209,29 @@ async function main() {
   }, countsBeforeRetry, '重复迁移不得改变事件、进展或关系数量');
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM entries WHERE topic='换房计划'").get().count, 2,
     '旧 entries.topic 必须保留作为回滚来源');
+  assert.ok(!(await db.listTopicGroups()).some(group => group.topic === '换房计划'),
+    '已迁移主题不应在首页聚合区与事件重复展示');
+
+  const hiddenRelatedTodo = await db.insertEntry({ rawText: '整理换房资料', source: 'text', createdAt: 3300 }, {
+    kind: 'task', summary: '整理换房资料', dueAt: null, tags: [], topic: null, persons: [],
+  });
+  const datedRelatedTodo = await db.insertEntry({ rawText: '周末联系中介', source: 'text', createdAt: 3400 }, {
+    kind: 'task', summary: '联系中介', dueAt: 9000, tags: [], topic: null, persons: [],
+  });
+  await eventStore.linkObjects({
+    fromType: 'todo', fromId: hiddenRelatedTodo.id, relationType: 'belongs_to',
+    toType: 'event', toId: firstEvent.id, createdAt: 3400,
+  });
+  await eventStore.linkObjects({
+    fromType: 'todo', fromId: datedRelatedTodo.id, relationType: 'belongs_to',
+    toType: 'event', toId: firstEvent.id, createdAt: 3401,
+  });
+  const mortgageDetail = await eventStore.getEventDetail(firstEvent.id);
+  assert.equal(mortgageDetail.todos.length, 2, '事件详情应同时展示有日期和隐藏待办');
+  assert.ok(mortgageDetail.todos.some(todo => todo.dueAt === null));
+  assert.ok(mortgageDetail.todos.some(todo => todo.dueAt === 9000));
+  assert.equal(mortgageDetail.updates[0].content, '已提前还款 30 万', '关键进展应按最新在前展示');
+  assert.equal(await eventStore.getEventDetail('missing-event'), null, '不存在事件应返回局部空结果');
 
   const undoUser = await assistantStore.saveUserTurn({
     requestId: 'request-undo-create', content: '持续跟进搬家，周六打包', source: 'text', createdAt: 4000,

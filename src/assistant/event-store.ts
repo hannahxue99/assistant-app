@@ -6,6 +6,7 @@ import {
 } from '../db';
 import type {
   AssistantEvent,
+  AssistantEventDetail,
   AssistantEventUpdate,
   AssistantObjectRelation,
   AssistantObjectType,
@@ -308,3 +309,38 @@ export function countEventSourceMessages(eventId: string, database?: SQLiteDatab
   });
 }
 
+export function getEventDetail(
+  eventId: string,
+  database?: SQLiteDatabase,
+): Promise<AssistantEventDetail | null> {
+  return readWith(database, async (connection) => {
+    const eventRow = await connection.getFirstAsync<any>('SELECT * FROM assistant_events WHERE id=?', eventId);
+    if (!eventRow) return null;
+    const todoRows = await connection.getAllAsync<any>(
+      `SELECT e.id, e.summary, e.raw_text, e.due_at, e.done, e.updated_at
+       FROM assistant_object_relations r
+       JOIN entries e ON e.id=r.from_id
+       WHERE r.from_type='todo' AND r.relation_type='belongs_to'
+         AND r.to_type='event' AND r.to_id=? AND r.undone_at IS NULL
+       ORDER BY e.done ASC, e.due_at IS NULL, e.due_at ASC, e.updated_at DESC`,
+      eventId,
+    );
+    const updateRows = await connection.getAllAsync<any>(
+      `SELECT * FROM assistant_event_updates
+       WHERE event_id=? AND undone_at IS NULL
+       ORDER BY occurred_at DESC, id DESC`,
+      eventId,
+    );
+    return {
+      event: rowToEvent(eventRow),
+      todos: todoRows.map(row => ({
+        id: row.id,
+        text: row.summary || row.raw_text,
+        dueAt: row.due_at ?? null,
+        done: Boolean(row.done),
+        updatedAt: Number(row.updated_at),
+      })),
+      updates: updateRows.map(rowToUpdate),
+    };
+  });
+}

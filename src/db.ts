@@ -720,7 +720,12 @@ export async function listTopicGroups(): Promise<TopicGroup[]> {
   const rows = await d.getAllAsync<any>(`
     WITH counted AS (
       SELECT topic, COUNT(*) AS entry_count FROM entries
-      WHERE topic IS NOT NULL AND TRIM(topic) != '' GROUP BY topic
+      WHERE topic IS NOT NULL AND TRIM(topic) != ''
+        AND NOT EXISTS (
+          SELECT 1 FROM assistant_migrations m
+          WHERE m.migration_key=('legacy-topic-v1:' || entries.topic)
+        )
+      GROUP BY topic
     )
     SELECT e.*, counted.entry_count, p.pinned_at
     FROM counted JOIN entries e ON e.id = (

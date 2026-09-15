@@ -1,5 +1,5 @@
 /**
- * 「首页」— 本周待办 + 长期待办 + 主人的备忘录（聚合/用户原声）+ 沉底快速记录
+ * 「首页」— 本周待办 + 持续事件 + 主人的备忘录（聚合/用户原声）+ 沉底快速记录
  * 设计依据：DESIGN.md（布局/空态/交互均已对齐）
  */
 import { Ionicons } from '@expo/vector-icons';
@@ -20,12 +20,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Composer } from '../../src/components/Composer';
+import { AssistantEventCard } from '../../src/components/AssistantEventCard';
 import { TopicPinIcon } from '../../src/components/TopicPinIcon';
 import {
   getSettings,
   listEntries,
   listByKeyword,
-  listLongTermTasks,
   listTopicGroups,
   listWeekTasks,
   setDone,
@@ -40,11 +40,12 @@ import {
   groupWeekTasks,
   isOverdue,
   logTimestamp,
-  longTermLabel,
   weekTaskLabel,
   type DayGroup,
 } from '../../src/engine/schedule';
 import type { Entry, Settings, TopicGroup } from '../../src/types';
+import type { AssistantEvent } from '../../src/assistant/action-types';
+import { listEvents } from '../../src/assistant/event-store';
 import { theme } from '../../src/theme';
 
 type MemoTab = 'aggregate' | 'voice';
@@ -53,7 +54,8 @@ export default function HomeScreen() {
   const router = useRouter();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [weekGroups, setWeekGroups] = useState<DayGroup[]>([]);
-  const [longTerm, setLongTerm] = useState<Entry[]>([]);
+  const [events, setEvents] = useState<AssistantEvent[]>([]);
+  const [eventsState, setEventsState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [memoTab, setMemoTab] = useState<MemoTab>('aggregate');
   const [query, setQuery] = useState('');
   const [voiceQuery, setVoiceQuery] = useState('');
@@ -65,13 +67,26 @@ export default function HomeScreen() {
   /** 原声页签实际展示的列表（搜索时为命中子集） */
   const [shownVoice, setShownVoice] = useState<Entry[]>([]);
 
+  const loadEvents = useCallback(async (version = loadVersion.current) => {
+    setEventsState('loading');
+    try {
+      const value = await listEvents({ status: 'active', limit: 20 });
+      if (version !== loadVersion.current) return;
+      setEvents(value);
+      setEventsState('ready');
+    } catch {
+      if (version !== loadVersion.current) return;
+      setEventsState('error');
+    }
+  }, []);
+
   const load = useCallback(async () => {
     const version = ++loadVersion.current;
     const activeFilters = { ...filters.current };
-    const [s, week, long_, groups, all] = await Promise.all([
+    void loadEvents(version);
+    const [s, week, groups, all] = await Promise.all([
       getSettings(),
       listWeekTasks(),
-      listLongTermTasks(),
       listTopicGroups(),
       listEntries({ query: '', kind: 'all', showDone: true }),
     ]);
@@ -87,12 +102,11 @@ export default function HomeScreen() {
     if (version !== loadVersion.current) return;
     setSettings(s);
     setWeekGroups(groupWeekTasks(week));
-    setLongTerm(long_);
     setTopics(aggregateHits ? [] : groups);
     setStream(aggregateHits ?? all.filter((e) => !e.topic));
     setVoiceLog(all);
     setShownVoice(voiceHits ?? all);
-  }, []);
+  }, [loadEvents]);
 
   useFocusEffect(
     useCallback(() => {
@@ -183,22 +197,24 @@ export default function HomeScreen() {
             ))
           )}
 
-          {/* 模块二：长期待办（无则隐藏） */}
-          {longTerm.length > 0 && (
-            <>
-              <Text style={styles.h2}>长期待办</Text>
-              {longTerm.map((e) => (
-                <Pressable
-                  key={e.id}
-                  style={styles.longRow}
-                  onPress={() => router.push(`/entry/${e.id}`)}
-                >
-                  <Text style={styles.longLabel}>{longTermLabel(e.dueAt!)}</Text>
-                  <Text style={styles.longText} numberOfLines={1}>{e.summary}</Text>
-                </Pressable>
-              ))}
-            </>
-          )}
+          {/* 模块二：持续事件。失败只影响本区，不阻断本周待办和原声。 */}
+          <Text style={styles.h1}>事件</Text>
+          {eventsState === 'loading' ? (
+            <ActivityIndicator color={theme.colors.accent} style={styles.eventsLoading} />
+          ) : eventsState === 'error' ? (
+            <Pressable style={styles.eventsError} onPress={() => { void loadEvents(); }}>
+              <Text style={styles.eventsErrorText}>事件暂时加载不了</Text>
+              <Text style={styles.eventsRetry}>重试</Text>
+            </Pressable>
+          ) : events.length === 0 ? (
+            <Text style={styles.eventsEmpty}>还没有需要持续跟进的事</Text>
+          ) : events.map(event => (
+            <AssistantEventCard
+              key={event.id}
+              event={event}
+              onPress={() => router.push(`/event/${event.id}`)}
+            />
+          ))}
 
           {/* 模块三：主人的备忘录 */}
           <Text style={styles.h1}>主人的备忘录</Text>
@@ -373,7 +389,6 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 16, gap: 10 },
   dateLine: { fontSize: theme.font.small, color: theme.colors.textDim },
   h1: { fontSize: 18, fontWeight: '700', color: theme.colors.text, marginTop: 8 },
-  h2: { fontSize: 14, fontWeight: '700', color: theme.colors.textDim, marginTop: 8 },
   emptyWeek: {
     borderWidth: 1,
     borderStyle: 'dashed',
@@ -411,18 +426,11 @@ const styles = StyleSheet.create({
   weekLabel: { fontSize: theme.font.small, fontWeight: '700', color: theme.colors.accent, minWidth: 48 },
   weekText: { flex: 1, fontSize: theme.font.body, color: theme.colors.text },
   weekTextDone: { textDecorationLine: 'line-through', color: theme.colors.textDim },
-  longRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.input,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  longLabel: { fontSize: theme.font.small, fontWeight: '700', color: theme.colors.textDim },
-  longText: { flex: 1, fontSize: theme.font.body, color: theme.colors.text },
+  eventsLoading: { marginVertical: 18 },
+  eventsError: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  eventsErrorText: { color: theme.colors.textDim, fontSize: theme.font.small },
+  eventsRetry: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
+  eventsEmpty: { color: theme.colors.textDim, fontSize: theme.font.small, paddingVertical: 10 },
   seg: {
     flexDirection: 'row',
     backgroundColor: theme.colors.card,
