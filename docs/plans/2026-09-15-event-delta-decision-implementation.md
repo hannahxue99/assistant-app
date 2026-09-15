@@ -8,6 +8,8 @@
 
 **Tech Stack:** Expo SDK 57, React Native, TypeScript, expo-sqlite, structured chat-completion JSON, tsx and Node SQLite integration tests.
 
+**Protocol reliability:** `event_delta.key` is local idempotency metadata generated from array order. The model only returns semantic fields, so a missing or duplicated internal key cannot invalidate an otherwise usable reply.
+
 ---
 
 ### Task 1: Define and parse the event-delta protocol
@@ -142,4 +144,3 @@ Commit implementation and test changes to `codex/xiaozhi-todos-events`, then pus
 **Step 4: Reload the existing Dev session**
 
 Send `r` to Metro session `33273` and confirm the iOS bundle completes. Device acceptance should exercise: new plan, changed date, completed todo, external possibility, and ambiguous target.
-

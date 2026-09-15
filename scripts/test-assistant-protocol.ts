@@ -55,32 +55,42 @@ check(existingOperations.operations[0].type === 'update_event', '应解析候选
 check(existingOperations.operations[1].type === 'complete_todo', '应解析候选待办完成');
 
 const withEventDelta = parseAssistantTurnOutput(JSON.stringify({
-  reply: '下一笔还款安排记住了。',
+  reply: '这条还款主线会持续很长时间。',
   segment: { action: 'continue' },
   event_deltas: [{
-    key: 'loan-plan',
     target: { action: 'update_existing', event_id: 'event-loan' },
-    evidence: ['下个月11号再还10万'],
+    evidence: ['贷款后续要30年左右结束'],
     state: {
-      action: 'replace', change_type: 'plan',
-      value: '已提前还款30万；计划10月11日再还10万',
+      action: 'replace', change_type: 'fact',
+      value: '已开始还款，预计还款周期约30年',
     },
-    progress: [{ type: 'decision', content: '确定10月11日再还款10万' }],
-    todos: [{
-      action: 'create', todo_ref: 'todo_1', text: '还款10万',
-      date_status: 'resolved', date_text: '下个月11号',
-      due_date: '2026-10-11', time_precision: 'date',
-    }],
+    progress: [{ type: 'fact', content: '明确贷款还款周期约30年' }],
+    todos: [],
   }],
 }));
 check(withEventDelta.eventDeltas.length === 1, '应解析完整事件增量');
 const parsedDelta = withEventDelta.eventDeltas[0];
+check(parsedDelta.key === 'event_delta_1', '事件增量键应由本地稳定生成，不依赖模型返回');
 check(parsedDelta.target.action === 'update_existing' && parsedDelta.target.eventId === 'event-loan',
   '应解析已有事件目标');
 check(parsedDelta.state.action === 'replace' && parsedDelta.progress.length === 1,
   '状态与关键进展必须保留为同一增量');
-check(parsedDelta.todos[0]?.action === 'create' && parsedDelta.todos[0].dueDate === '2026-10-11',
-  '增量内待办必须沿用模型日期协议');
+
+const ignoredModelDeltaKeys = parseAssistantTurnOutput(JSON.stringify({
+  reply: '收到。', segment: { action: 'continue' },
+  event_deltas: [
+    {
+      key: '../../unsafe', target: { action: 'update_existing', event_id: 'event-a' },
+      evidence: ['原话'], state: { action: 'keep' }, progress: [], todos: [],
+    },
+    {
+      key: '../../unsafe', target: { action: 'update_existing', event_id: 'event-b' },
+      evidence: ['原话'], state: { action: 'keep' }, progress: [], todos: [],
+    },
+  ],
+}));
+check(ignoredModelDeltaKeys.eventDeltas.map(delta => delta.key).join(',') === 'event_delta_1,event_delta_2',
+  '模型返回的内部 key 应被忽略，由本地按顺序重新生成');
 
 const fenced = parseAssistantTurnOutput('```json\n{"reply":"好的","segment":{"action":"split_before_user","previous_summary":"旧话题结束","summary":"新话题开始"}}\n```');
 check(fenced.segment.action === 'split_before_user', '应容忍 JSON 代码块');

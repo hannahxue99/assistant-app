@@ -158,7 +158,7 @@ todo.update         -> update_todo + 确保 link_todo_event
 todo.complete       -> complete_todo + 确保 link_todo_event
 ```
 
-全部操作、助手回复和会话摘要在一个 SQLite 事务中提交。以 `request_id + event_delta.key + 子项序号` 生成稳定键，重试不得重复追加进展或待办。事件 revision 继续做乐观并发校验。
+全部操作、助手回复和会话摘要在一个 SQLite 事务中提交。`event_delta.key` 不要求模型生成，由协议层按数组顺序生成；再以 `request_id + 本地 event_delta.key + 子项序号` 生成稳定操作键。重试不得重复追加进展或待办，事件 revision 继续做乐观并发校验。
 
 ## 7. 失败与降级
 

@@ -5,10 +5,11 @@ export interface AssistantPromptMessage {
   content: string;
 }
 
-export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v5-event-delta';
+export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v6-local-delta-key';
 
 export const ASSISTANT_EVENT_DELTA_FORMAT_GUIDE = [
   '事件增量格式（已有或新建持续事件统一使用 event_deltas，不要拆成互不关联的事件/进展/待办操作）：',
+  '- event_delta 不需要 key；内部幂等编号由本地生成。只返回下列业务判断字段。',
   '- target 更新已有事件：{"action":"update_existing","event_id":"候选事件ID"}',
   '- target 新建事件：{"action":"create_new","event_ref":"event_1","title":"稳定主线标题"}',
   '- 不处理或需澄清：target.action 为 none 或 clarify；state 必须 keep，progress/todos 必须为空。通常直接不返回该 delta 即可。',

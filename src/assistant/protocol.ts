@@ -327,8 +327,10 @@ function parseEventDeltas(value: unknown): AssistantEventDelta[] {
         throw new AssistantProtocolError('事件增量必须是对象');
       }
       const raw = candidate as any;
-      const key = requiredText(raw.key, 'event_delta.key', 64);
-      if (!OPERATION_KEY.test(key)) throw new AssistantProtocolError('event_delta.key 非法');
+      // This key is transport metadata, not a semantic model decision. Generate it
+      // locally so a valid turn cannot fail because the model omitted or duplicated
+      // an internal idempotency field.
+      const key = `event_delta_${index + 1}`;
       if (!Array.isArray(raw.evidence) || raw.evidence.length < 1 || raw.evidence.length > 3) {
         throw new AssistantProtocolError('event_delta.evidence 必须包含 1–3 条本轮原话');
       }
@@ -366,8 +368,6 @@ function parseEventDeltas(value: unknown): AssistantEventDelta[] {
       throw error;
     }
   });
-  const keys = new Set(deltas.map(delta => delta.key));
-  if (keys.size !== deltas.length) throw new AssistantProtocolError('单轮事件增量键不能重复');
   return deltas;
 }
 
