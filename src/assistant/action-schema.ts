@@ -120,6 +120,8 @@ export const assistantActionSchema = `
     error_detail TEXT,
     repair_count INTEGER NOT NULL DEFAULT 0,
     repair_status TEXT NOT NULL DEFAULT 'not_needed' CHECK (repair_status IN ('not_needed', 'succeeded', 'failed')),
+    provider_attempt_count INTEGER NOT NULL DEFAULT 0,
+    provider_attempts_json TEXT NOT NULL DEFAULT '[]',
     protocol_warnings_json TEXT NOT NULL DEFAULT '[]',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,

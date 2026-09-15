@@ -208,8 +208,8 @@ async function runSavedTurn(input: {
           ? output.providerMetadata.completedAt - output.providerMetadata.startedAt
           : null,
         tokens: output.providerMetadata?.totalTokens ?? null,
-        repairCount: output.providerMetadata?.repairCount ?? 0,
-        repairStatus: output.providerMetadata?.repairStatus ?? 'not_needed',
+        providerAttemptCount: output.providerMetadata?.attemptCount ?? 0,
+        providerAttempts: output.providerMetadata?.attempts ?? [],
         warnings: output.providerMetadata?.protocolWarnings ?? [],
       });
     }
@@ -231,8 +231,8 @@ async function runSavedTurn(input: {
       requestId: input.requestId,
       errorCode,
       errorDetail,
-      repairCount: diagnostics?.repairCount,
-      repairStatus: diagnostics?.repairStatus,
+      providerAttemptCount: diagnostics?.attemptCount,
+      providerAttempts: diagnostics?.attempts,
       protocolWarnings: diagnostics?.protocolWarnings,
     }));
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
@@ -241,8 +241,8 @@ async function runSavedTurn(input: {
         status: 'failed',
         errorCode,
         errorDetail,
-        repairCount: diagnostics?.repairCount ?? 0,
-        repairStatus: diagnostics?.repairStatus ?? 'not_needed',
+        providerAttemptCount: diagnostics?.attemptCount ?? 0,
+        providerAttempts: diagnostics?.attempts ?? [],
       });
     }
     await failTurn(input.requestId, errorCode).catch(() => {});

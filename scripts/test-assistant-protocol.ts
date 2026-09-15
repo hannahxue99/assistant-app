@@ -154,9 +154,9 @@ async function main() {
     },
   });
   check(providerResult.reply === '继续推进', 'Provider 应返回校验后的结果');
-  check(providerResult.providerMetadata.repairCount === 0
-    && providerResult.providerMetadata.repairStatus === 'not_needed',
-  '合法响应不得增加修复调用');
+  check(providerResult.providerMetadata.attemptCount === 1
+    && providerResult.providerMetadata.attempts[0].errorCode === null,
+  '合法响应只应执行一次完整请求');
   check(!capturedBody.includes('secret'), 'API Key 不得进入请求 body');
   check(capturedBody.includes('fixture-model'), '请求应使用当前模型设置');
   check(capturedBody.includes('"stream":true'), 'Provider 必须启用流式返回');
@@ -200,9 +200,10 @@ async function main() {
   check(streamed.providerMetadata.totalTokens === 18 && streamed.providerMetadata.finishReason === 'stop',
     '流式元数据应记录 token usage 与结束原因');
 
-  const repairBodies: string[] = [];
-  let repairCalls = 0;
-  const repaired = await requestAssistantTurn({
+  const retryBodies: string[] = [];
+  const retryDisplays: string[] = [];
+  let retryCalls = 0;
+  const retried = await requestAssistantTurn({
     settings: {
       llmEnabled: true,
       llmBaseUrl: 'https://example.test/v1',
@@ -210,35 +211,52 @@ async function main() {
       llmModel: 'fixture-model',
     },
     context: {
-      contextBlock: '不应在修复请求里重复的私密历史上下文',
-      recentMessages: [{ id: 'u', role: 'user', content: '不应重复发送的历史原话', createdAt: 1 }],
+      contextBlock: '第二次完整请求也必须保留的上下文',
+      recentMessages: [{ id: 'u', role: 'user', content: '下个月11号还款10万', createdAt: 1 }],
     },
     referenceAt: new Date('2026-09-15T15:39:06+08:00').getTime(),
     timeZone: 'Asia/Shanghai',
     fetchImpl: async (_url, init) => {
-      repairBodies.push(String(init?.body));
-      repairCalls += 1;
-      const content = repairCalls === 1
+      retryBodies.push(String(init?.body));
+      retryCalls += 1;
+      const content = retryCalls === 1
         ? '{"reply":"好的，记下了","segment":{"action":"continue"},"operations":[{"key":"todo","type":"create_todo","todo_ref":"todo_1","text":"还款10万","date_status":"resolved","date_text":"下个月11号"}]}'
         : '{"reply":"好的，记下了","segment":{"action":"continue"},"operations":[{"key":"todo","type":"create_todo","todo_ref":"todo_1","text":"还款10万","date_status":"resolved","date_text":"下个月11号","due_date":"2026-10-11","time_precision":"date"}]}';
+      if (retryCalls === 1) {
+        const event = JSON.stringify({
+          choices: [{ delta: { content }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 5, completion_tokens: 6, total_tokens: 11 },
+        });
+        return new Response(`data: ${event}\n\ndata: [DONE]\n\n`, {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      }
       return new Response(JSON.stringify({
         choices: [{ message: { content }, finish_reason: 'stop' }],
         usage: { prompt_tokens: 5, completion_tokens: 6, total_tokens: 11 },
       }), { status: 200, headers: { 'content-type': 'application/json' } });
     },
+    onReplyText: text => retryDisplays.push(text),
   });
-  check(repairCalls === 2, '协议损坏时最多追加一次格式修复请求');
-  check(repaired.operations[0].type === 'create_todo', '修复结果必须重新通过同一严格协议');
-  check(repaired.providerMetadata.repairCount === 1 && repaired.providerMetadata.repairStatus === 'succeeded',
-    'Provider 元数据应标记修复成功');
-  check(repaired.providerMetadata.totalTokens === 22, '修复调用的 token 应合并计入本轮');
-  check(!repairBodies[1].includes('私密历史上下文') && !repairBodies[1].includes('历史原话'),
-    '格式修复不得重复携带完整上下文');
-  check(repaired.providerMetadata.protocolWarnings.includes('reply_execution_claim'),
-    '修复后的自然成功措辞应记录为告警但不导致失败');
+  check(retryCalls === 2, '协议损坏时最多重试一次完整请求');
+  check(retried.operations[0].type === 'create_todo', '第二次完整结果必须重新通过同一严格协议');
+  check(retried.providerMetadata.attemptCount === 2
+    && retried.providerMetadata.attempts[0].errorCode === 'invalid-response'
+    && retried.providerMetadata.attempts[1].errorCode === null,
+  'Provider 元数据应分别记录失败和成功尝试');
+  check(retried.providerMetadata.totalTokens === 22, '两次完整调用的 token 应合并计入本轮');
+  check(retryBodies[0] === retryBodies[1]
+    && retryBodies[1].includes('第二次完整请求也必须保留的上下文')
+    && retryBodies[1].includes('下个月11号还款10万'),
+  '重试必须原样携带同一份完整上下文，而非发送 JSON 修补提示');
+  check(retryDisplays[0] === '好的，记下了' && retryDisplays.includes('') && retryDisplays.at(-1) === retried.reply,
+    '重试前应清空第一次流式草稿，最终只展示第二次有效回复');
+  check(retried.providerMetadata.protocolWarnings.includes('reply_execution_claim'),
+    '第二次自然成功措辞应记录为告警但不导致失败');
 
-  let failedRepairCalls = 0;
-  let failedRepairError: any = null;
+  let failedRetryCalls = 0;
+  let failedRetryError: any = null;
   try {
     await requestAssistantTurn({
       settings: {
@@ -249,19 +267,46 @@ async function main() {
       },
       context: { contextBlock: '上下文', recentMessages: [] },
       fetchImpl: async () => {
-        failedRepairCalls += 1;
+        failedRetryCalls += 1;
         return new Response(JSON.stringify({
           choices: [{ message: { content: '{"reply":"收到","segment":{"action":"bad"}}' } }],
         }), { status: 200, headers: { 'content-type': 'application/json' } });
       },
     });
   } catch (error) {
-    failedRepairError = error;
+    failedRetryError = error;
   }
-  check(failedRepairCalls === 2, '首次和修复都损坏时也只能调用两次，不能无限修复');
-  check(failedRepairError?.code === 'invalid-response'
-    && failedRepairError?.diagnostics?.repairStatus === 'failed',
-  '修复仍失败时必须携带精确诊断状态');
+  check(failedRetryCalls === 2, '连续损坏时也只能调用两次，不能无限重试');
+  check(failedRetryError?.code === 'invalid-response'
+    && failedRetryError?.diagnostics?.attemptCount === 2
+    && failedRetryError?.diagnostics?.attempts.every((attempt: any) => attempt.errorCode === 'invalid-response'),
+  '两次仍失败时必须携带逐次诊断状态');
+
+  let unauthorizedCalls = 0;
+  await requestAssistantTurn({
+    settings: { llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model' },
+    context: { contextBlock: '上下文', recentMessages: [] },
+    fetchImpl: async () => {
+      unauthorizedCalls += 1;
+      return new Response('unauthorized', { status: 401 });
+    },
+  }).then(() => { throw new Error('401 应失败'); }, () => {});
+  check(unauthorizedCalls === 1, '鉴权错误不应自动重试');
+
+  let rateLimitCalls = 0;
+  const afterRateLimit = await requestAssistantTurn({
+    settings: { llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model' },
+    context: { contextBlock: '上下文', recentMessages: [] },
+    fetchImpl: async () => {
+      rateLimitCalls += 1;
+      if (rateLimitCalls === 1) return new Response('slow down', { status: 429 });
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: '{"reply":"重试成功","segment":{"action":"continue"}}' } }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+  });
+  check(rateLimitCalls === 2 && afterRateLimit.providerMetadata.attemptCount === 2,
+    '限流错误应执行一次完整重试');
 
   console.log('assistant protocol tests passed');
 }

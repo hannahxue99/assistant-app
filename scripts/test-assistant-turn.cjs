@@ -105,8 +105,11 @@ async function main() {
     const error = Object.assign(new Error('operations[0]: resolved 缺少 due_date'), {
       code: 'invalid-response',
       diagnostics: {
-        repairCount: 1,
-        repairStatus: 'failed',
+        attemptCount: 2,
+        attempts: [
+          { attempt: 1, startedAt: 2500, completedAt: 2510, errorCode: 'invalid-response', errorDetail: '缺少 due_date', finishReason: 'stop', promptTokens: 10, completionTokens: 4, totalTokens: 14 },
+          { attempt: 2, startedAt: 2511, completedAt: 2520, errorCode: 'invalid-response', errorDetail: '缺少 due_date', finishReason: 'stop', promptTokens: 10, completionTokens: 4, totalTokens: 14 },
+        ],
         protocolWarnings: ['reply_execution_claim'],
       },
     });
@@ -119,8 +122,8 @@ async function main() {
     "SELECT * FROM assistant_decision_logs WHERE request_id='request-protocol-failure'",
   ).get();
   assert.equal(protocolFailureLog.error_detail, 'operations[0]: resolved 缺少 due_date');
-  assert.equal(protocolFailureLog.repair_count, 1);
-  assert.equal(protocolFailureLog.repair_status, 'failed');
+  assert.equal(protocolFailureLog.provider_attempt_count, 2);
+  assert.equal(JSON.parse(protocolFailureLog.provider_attempts_json).length, 2);
   assert.deepEqual(JSON.parse(protocolFailureLog.protocol_warnings_json), ['reply_execution_claim']);
 
   provider = async () => ({
@@ -130,7 +133,9 @@ async function main() {
     providerMetadata: {
       startedAt: 2600, completedAt: 2650, finishReason: 'stop',
       promptTokens: 10, completionTokens: 5, totalTokens: 15,
-      repairCount: 0, repairStatus: 'not_needed', protocolWarnings: ['reply_execution_claim'],
+      attemptCount: 1,
+      attempts: [{ attempt: 1, startedAt: 2600, completedAt: 2650, errorCode: null, errorDetail: null, finishReason: 'stop', promptTokens: 10, completionTokens: 5, totalTokens: 15 }],
+      protocolWarnings: ['reply_execution_claim'],
     },
   });
   const falseClaim = await orchestrator.sendAssistantTurn({
@@ -254,7 +259,12 @@ async function main() {
     providerMetadata: {
       startedAt: 4900, completedAt: 4950, finishReason: 'stop',
       promptTokens: 10, completionTokens: 5, totalTokens: 15,
-      repairCount: 1, repairStatus: 'succeeded', protocolWarnings: [],
+      attemptCount: 2,
+      attempts: [
+        { attempt: 1, startedAt: 4900, completedAt: 4920, errorCode: 'invalid-response', errorDetail: '格式错误', finishReason: 'stop', promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+        { attempt: 2, startedAt: 4921, completedAt: 4950, errorCode: null, errorDetail: null, finishReason: 'stop', promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+      ],
+      protocolWarnings: [],
     },
   });
   await assert.rejects(orchestrator.sendAssistantTurn({
@@ -268,8 +278,8 @@ async function main() {
   assert.equal(sqlite.prepare("SELECT status FROM assistant_requests WHERE id='request-rollback'").get().status, 'failed',
     '事务失败后用户原话应保留为可重试状态');
   const rollbackLog = sqlite.prepare("SELECT * FROM assistant_decision_logs WHERE request_id='request-rollback'").get();
-  assert.equal(rollbackLog.repair_count, 1, '事务失败不得覆盖已经记录的模型修复元数据');
-  assert.equal(rollbackLog.repair_status, 'succeeded');
+  assert.equal(rollbackLog.provider_attempt_count, 2, '事务失败不得覆盖已经记录的模型尝试元数据');
+  assert.equal(JSON.parse(rollbackLog.provider_attempts_json).length, 2);
 
   console.log('assistant turn tests passed');
   sqlite.close();
