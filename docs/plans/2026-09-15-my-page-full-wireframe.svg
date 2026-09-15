@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="1540" viewBox="0 0 520 1540">
+  <rect width="520" height="1540" fill="#ECE8E1"/>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #2B2622; }
+    .muted { fill: #8A837B; }
+    .accent { fill: #E0733A; }
+    .card { fill: #FFFFFF; stroke: #E8E2D9; stroke-width: 1; }
+    .soft { fill: #F9E8DD; }
+    .rule { stroke: #E8E2D9; stroke-width: 1; }
+    .label { font-size: 14px; fill: #8A837B; }
+    .body { font-size: 17px; }
+  </style>
+
+  <rect x="34" y="18" width="452" height="1490" rx="34" fill="#F6F3EE" stroke="#D8D1C7" stroke-width="2"/>
+  <text x="62" y="80" font-size="29" font-weight="700">我的</text>
+  <text x="62" y="106" font-size="14" class="muted">已陪伴 36 天 · 小知正在逐渐了解你</text>
+
+  <text x="62" y="158" font-size="21" font-weight="650">长期记忆</text>
+  <text x="62" y="181" font-size="13" class="muted">只保留会持续影响未来协助方式的认知</text>
+
+  <rect x="52" y="204" width="416" height="121" rx="16" class="card"/>
+  <rect x="68" y="221" width="52" height="25" rx="12.5" class="soft"/>
+  <text x="94" y="238" font-size="12" text-anchor="middle" class="accent">偏好</text>
+  <text x="68" y="274" class="body">不喜欢安排早会，重要事项尽量放在下午。</text>
+  <text x="353" y="307" font-size="14" class="muted">修改</text>
+  <text x="413" y="307" font-size="14" class="muted">忘记</text>
+
+  <rect x="52" y="337" width="416" height="121" rx="16" class="card"/>
+  <rect x="68" y="354" width="76" height="25" rx="12.5" class="soft"/>
+  <text x="106" y="371" font-size="12" text-anchor="middle" class="accent">长期目标</text>
+  <text x="68" y="407" class="body">建立一个能长期陪伴自己的私人 AI。</text>
+  <text x="353" y="440" font-size="14" class="muted">修改</text>
+  <text x="413" y="440" font-size="14" class="muted">忘记</text>
+
+  <rect x="52" y="470" width="416" height="121" rx="16" class="card"/>
+  <rect x="68" y="487" width="76" height="25" rx="12.5" class="soft"/>
+  <text x="106" y="504" font-size="12" text-anchor="middle" class="accent">做事原则</text>
+  <text x="68" y="540" class="body">重要决策先理清关键问题，再逐步推进。</text>
+  <text x="353" y="573" font-size="14" class="muted">修改</text>
+  <text x="413" y="573" font-size="14" class="muted">忘记</text>
+
+  <text x="62" y="641" class="label">助手与同步</text>
+  <rect x="52" y="659" width="416" height="160" rx="16" class="card"/>
+  <text x="68" y="697" class="body">理解引擎</text>
+  <text x="448" y="697" font-size="14" text-anchor="end" class="muted">已开启  ›</text>
+  <line x1="68" y1="720" x2="452" y2="720" class="rule"/>
+  <text x="68" y="759" class="body">同步到苹果日历</text>
+  <rect x="399" y="741" width="48" height="28" rx="14" fill="#E0733A"/>
+  <circle cx="433" cy="755" r="11" fill="#FFFFFF"/>
+  <text x="68" y="793" font-size="13" class="muted">已同步 · 私人助手专用日历</text>
+
+  <text x="62" y="869" class="label">待办通知</text>
+  <rect x="52" y="887" width="416" height="174" rx="16" class="card"/>
+  <text x="68" y="928" class="body">早 8:00 晨间待办</text>
+  <rect x="399" y="910" width="48" height="28" rx="14" fill="#E0733A"/>
+  <circle cx="433" cy="924" r="11" fill="#FFFFFF"/>
+  <line x1="68" y1="952" x2="452" y2="952" class="rule"/>
+  <text x="68" y="991" class="body">晚 21:00 夜间待办</text>
+  <rect x="399" y="973" width="48" height="28" rx="14" fill="#D8D1C7"/>
+  <circle cx="413" cy="987" r="11" fill="#FFFFFF"/>
+  <text x="68" y="1035" font-size="12" class="muted">这里只发送待办汇总，不包含教练提醒</text>
+
+  <text x="62" y="1111" class="label">数据管理</text>
+  <rect x="52" y="1129" width="416" height="187" rx="16" class="card"/>
+  <text x="68" y="1170" class="body">导出数据</text>
+  <text x="448" y="1170" font-size="14" text-anchor="end" class="muted">Markdown  ↗</text>
+  <line x1="68" y1="1192" x2="452" y2="1192" class="rule"/>
+  <text x="68" y="1233" class="body">导入数据</text>
+  <text x="448" y="1233" font-size="14" text-anchor="end" class="muted">选择备份文件  ›</text>
+  <line x1="68" y1="1255" x2="452" y2="1255" class="rule"/>
+  <text x="68" y="1296" class="body">数据概览</text>
+  <text x="448" y="1296" font-size="14" text-anchor="end" class="muted">128 条 · 36 天</text>
+
+  <text x="260" y="1358" font-size="12" text-anchor="middle" class="muted">页面可滚动 · 底部导航固定</text>
+
+  <rect x="34" y="1408" width="452" height="100" rx="0" fill="#FFFFFF"/>
+  <line x1="34" y1="1408" x2="486" y2="1408" class="rule"/>
+  <text x="119" y="1448" font-size="21" text-anchor="middle" class="muted">⌂</text>
+  <text x="260" y="1448" font-size="20" text-anchor="middle" class="muted">◆</text>
+  <text x="401" y="1448" font-size="21" text-anchor="middle" class="accent">○</text>
+  <text x="119" y="1480" font-size="12" text-anchor="middle" class="muted">首页</text>
+  <text x="260" y="1480" font-size="12" text-anchor="middle" class="muted">小知</text>
+  <text x="401" y="1480" font-size="12" text-anchor="middle" class="accent">我的</text>
+</svg>

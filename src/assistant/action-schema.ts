@@ -4,6 +4,35 @@
  * 待办继续复用 entries(kind='task')；这里仅保存事件、关系与可撤销操作日志。
  * 所有迁移均为增量创建，旧 topic/entries 数据保持不变。
  */
+const ASSISTANT_OPERATION_TYPES = [
+  'create_todo', 'update_todo', 'complete_todo', 'create_event', 'update_event',
+  'append_event_update', 'rename_event', 'pin_event', 'link_todo_event',
+  'create_memory', 'activate_memory', 'supersede_memory', 'forget_memory',
+] as const;
+
+const ASSISTANT_OBJECT_TYPES = ['todo', 'event', 'event_update', 'relation', 'memory'] as const;
+
+function operationTableSql(name: string): string {
+  return `CREATE TABLE ${name} (
+    id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL,
+    operation_key TEXT NOT NULL,
+    operation_type TEXT NOT NULL CHECK (operation_type IN (${ASSISTANT_OPERATION_TYPES.map(value => `'${value}'`).join(', ')})),
+    object_type TEXT NOT NULL CHECK (object_type IN (${ASSISTANT_OBJECT_TYPES.map(value => `'${value}'`).join(', ')})),
+    object_id TEXT NOT NULL,
+    before_snapshot TEXT,
+    after_snapshot TEXT NOT NULL,
+    receipt_summary TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'committed' CHECK (status IN ('committed', 'undone')),
+    sequence INTEGER NOT NULL CHECK (sequence >= 0),
+    created_at INTEGER NOT NULL,
+    undone_at INTEGER,
+    FOREIGN KEY(request_id) REFERENCES assistant_requests(id),
+    UNIQUE(request_id, operation_key),
+    UNIQUE(request_id, sequence)
+  )`;
+}
+
 export const assistantActionSchema = `
   CREATE TABLE IF NOT EXISTS assistant_events (
     id TEXT PRIMARY KEY,
@@ -71,27 +100,7 @@ export const assistantActionSchema = `
   CREATE INDEX IF NOT EXISTS idx_assistant_object_relations_source
     ON assistant_object_relations(source_message_id);
 
-  CREATE TABLE IF NOT EXISTS assistant_operations (
-    id TEXT PRIMARY KEY,
-    request_id TEXT NOT NULL,
-    operation_key TEXT NOT NULL,
-    operation_type TEXT NOT NULL CHECK (operation_type IN (
-      'create_todo', 'update_todo', 'complete_todo', 'create_event', 'update_event',
-      'append_event_update', 'rename_event', 'pin_event', 'link_todo_event'
-    )),
-    object_type TEXT NOT NULL CHECK (object_type IN ('todo', 'event', 'event_update', 'relation')),
-    object_id TEXT NOT NULL,
-    before_snapshot TEXT,
-    after_snapshot TEXT NOT NULL,
-    receipt_summary TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'committed' CHECK (status IN ('committed', 'undone')),
-    sequence INTEGER NOT NULL CHECK (sequence >= 0),
-    created_at INTEGER NOT NULL,
-    undone_at INTEGER,
-    FOREIGN KEY(request_id) REFERENCES assistant_requests(id),
-    UNIQUE(request_id, operation_key),
-    UNIQUE(request_id, sequence)
-  );
+  ${operationTableSql('assistant_operations').replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS')};
   CREATE INDEX IF NOT EXISTS idx_assistant_operations_request
     ON assistant_operations(request_id, sequence);
   CREATE INDEX IF NOT EXISTS idx_assistant_operations_object
@@ -132,3 +141,44 @@ export const assistantActionSchema = `
   CREATE INDEX IF NOT EXISTS idx_assistant_decision_logs_created
     ON assistant_decision_logs(created_at DESC, request_id DESC);
 `;
+
+type OperationSchemaDatabase = {
+  getFirstAsync<T>(sql: string, ...args: any[]): Promise<T | null>;
+  execAsync(sql: string): Promise<void>;
+  withExclusiveTransactionAsync(task: (txn: OperationSchemaDatabase) => Promise<void>): Promise<void>;
+};
+
+/** SQLite 无法直接修改 CHECK；旧库需事务化重建操作表并保留全部撤销历史。 */
+export async function ensureAssistantOperationSchema(database: OperationSchemaDatabase): Promise<void> {
+  const row = await database.getFirstAsync<{ sql: string }>(
+    "SELECT sql FROM sqlite_master WHERE type='table' AND name='assistant_operations'",
+  );
+  if (!row || (row.sql.includes("'create_memory'") && row.sql.includes("'memory'"))) return;
+
+  await database.withExclusiveTransactionAsync(async (txn) => {
+    await txn.execAsync(`
+      DROP TABLE IF EXISTS assistant_operations_next;
+      ${operationTableSql('assistant_operations_next')};
+      INSERT INTO assistant_operations_next (
+        id, request_id, operation_key, operation_type, object_type, object_id,
+        before_snapshot, after_snapshot, receipt_summary, status, sequence, created_at, undone_at
+      ) SELECT
+        id, request_id, operation_key, operation_type, object_type, object_id,
+        before_snapshot, after_snapshot, receipt_summary, status, sequence, created_at, undone_at
+      FROM assistant_operations;
+    `);
+    const before = await txn.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM assistant_operations');
+    const after = await txn.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM assistant_operations_next');
+    if (Number(before?.count ?? 0) !== Number(after?.count ?? 0)) {
+      throw new Error('assistant_operations 迁移行数校验失败');
+    }
+    await txn.execAsync(`
+      DROP TABLE assistant_operations;
+      ALTER TABLE assistant_operations_next RENAME TO assistant_operations;
+      CREATE INDEX idx_assistant_operations_request
+        ON assistant_operations(request_id, sequence);
+      CREATE INDEX idx_assistant_operations_object
+        ON assistant_operations(object_type, object_id, created_at DESC);
+    `);
+  });
+}

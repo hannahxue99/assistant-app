@@ -26,6 +26,8 @@ import { inferTimePrecision } from './engine/calendar-projection';
 import { runSingleFlight, type SingleFlightState } from './engine/single-flight';
 import { assistantSchema } from './assistant/schema';
 import { assistantActionSchema } from './assistant/action-schema';
+import { ensureAssistantOperationSchema } from './assistant/action-schema';
+import { assistantMemorySchema } from './assistant/memory-schema';
 
 type DatabaseGlobal = typeof globalThis & {
   __assistantDatabaseRuntime?: SingleFlightState<SQLite.SQLiteDatabase>;
@@ -153,6 +155,8 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
   `);
   await database.execAsync(assistantSchema);
   await database.execAsync(assistantActionSchema);
+  await ensureAssistantOperationSchema(database);
+  await database.execAsync(assistantMemorySchema);
 
   const decisionLogColumns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(assistant_decision_logs)');
   if (!decisionLogColumns.some(column => column.name === 'error_detail')) {
