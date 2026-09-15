@@ -1,9 +1,8 @@
 /**
- * 「我的」页 — 主人页头 + 画像卡（原地编辑）+ 行内提醒开关 + 数据管理 + 统计 + 理解引擎入口
- * 设计：不开子页（理解引擎除外）；统计纯展示；导出直接调系统分享面板
+ * 「我的」页 — 长期记忆 + 助手与同步 + 待办通知 + 数据管理。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -15,13 +14,12 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { EditAction } from '../../src/components/EditAction';
 import { CalendarSyncSetting } from '../../src/components/CalendarSyncSetting';
+import { MemorySection } from '../../src/components/MemorySection';
 import { ImportFeedbackModal } from '../../src/components/ImportFeedbackModal';
 import { ImportPreviewModal, type ImportPreviewData } from '../../src/components/ImportPreviewModal';
 import {
@@ -44,6 +42,15 @@ import {
 import { importLegacyExport, previewLegacyImport } from '../../src/assistant/legacy-import';
 import { migrateLegacyEntriesToAssistantHistory } from '../../src/assistant/migration';
 import { migrateLegacyTopicsToEvents } from '../../src/assistant/event-migration';
+import { memorySectionState } from '../../src/assistant/memory-ui';
+import {
+  editMemory,
+  forgetMemory,
+  listActiveMemories,
+  undoMemoryUiAction,
+  type MemoryUiUndoToken,
+} from '../../src/assistant/memory-store';
+import type { AssistantMemory } from '../../src/assistant/memory-types';
 import {
   ensurePermissions,
   scheduleDailyNotifications,
@@ -64,9 +71,12 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [total, setTotal] = useState(0);
   const [days, setDays] = useState(0);
-  const [editing, setEditing] = useState(false);
-  const [goalsText, setGoalsText] = useState('');
-  const [avoidText, setAvoidText] = useState('');
+  const [memories, setMemories] = useState<AssistantMemory[]>([]);
+  const [memoryLoadedOnce, setMemoryLoadedOnce] = useState(false);
+  const [memoryLoading, setMemoryLoading] = useState(true);
+  const [memoryError, setMemoryError] = useState(false);
+  const [memoryBusyId, setMemoryBusyId] = useState<string | null>(null);
+  const [memoryUndo, setMemoryUndo] = useState<{ label: string; token: MemoryUiUndoToken } | null>(null);
   const [importCandidate, setImportCandidate] = useState<ImportCandidate | null>(null);
   const [importFileName, setImportFileName] = useState('');
   const [importing, setImporting] = useState(false);
@@ -75,16 +85,30 @@ export default function ProfileScreen() {
     message: string;
   } | null>(null);
 
+  const loadMemories = useCallback(async () => {
+    if (!memoryLoadedOnce) setMemoryLoading(true);
+    try {
+      setMemories(await listActiveMemories());
+      setMemoryLoadedOnce(true);
+      setMemoryError(false);
+    } catch {
+      setMemoryError(true);
+    } finally {
+      setMemoryLoading(false);
+    }
+  }, [memoryLoadedOnce]);
+
   const load = useCallback(async () => {
-    const [s, p, n, first] = await Promise.all([getSettings(), getProfile(), countEntries(), firstEntryAt()]);
-    setSettings(s);
-    setProfile(p);
-    setTotal(n);
-    setDays(first ? Math.max(1, Math.floor((Date.now() - first) / 86400000) + 1) : 0);
-    setGoalsText(p.goals.join('；'));
-    setAvoidText(p.avoid.join('；'));
-    setEditing(false); // 未保存的编辑在离开/重进时丢弃
-  }, []);
+    void loadMemories();
+    const results = await Promise.allSettled([getSettings(), getProfile(), countEntries(), firstEntryAt()]);
+    if (results[0].status === 'fulfilled') setSettings(results[0].value);
+    if (results[1].status === 'fulfilled') setProfile(results[1].value);
+    if (results[2].status === 'fulfilled') setTotal(results[2].value);
+    if (results[3].status === 'fulfilled') {
+      const first = results[3].value;
+      setDays(first ? Math.max(1, Math.floor((Date.now() - first) / 86400000) + 1) : 0);
+    }
+  }, [loadMemories]);
 
   useFocusEffect(
     useCallback(() => {
@@ -92,19 +116,56 @@ export default function ProfileScreen() {
     }, [load]),
   );
 
-  if (!settings || !profile) return null;
+  useEffect(() => {
+    if (!memoryUndo) return;
+    const timer = setTimeout(() => setMemoryUndo(null), 6000);
+    return () => clearTimeout(timer);
+  }, [memoryUndo]);
 
-  async function saveImage() {
-    const goals = goalsText.split(/[；;，,]/).map((s) => s.trim()).filter(Boolean);
-    const avoid = avoidText.split(/[；;，,]/).map((s) => s.trim()).filter(Boolean);
-    const next = { ...profile!, goals, avoid };
-    await saveProfile(next);
-    setProfile(next);
-    setEditing(false);
+  async function saveLongTermMemory(memory: AssistantMemory, content: string) {
+    setMemoryBusyId(memory.id);
+    try {
+      const result = await editMemory({ id: memory.id, expectedRevision: memory.revision, content });
+      if (!result) {
+        await loadMemories();
+        Alert.alert('这条记忆刚有新变化', '已经刷新为最新内容，请再修改一次。');
+        return;
+      }
+      await loadMemories();
+      setMemoryUndo({ label: '已更新一条记忆', token: result.undo });
+    } finally {
+      setMemoryBusyId(null);
+    }
+  }
+
+  async function forgetLongTermMemory(memory: AssistantMemory) {
+    setMemoryBusyId(memory.id);
+    try {
+      const result = await forgetMemory({ id: memory.id, expectedRevision: memory.revision });
+      if (!result) {
+        await loadMemories();
+        Alert.alert('这条记忆刚有新变化', '已经刷新为最新内容。');
+        return;
+      }
+      setMemories(current => current.filter(item => item.id !== memory.id));
+      setMemoryUndo({ label: '已忘记', token: result.undo });
+    } finally {
+      setMemoryBusyId(null);
+    }
+  }
+
+  async function undoLastMemoryAction() {
+    const current = memoryUndo;
+    if (!current) return;
+    setMemoryUndo(null);
+    const restored = await undoMemoryUiAction(current.token);
+    await loadMemories();
+    if (!restored) Alert.alert('无法撤销', '这条记忆已经发生了新的变化。');
   }
 
   async function toggleNotify(key: 'notifyMorning' | 'notifyEvening', v: boolean) {
-    const prev = profile!;
+    if (!profile) return;
+    const prev = profile;
     const next = { ...prev, [key]: v };
     setProfile(next);
     await saveProfile(next);
@@ -250,7 +311,9 @@ export default function ProfileScreen() {
     setImporting(false);
   }
 
-  const llmStatus = !settings.llmEnabled
+  const llmStatus = !settings
+    ? { label: '读取中', warn: false }
+    : !settings.llmEnabled
     ? { label: '已关闭', warn: false }
     : settings.llmKey
       ? { label: '已开启', warn: false }
@@ -259,59 +322,26 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.h1}>主人</Text>
+        <Text style={styles.h1}>我的</Text>
         <Text style={styles.companion}>
-          {total > 0 ? `已陪伴 ${days} 天 · 共 ${total} 条记录` : '还没有记录，去小知说第一句话吧'}
+          {days > 0 ? `已陪伴 ${days} 天 · ${memories.length} 条长期记忆` : `${memories.length} 条长期记忆`}
         </Text>
 
-        {/* 画像卡 */}
-        <View style={styles.profileCard}>
-          <View style={styles.profileHead}>
-            <Text style={styles.cardTitle}>画像 · 让助手更懂你</Text>
-            <EditAction
-              editing={editing}
-              level="module"
-              onPress={editing ? saveImage : () => setEditing(true)}
-              label="编辑画像"
-            />
-          </View>
-          {editing ? (
-            <>
-              <Text style={styles.label}>近期目标</Text>
-              <TextInput
-                style={[styles.input, styles.inputEditing]}
-                value={goalsText}
-                onChangeText={setGoalsText}
-                placeholder="如：学英语；每周跑步两次；读完三本书"
-                placeholderTextColor={theme.colors.textDim}
-                multiline
-              />
-              <Text style={styles.label}>想少做的事</Text>
-              <TextInput
-                style={styles.input}
-                value={avoidText}
-                onChangeText={setAvoidText}
-                placeholder="如：熬夜；刷短视频"
-                placeholderTextColor={theme.colors.textDim}
-                multiline
-              />
-              <Text style={styles.hint}>不保存退出，改动丢弃</Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.label}>近期目标</Text>
-              <Text style={styles.profileValue}>
-                {profile.goals.length ? profile.goals.join('；') : '未设置，点右上角铅笔补充'}
-              </Text>
-              <Text style={styles.label}>想少做的事</Text>
-              <Text style={styles.profileValue}>
-                {profile.avoid.length ? profile.avoid.join('；') : '未设置'}
-              </Text>
-            </>
-          )}
-        </View>
+        <MemorySection
+          state={memorySectionState({
+            loadedOnce: memoryLoadedOnce,
+            loading: memoryLoading,
+            error: memoryError,
+            memoryCount: memories.length,
+          })}
+          memories={memories}
+          busyId={memoryBusyId}
+          onRetry={() => void loadMemories()}
+          onSave={saveLongTermMemory}
+          onForget={forgetLongTermMemory}
+        />
 
-        {/* 分组列表 */}
+        <Text style={styles.sectionLabel}>助手与同步</Text>
         <Pressable style={styles.row} onPress={() => router.push('/settings/llm')}>
           <Text style={styles.rowLabel}>理解引擎</Text>
           <Text style={[styles.rowValue, llmStatus.warn && { color: theme.colors.red }]}>
@@ -319,34 +349,39 @@ export default function ProfileScreen() {
           </Text>
         </Pressable>
 
+        <CalendarSyncSetting />
+
+        <Text style={styles.sectionLabel}>待办通知</Text>
         <View style={styles.notifyCard}>
           <View style={styles.notifyRow}>
             <Text style={styles.rowLabel}>早 8:00 晨间待办</Text>
             <Switch
-              value={profile.notifyMorning}
+              value={profile?.notifyMorning ?? false}
+              disabled={!profile}
               onValueChange={(v) => toggleNotify('notifyMorning', v)}
               trackColor={{ false: theme.colors.border, true: theme.colors.accentSoft }}
-              thumbColor={profile.notifyMorning ? theme.colors.accent : '#fff'}
+              thumbColor={profile?.notifyMorning ? theme.colors.accent : '#fff'}
             />
           </View>
           <View style={styles.notifyRow}>
             <Text style={styles.rowLabel}>晚 21:00 夜间待办</Text>
             <Switch
-              value={profile.notifyEvening}
+              value={profile?.notifyEvening ?? false}
+              disabled={!profile}
               onValueChange={(v) => toggleNotify('notifyEvening', v)}
               trackColor={{ false: theme.colors.border, true: theme.colors.accentSoft }}
-              thumbColor={profile.notifyEvening ? theme.colors.accent : '#fff'}
+              thumbColor={profile?.notifyEvening ? theme.colors.accent : '#fff'}
             />
           </View>
         </View>
+        <Text style={styles.sectionHint}>仅控制现有待办汇总，不包含首页的教练提醒。</Text>
 
-        <CalendarSyncSetting />
         <Text style={styles.sectionLabel}>数据管理</Text>
         <View style={styles.dataCard}>
           <Pressable
-            style={[styles.dataRow, total === 0 && { opacity: 0.45 }]}
+            style={[styles.dataRow, total === 0 && memories.length === 0 && { opacity: 0.45 }]}
             onPress={doExport}
-            disabled={total === 0}
+            disabled={total === 0 && memories.length === 0}
           >
             <Text style={styles.rowLabel}>导出数据</Text>
             <Text style={styles.rowValue}>Markdown ⤴</Text>
@@ -359,10 +394,18 @@ export default function ProfileScreen() {
 
         <View style={[styles.row, styles.rowStatic]}>
           <Text style={[styles.rowLabel, { color: theme.colors.textDim }]}>统计</Text>
-          <Text style={styles.rowValue}>{total} 条 · {days} 天</Text>
+          <Text style={styles.rowValue}>{total} 条内容 · {memories.length} 条长期记忆 · {days} 天</Text>
         </View>
 
       </ScrollView>
+      {memoryUndo && (
+        <View style={styles.undoBar}>
+          <Text style={styles.undoLabel}>{memoryUndo.label}</Text>
+          <Pressable accessibilityRole="button" onPress={() => void undoLastMemoryAction()} style={styles.undoAction}>
+            <Text style={styles.undoText}>撤销</Text>
+          </Pressable>
+        </View>
+      )}
       <ImportPreviewModal
         visible={!!importCandidate}
         fileName={importFileName}
@@ -387,7 +430,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
-  content: { padding: 16, paddingBottom: 40, gap: 10 },
+  content: { padding: 16, paddingBottom: 72, gap: 10 },
   h1: { fontSize: 18, fontWeight: '700', color: theme.colors.text },
   companion: { fontSize: theme.font.small, color: theme.colors.textDim, marginTop: -6 },
   profileCard: {
@@ -438,6 +481,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     marginBottom: -3,
   },
+  sectionHint: { color: theme.colors.textDim, fontSize: 12, lineHeight: 18, paddingHorizontal: 4, marginTop: -5 },
   dataCard: {
     backgroundColor: theme.colors.card,
     borderWidth: 1,
@@ -469,4 +513,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 7,
   },
+  undoBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 12,
+    minHeight: 48,
+    paddingLeft: 16,
+    paddingRight: 6,
+    borderRadius: 14,
+    backgroundColor: theme.colors.text,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...theme.shadow,
+  },
+  undoLabel: { color: '#fff', fontSize: theme.font.small },
+  undoAction: { minWidth: 58, minHeight: 40, alignItems: 'center', justifyContent: 'center' },
+  undoText: { color: '#F7B58E', fontSize: theme.font.small, fontWeight: '700' },
 });
