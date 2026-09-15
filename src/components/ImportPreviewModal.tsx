@@ -90,6 +90,12 @@ export function ImportPreviewModal({
             ))}
           </View>
 
+          {!!current && (current.memoryAdded + current.memoryUpdated + current.memoryIgnored + current.memoryConflicts > 0) && (
+            <Text style={styles.memorySummary}>
+              长期记忆　新增 {current.memoryAdded} · 更新 {current.memoryUpdated} · 保留 {current.memoryIgnored + current.memoryConflicts}
+            </Text>
+          )}
+
           <View style={styles.noteRow}>
             <Ionicons name="shield-checkmark-outline" size={17} color={theme.colors.green} />
             <Text style={styles.note}>
@@ -158,6 +164,7 @@ const styles = StyleSheet.create({
   metric: { flex: 1, alignItems: 'center', backgroundColor: theme.colors.bg, borderRadius: 10, paddingVertical: 9 },
   metricValue: { color: theme.colors.text, fontSize: 18, fontWeight: '700' },
   metricLabel: { color: theme.colors.textDim, fontSize: 11, marginTop: 2 },
+  memorySummary: { color: theme.colors.textDim, fontSize: 12, lineHeight: 18, textAlign: 'center' },
   noteRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
   note: { flex: 1, color: theme.colors.textDim, fontSize: 12, lineHeight: 18 },
   actions: { flexDirection: 'row', gap: 8 },

@@ -217,6 +217,34 @@ async function main() {
     '撤销整轮时应移除本轮新建的显式和候选记忆');
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM assistant_memory_sources WHERE created_at=5000").get().count, 0,
     '撤销整轮时应同时移除本轮记忆来源');
+
+  const importedMemory = {
+    id: 'memory-imported', category: 'long_term_goal', content: '建立长期陪伴型私人 AI',
+    normalizedContent: '建立长期陪伴型私人ai', status: 'active', sensitivity: 'ordinary',
+    admissionBasis: 'explicit', supersededById: null, revision: 2,
+    createdAt: 6000, updatedAt: 6100, activatedAt: 6000, supersededAt: null, forgottenAt: null,
+  };
+  const importEnvelope = {
+    format: 'assistant-app-export-v2', schemaVersion: 2, exportedAt: 6200, entryCount: 0,
+    payload: {
+      entries: [], profile: { name: '', goals: [], avoid: [], notifyMorning: true, notifyEvening: true },
+      topicPreferences: [], memories: [importedMemory],
+      memorySources: [{
+        id: 'source-imported', memoryId: importedMemory.id, sourceMessageId: 'message-from-other-device',
+        evidence: '建立长期陪伴型私人 AI', createdAt: 6000,
+      }],
+    },
+  };
+  const importResult = await db.importBackup(importEnvelope);
+  assert.equal(importResult.memoryAdded, 1, '新版备份应恢复长期记忆');
+  assert.equal((await memoryStore.getMemory(importedMemory.id)).revision, 2);
+  assert.equal(sqlite.prepare('SELECT source_message_id FROM assistant_memory_sources WHERE id=?').get('source-imported').source_message_id, null,
+    '来源消息未包含在备份中时应保留证据但清空失效外键');
+  const repeatedImport = await db.importBackup(importEnvelope);
+  assert.equal(repeatedImport.memoryIgnored, 1, '重复导入相同记忆必须幂等');
+  const exported = load('src/engine/backup-format.ts').parseImportableMarkdown(await db.exportMarkdown());
+  assert.ok(exported.payload.memories.some(memory => memory.id === importedMemory.id), '新版导出必须包含长期记忆');
+  assert.ok(exported.payload.memorySources.some(source => source.id === 'source-imported'), '新版导出必须包含后台来源');
   console.log('assistant memory database tests passed');
   sqlite.close();
 }

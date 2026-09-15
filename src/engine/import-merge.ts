@@ -1,4 +1,5 @@
 import type { BackupPayload, Entry, Profile } from '../types';
+import type { AssistantMemory } from '../assistant/memory-types';
 
 export type EntryImportAction = 'add' | 'update' | 'ignore' | 'keep-local';
 
@@ -16,6 +17,39 @@ export interface ImportPreview {
   ignored: number;
   conflicts: number;
   profileWillImport: boolean;
+  memoryAdded: number;
+  memoryUpdated: number;
+  memoryIgnored: number;
+  memoryConflicts: number;
+}
+
+export type MemoryImportAction = 'add' | 'update' | 'ignore' | 'keep-local';
+
+export interface MemoryImportDecision {
+  action: MemoryImportAction;
+  incoming: AssistantMemory;
+  local: AssistantMemory | null;
+}
+
+export function memoriesHaveSameContent(left: AssistantMemory, right: AssistantMemory): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+export function classifyMemoryImport(incoming: AssistantMemory, local: AssistantMemory | null): MemoryImportDecision {
+  if (!local) return { action: 'add', incoming, local };
+  if (memoriesHaveSameContent(incoming, local)) return { action: 'ignore', incoming, local };
+  if (incoming.revision > local.revision) return { action: 'update', incoming, local };
+  if (incoming.revision < local.revision) return { action: 'keep-local', incoming, local };
+  if (incoming.updatedAt > local.updatedAt) return { action: 'update', incoming, local };
+  return { action: 'keep-local', incoming, local };
+}
+
+export function buildMemoryImportDecisions(
+  incoming: AssistantMemory[],
+  local: AssistantMemory[],
+): MemoryImportDecision[] {
+  const localById = new Map(local.map(memory => [memory.id, memory]));
+  return incoming.map(memory => classifyMemoryImport(memory, localById.get(memory.id) ?? null));
 }
 
 export interface ImportResult extends ImportPreview {
@@ -87,6 +121,7 @@ export function summarizeImport(
   decisions: EntryImportDecision[],
   localProfile: Profile,
   incomingPayload: BackupPayload,
+  memoryDecisions: MemoryImportDecision[] = [],
 ): ImportPreview {
   return {
     added: decisions.filter((decision) => decision.action === 'add').length,
@@ -94,5 +129,9 @@ export function summarizeImport(
     ignored: decisions.filter((decision) => decision.action === 'ignore').length,
     conflicts: decisions.filter((decision) => decision.action === 'keep-local').length,
     profileWillImport: isDefaultProfile(localProfile) && !isDefaultProfile(incomingPayload.profile),
+    memoryAdded: memoryDecisions.filter(decision => decision.action === 'add').length,
+    memoryUpdated: memoryDecisions.filter(decision => decision.action === 'update').length,
+    memoryIgnored: memoryDecisions.filter(decision => decision.action === 'ignore').length,
+    memoryConflicts: memoryDecisions.filter(decision => decision.action === 'keep-local').length,
   };
 }

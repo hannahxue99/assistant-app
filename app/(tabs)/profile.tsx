@@ -272,7 +272,10 @@ export default function ProfileScreen() {
       } else {
         const result = await importBackup(importCandidate.envelope);
         affectedEntries = result.affectedEntries;
-        summary = `新增 ${result.added} 条，更新 ${result.updated} 条，忽略 ${result.ignored} 条，保留本地冲突 ${result.conflicts} 条。`;
+        const memorySummary = result.memoryAdded + result.memoryUpdated + result.memoryIgnored + result.memoryConflicts > 0
+          ? ` 长期记忆：新增 ${result.memoryAdded} 条，更新 ${result.memoryUpdated} 条，保留 ${result.memoryIgnored + result.memoryConflicts} 条。`
+          : '';
+        summary = `新增 ${result.added} 条，更新 ${result.updated} 条，忽略 ${result.ignored} 条，保留本地冲突 ${result.conflicts} 条。${memorySummary}`;
         try {
           await migrateLegacyEntriesToAssistantHistory();
           await migrateLegacyTopicsToEvents();

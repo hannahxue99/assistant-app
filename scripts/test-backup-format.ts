@@ -74,6 +74,28 @@ check('中文内容和全部字段可往返恢复', () => {
   if (actual.exportedAt !== 1788514200000) throw new Error('exportedAt mismatch');
 });
 
+check('长期记忆与后台来源可往返恢复，且不在可读区展示来源', () => {
+  const expected: BackupPayload = {
+    ...payload(),
+    memories: [{
+      id: 'memory-1', category: 'preference', content: '不喜欢早会', normalizedContent: '不喜欢早会',
+      status: 'active', sensitivity: 'ordinary', admissionBasis: 'explicit', supersededById: null,
+      revision: 1, createdAt: 100, updatedAt: 100, activatedAt: 100, supersededAt: null, forgottenAt: null,
+    }],
+    memorySources: [{ id: 'source-1', memoryId: 'memory-1', sourceMessageId: 'message-1', evidence: '不喜欢早会', createdAt: 100 }],
+  };
+  const md = buildImportableMarkdown('# 记录\n\n## 长期记忆\n\n- 不喜欢早会', expected, 200);
+  const readable = md.slice(0, md.indexOf('<!-- ASSISTANT_APP_EXPORT_V2'));
+  if (readable.includes('source-1') || readable.includes('message-1')) throw new Error('memory source leaked into readable markdown');
+  if (JSON.stringify(parseImportableMarkdown(md).payload) !== JSON.stringify(expected)) throw new Error('memory payload mismatch');
+});
+
+check('旧 V2 备份缺少长期记忆字段时仍可导入', () => {
+  const oldPayload = payload();
+  const parsed = parseImportableMarkdown(buildImportableMarkdown('# 旧备份', oldPayload, 200));
+  if (parsed.payload.memories !== undefined || parsed.payload.memorySources !== undefined) throw new Error('old payload compatibility changed');
+});
+
 check('原文包含注释结束符时仍可安全往返', () => {
   const expected = payload([entry({ rawText: '保留 --> 这个文本 -- 不截断' })]);
   const md = buildImportableMarkdown('# 记录', expected, 1788514200000);

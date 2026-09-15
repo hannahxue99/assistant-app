@@ -14,11 +14,13 @@ import type {
 import { buildImportableMarkdown } from './engine/backup-format';
 import {
   buildImportDecisions,
+  buildMemoryImportDecisions,
   isDefaultProfile,
   summarizeImport,
   type ImportPreview,
   type ImportResult,
 } from './engine/import-merge';
+import type { AssistantMemory, AssistantMemorySource } from './assistant/memory-types';
 import { sortTopicGroups } from './engine/topic-order';
 import { deriveEditedEntry } from './engine/edit-derived';
 import { calendarSchema } from './engine/calendar-schema';
@@ -306,6 +308,56 @@ function rowToProfile(r: any): Profile {
     notifyMorning: !!r.notify_morning,
     notifyEvening: !!r.notify_evening,
   };
+}
+
+function rowToAssistantMemory(r: any): AssistantMemory {
+  return {
+    id: r.id,
+    category: r.category,
+    content: r.content,
+    normalizedContent: r.normalized_content,
+    status: r.status,
+    sensitivity: r.sensitivity,
+    admissionBasis: r.admission_basis,
+    supersededById: r.superseded_by_id ?? null,
+    revision: Number(r.revision),
+    createdAt: Number(r.created_at),
+    updatedAt: Number(r.updated_at),
+    activatedAt: r.activated_at ?? null,
+    supersededAt: r.superseded_at ?? null,
+    forgottenAt: r.forgotten_at ?? null,
+  };
+}
+
+function rowToAssistantMemorySource(r: any): AssistantMemorySource {
+  return {
+    id: r.id,
+    memoryId: r.memory_id,
+    sourceMessageId: r.source_message_id ?? null,
+    evidence: r.evidence,
+    createdAt: Number(r.created_at),
+  };
+}
+
+async function insertOrReplaceImportedMemory(
+  d: SQLite.SQLiteDatabase,
+  memory: AssistantMemory,
+): Promise<void> {
+  await d.runAsync(
+    `INSERT INTO assistant_memories (
+       id, category, content, normalized_content, status, sensitivity, admission_basis,
+       superseded_by_id, revision, created_at, updated_at, activated_at, superseded_at, forgotten_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET category=excluded.category, content=excluded.content,
+       normalized_content=excluded.normalized_content, status=excluded.status,
+       sensitivity=excluded.sensitivity, admission_basis=excluded.admission_basis,
+       superseded_by_id=NULL, revision=excluded.revision, created_at=excluded.created_at,
+       updated_at=excluded.updated_at, activated_at=excluded.activated_at,
+       superseded_at=excluded.superseded_at, forgotten_at=excluded.forgotten_at`,
+    memory.id, memory.category, memory.content, memory.normalizedContent, memory.status,
+    memory.sensitivity, memory.admissionBasis, memory.revision, memory.createdAt,
+    memory.updatedAt, memory.activatedAt, memory.supersededAt, memory.forgottenAt,
+  );
 }
 
 async function insertImportedEntry(d: SQLite.SQLiteDatabase, entry: Entry): Promise<void> {
@@ -905,13 +957,18 @@ export async function saveSettings(s: Settings): Promise<void> {
 
 export async function previewBackupImport(payload: BackupPayload): Promise<ImportPreview> {
   const d = await getDb();
-  const [rows, profileRow] = await Promise.all([
+  const [rows, profileRow, memoryRows] = await Promise.all([
     d.getAllAsync<any>('SELECT * FROM entries'),
     d.getFirstAsync<any>('SELECT * FROM profile WHERE id=1'),
+    d.getAllAsync<any>('SELECT * FROM assistant_memories'),
   ]);
   const localEntries = rows.map(rowToEntry);
   const decisions = buildImportDecisions(payload.entries, localEntries);
-  return summarizeImport(decisions, rowToProfile(profileRow), payload);
+  const memoryDecisions = buildMemoryImportDecisions(
+    payload.memories ?? [],
+    memoryRows.map(rowToAssistantMemory),
+  );
+  return summarizeImport(decisions, rowToProfile(profileRow), payload, memoryDecisions);
 }
 
 /**
@@ -926,20 +983,29 @@ export async function importBackup(envelope: BackupEnvelope): Promise<ImportResu
     ignored: 0,
     conflicts: 0,
     profileWillImport: false,
+    memoryAdded: 0,
+    memoryUpdated: 0,
+    memoryIgnored: 0,
+    memoryConflicts: 0,
   };
   let affectedIds: string[] = [];
   let affectedEntries: Entry[] = [];
   let profileImported = false;
 
   await d.withExclusiveTransactionAsync(async (txn) => {
-    const [rows, profileRow] = await Promise.all([
+    const [rows, profileRow, memoryRows] = await Promise.all([
       txn.getAllAsync<any>('SELECT * FROM entries'),
       txn.getFirstAsync<any>('SELECT * FROM profile WHERE id=1'),
+      txn.getAllAsync<any>('SELECT * FROM assistant_memories'),
     ]);
     const localEntries = rows.map(rowToEntry);
     const localProfile = rowToProfile(profileRow);
     const decisions = buildImportDecisions(envelope.payload.entries, localEntries);
-    preview = summarizeImport(decisions, localProfile, envelope.payload);
+    const memoryDecisions = buildMemoryImportDecisions(
+      envelope.payload.memories ?? [],
+      memoryRows.map(rowToAssistantMemory),
+    );
+    preview = summarizeImport(decisions, localProfile, envelope.payload, memoryDecisions);
     affectedIds = [];
     affectedEntries = [];
     const importedAt = Date.now();
@@ -996,6 +1062,31 @@ export async function importBackup(envelope: BackupEnvelope): Promise<ImportResu
       );
     }
 
+    for (const decision of memoryDecisions) {
+      if (decision.action === 'add' || decision.action === 'update') {
+        await insertOrReplaceImportedMemory(txn, decision.incoming);
+      }
+    }
+    for (const decision of memoryDecisions) {
+      if (decision.action !== 'add' && decision.action !== 'update') continue;
+      const successor = decision.incoming.supersededById;
+      if (!successor) continue;
+      const exists = await txn.getFirstAsync<{ id: string }>('SELECT id FROM assistant_memories WHERE id=?', successor);
+      if (exists) await txn.runAsync('UPDATE assistant_memories SET superseded_by_id=? WHERE id=?', successor, decision.incoming.id);
+    }
+    for (const source of envelope.payload.memorySources ?? []) {
+      const memory = await txn.getFirstAsync<{ id: string }>('SELECT id FROM assistant_memories WHERE id=?', source.memoryId);
+      if (!memory) continue;
+      const sourceMessage = source.sourceMessageId
+        ? await txn.getFirstAsync<{ id: string }>('SELECT id FROM assistant_messages WHERE id=?', source.sourceMessageId)
+        : null;
+      await txn.runAsync(
+        `INSERT OR IGNORE INTO assistant_memory_sources
+         (id, memory_id, source_message_id, evidence, created_at) VALUES (?, ?, ?, ?, ?)`,
+        source.id, source.memoryId, sourceMessage?.id ?? null, source.evidence, source.createdAt,
+      );
+    }
+
     for (const entryId of affectedIds) {
       await txn.runAsync(
         `INSERT INTO notification_sync_queue (entry_id, queued_at) VALUES (?, ?)
@@ -1034,14 +1125,18 @@ export async function clearPendingNotificationSync(entryIds: string[]): Promise<
 
 export async function exportMarkdown(): Promise<string> {
   const d = await getDb();
-  const [rows, profile, preferenceRows] = await Promise.all([
+  const [rows, profile, preferenceRows, memoryRows, memorySourceRows] = await Promise.all([
     d.getAllAsync<any>('SELECT * FROM entries ORDER BY created_at ASC'),
     getProfile(),
     d.getAllAsync<{ topic: string; pinned_at: number | null }>(
       'SELECT topic, pinned_at FROM topic_preferences WHERE pinned_at IS NOT NULL ORDER BY topic ASC',
     ),
+    d.getAllAsync<any>('SELECT * FROM assistant_memories ORDER BY created_at ASC, id ASC'),
+    d.getAllAsync<any>('SELECT * FROM assistant_memory_sources ORDER BY created_at ASC, id ASC'),
   ]);
   const entries = rows.map(rowToEntry);
+  const memories = memoryRows.map(rowToAssistantMemory);
+  const memorySources = memorySourceRows.map(rowToAssistantMemorySource);
   let md = '# 我的个人助手记录\n\n';
   for (const e of entries) {
     const ts = new Date(e.createdAt).toLocaleString('zh-CN');
@@ -1055,10 +1150,16 @@ export async function exportMarkdown(): Promise<string> {
     if (e.dueAt) md += `时间：${new Date(e.dueAt).toLocaleString('zh-CN')}\n\n`;
     md += '---\n\n';
   }
+  const activeMemories = memories.filter(memory => memory.status === 'active');
+  if (activeMemories.length > 0) {
+    md += '## 长期记忆\n\n';
+    for (const memory of activeMemories) md += `- ${memory.content}\n`;
+    md += '\n---\n\n';
+  }
   const topicPreferences: TopicPreference[] = preferenceRows.map((row) => ({
     topic: row.topic,
     pinnedAt: row.pinned_at!,
   }));
-  const payload: BackupPayload = { entries, profile, topicPreferences };
+  const payload: BackupPayload = { entries, profile, topicPreferences, memories, memorySources };
   return buildImportableMarkdown(md, payload);
 }

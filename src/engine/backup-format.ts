@@ -5,6 +5,7 @@ import type {
   Profile,
   TopicPreference,
 } from '../types';
+import type { AssistantMemory, AssistantMemorySource } from '../assistant/memory-types';
 
 const FORMAT = 'assistant-app-export-v2' as const;
 const SCHEMA_VERSION = 2 as const;
@@ -106,6 +107,32 @@ function validateTopicPreference(value: unknown, index: number): TopicPreference
   return value as unknown as TopicPreference;
 }
 
+function validateMemory(value: unknown, index: number): AssistantMemory {
+  if (!isObject(value)) invalid(`第 ${index + 1} 条长期记忆不是对象`);
+  if (typeof value.id !== 'string' || !value.id) invalid(`第 ${index + 1} 条长期记忆缺少 ID`);
+  if (!['preference', 'principle', 'long_term_goal', 'important_relationship', 'recurring_pattern'].includes(String(value.category))) invalid(`第 ${index + 1} 条长期记忆类别无效`);
+  if (typeof value.content !== 'string' || !value.content.trim() || value.content.length > 200 || typeof value.normalizedContent !== 'string') invalid(`第 ${index + 1} 条长期记忆内容无效`);
+  if (!['candidate', 'active', 'superseded', 'forgotten'].includes(String(value.status))) invalid(`第 ${index + 1} 条长期记忆状态无效`);
+  if (!['ordinary', 'sensitive'].includes(String(value.sensitivity))) invalid(`第 ${index + 1} 条长期记忆敏感级别无效`);
+  if (!['explicit', 'repeated', 'confirmed', 'inferred', 'manual_edit', 'profile_migration'].includes(String(value.admissionBasis))) invalid(`第 ${index + 1} 条长期记忆准入方式无效`);
+  if (value.supersededById !== null && typeof value.supersededById !== 'string') invalid(`第 ${index + 1} 条长期记忆替代关系无效`);
+  if (typeof value.revision !== 'number' || !Number.isInteger(value.revision) || value.revision < 1) invalid(`第 ${index + 1} 条长期记忆版本无效`);
+  if (!isFiniteTimestamp(value.createdAt) || !isFiniteTimestamp(value.updatedAt)
+    || !isNullableTimestamp(value.activatedAt) || !isNullableTimestamp(value.supersededAt)
+    || !isNullableTimestamp(value.forgottenAt)) invalid(`第 ${index + 1} 条长期记忆时间无效`);
+  return value as unknown as AssistantMemory;
+}
+
+function validateMemorySource(value: unknown, index: number): AssistantMemorySource {
+  if (!isObject(value)
+    || typeof value.id !== 'string' || !value.id
+    || typeof value.memoryId !== 'string' || !value.memoryId
+    || (value.sourceMessageId !== null && typeof value.sourceMessageId !== 'string')
+    || typeof value.evidence !== 'string' || !value.evidence.trim() || value.evidence.length > 200
+    || !isFiniteTimestamp(value.createdAt)) invalid(`第 ${index + 1} 条长期记忆来源无效`);
+  return value as unknown as AssistantMemorySource;
+}
+
 function validateEnvelope(value: unknown): BackupEnvelope {
   if (!isObject(value)) invalid('备份数据不是对象');
   if (value.schemaVersion !== SCHEMA_VERSION) {
@@ -136,6 +163,28 @@ function validateEnvelope(value: unknown): BackupEnvelope {
     topics.add(preference.topic);
   }
 
+  const memories = value.payload.memories === undefined
+    ? undefined
+    : Array.isArray(value.payload.memories) ? value.payload.memories.map(validateMemory) : invalid('长期记忆列表无效');
+  const memorySources = value.payload.memorySources === undefined
+    ? undefined
+    : Array.isArray(value.payload.memorySources) ? value.payload.memorySources.map(validateMemorySource) : invalid('长期记忆来源列表无效');
+  if (memories) {
+    const memoryIds = new Set<string>();
+    for (const memory of memories) {
+      if (memoryIds.has(memory.id)) invalid(`备份中存在重复长期记忆 ID：${memory.id}`);
+      memoryIds.add(memory.id);
+    }
+    const sourceIds = new Set<string>();
+    for (const source of memorySources ?? []) {
+      if (sourceIds.has(source.id)) invalid(`备份中存在重复长期记忆来源 ID：${source.id}`);
+      if (!memoryIds.has(source.memoryId)) invalid(`长期记忆来源指向不存在的记忆：${source.memoryId}`);
+      sourceIds.add(source.id);
+    }
+  } else if (memorySources?.length) {
+    invalid('备份包含长期记忆来源，但缺少长期记忆');
+  }
+
   return {
     format: FORMAT,
     schemaVersion: SCHEMA_VERSION,
@@ -145,6 +194,8 @@ function validateEnvelope(value: unknown): BackupEnvelope {
       entries,
       profile: validateProfile(value.payload.profile),
       topicPreferences,
+      ...(memories === undefined ? {} : { memories }),
+      ...(memorySources === undefined ? {} : { memorySources }),
     },
   };
 }
