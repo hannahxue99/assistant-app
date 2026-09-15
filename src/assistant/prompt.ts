@@ -5,7 +5,7 @@ export interface AssistantPromptMessage {
   content: string;
 }
 
-export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v3-resilient-json';
+export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v4-commitment-todo';
 
 export const ASSISTANT_OPERATION_FORMAT_GUIDE = [
   '候选操作格式（字段名必须完全一致）：',
@@ -44,6 +44,9 @@ export function buildAssistantPromptMessages(input: {
     '- 只有上下文列出的候选 ID 可以用于更新；新对象只能使用 event_1、todo_1 这类本轮局部引用。',
     '- 分别判断两件事：是否要维护持续主线的状态、是否形成用户准备执行的具体下一步。事件与待办不是二选一，同一句话可以同时更新事件并建立关联待办。',
     '- 待办只来自用户已经表达或接受的行动；你自己提出而用户尚未接受的建议不是待办。一次性行动只建待办。',
+    '- 判断待办看语义，不看句式：用户明确表示自己将在未来时间执行具体动作，就是行动承诺，即使用陈述句而不是“提醒我”，也应创建待办。',
+    '- 若行动承诺属于已有持续主线，同时提出事件更新、待办和二者关联；把计划写进事件 current_state 不能替代 create_todo。',
+    '- 可能性、假设、预测、他人的动作，以及用户尚未接受的建议都不是用户行动承诺，不得据此创建待办。',
     '- 只有明确持续跟进、多阶段，或已有主线出现新状态时才建/更新事件。',
     '- 不确定是否属于某个已有事件时不要静默合并；自然回复只追问一个必要问题，operations 留空。',
     '',
@@ -59,6 +62,10 @@ export function buildAssistantPromptMessages(input: {
     '}',
     '',
     ...ASSISTANT_OPERATION_FORMAT_GUIDE,
+    '',
+    '操作判断示例（参考时间 2026-09-15，时区 Asia/Shanghai）：',
+    '- 已有“公积金贷款还款”事件，用户说“下个月11号还款10万” => update_event + create_todo + link_todo_event；待办包含 "date_text":"下个月11号","due_date":"2026-10-11","time_precision":"date"。',
+    '- 用户说“银行说下个月可能调整利率” => 这是外部可能性，可以维护相关事件，但不创建用户待办。',
     '',
     '分段规则：只有用户明显换到另一个独立话题时才用 split_before_user；普通追问、补充、修正和相似话题延续都使用 continue。',
     '摘要只保留事实、决定、未决问题和用户当前立场，不写寒暄，不把推测写成事实。',

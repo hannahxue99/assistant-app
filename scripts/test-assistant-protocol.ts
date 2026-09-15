@@ -124,6 +124,9 @@ check(prompt[0].role === 'system', '首条必须是系统约束');
 check(prompt[0].content.includes('不得在自然回复中声称操作已经成功'), '自然回复必须禁止虚假完成');
 check(prompt[0].content.includes('operations'), '提示词必须声明结构化候选动作');
 check(prompt[0].content.includes('事件与待办不是二选一'), '提示词必须允许同轮事件与待办');
+check(prompt[0].content.includes('陈述句而不是“提醒我”'), '提示词必须把用户明确的未来行动承诺识别为待办');
+check(prompt[0].content.includes('下个月11号还款10万'), '提示词必须包含真实遗漏场景的正例');
+check(prompt[0].content.includes('银行说下个月可能调整利率'), '提示词必须包含非用户承诺的反例');
 check(prompt[0].content.includes('due_date'), '提示词必须要求模型解析日期');
 check(prompt.at(-1)?.content === '那继续梳理。', '最近原话必须保持角色与顺序');
 check(extractPartialJsonStringField('{"reply":"第一行\\n第', 'reply') === '第一行\n第',
