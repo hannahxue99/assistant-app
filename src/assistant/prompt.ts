@@ -5,7 +5,23 @@ export interface AssistantPromptMessage {
   content: string;
 }
 
-export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v2-model-date';
+export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v3-resilient-json';
+
+export const ASSISTANT_OPERATION_FORMAT_GUIDE = [
+  '候选操作格式（字段名必须完全一致）：',
+  '- create_todo: {"key":"...","type":"create_todo","todo_ref":"todo_1","text":"...","date_status":"resolved|ambiguous|absent","date_text":"日期原文","due_date":"YYYY-MM-DD","due_time":"HH:mm","time_precision":"date|dateTime"}',
+  '- update_todo: 同上但使用 todo_id；只改内容时可以省略全部日期字段。',
+  '- 更新已有待办时，只有用户改变日期才提供日期字段；date_status=absent 仅表示用户明确要求清除已有日期。日期含糊时先追问，不提交日期更新。',
+  '- complete_todo: {"key":"...","type":"complete_todo","todo_id":"候选ID"}',
+  '- create_event: {"key":"...","type":"create_event","event_ref":"event_1","title":"稳定主线标题","current_state":"当前状态"}',
+  '- update_event: {"key":"...","type":"update_event","event_id":"候选ID","current_state":"新状态"}',
+  '- append_event_update: {"key":"...","type":"append_event_update","event_id":"候选ID"或"event_ref":"event_1","content":"有意义的新进展"}',
+  '- rename_event: {"key":"...","type":"rename_event","event_id":"候选ID","title":"新标题"}',
+  '- pin_event: {"key":"...","type":"pin_event","event_id":"候选ID","pinned":true|false}',
+  '- link_todo_event: {"key":"...","type":"link_todo_event","todo_id":"候选ID"或"todo_ref":"todo_1","event_id":"候选ID"或"event_ref":"event_1"}',
+  '- 日期由你根据参考时间和用户时区解析：resolved 必须保留 date_text 并给 due_date；只有明确时刻才给 due_time 且精度为 dateTime；仅日期精度为 date。',
+  '- 日期含糊时用 ambiguous，只保留 date_text，不猜 due_date；没有日期时用 absent，其他日期字段全部省略。没有合适操作时返回空数组。',
+] as const;
 
 export function buildAssistantPromptMessages(input: {
   contextBlock: string;
@@ -42,17 +58,7 @@ export function buildAssistantPromptMessages(input: {
     '  "operations": [最多6个候选操作]',
     '}',
     '',
-    '候选操作格式（字段名必须完全一致）：',
-    '- create_todo: {"key":"...","type":"create_todo","todo_ref":"todo_1","text":"...","date_status":"resolved|ambiguous|absent","date_text":"日期原文","due_date":"YYYY-MM-DD","due_time":"HH:mm","time_precision":"date|dateTime"}',
-    '- update_todo: 同上但使用 todo_id；只改内容时可以省略全部日期字段。',
-    '- 更新已有待办时，只有用户改变日期才提供日期字段；date_status=absent 仅表示用户明确要求清除已有日期。日期含糊时先追问，不提交日期更新。',
-    '- complete_todo: {"key":"...","type":"complete_todo","todo_id":"候选ID"}',
-    '- create_event: {"key":"...","type":"create_event","event_ref":"event_1","title":"稳定主线标题","current_state":"当前状态"}',
-    '- update_event: {"key":"...","type":"update_event","event_id":"候选ID","current_state":"新状态"}',
-    '- append_event_update: {"key":"...","type":"append_event_update","event_id":"候选ID"或"event_ref":"event_1","content":"有意义的新进展"}',
-    '- rename_event / pin_event / link_todo_event：只在用户意图明确时使用；关联动作分别提供候选 ID 或同轮 *_ref。',
-    '- 日期由你根据参考时间和用户时区解析：resolved 必须保留 date_text 并给 due_date；只有明确时刻才给 due_time 且精度为 dateTime；仅日期精度为 date。',
-    '- 日期含糊时用 ambiguous，只保留 date_text，不猜 due_date；没有日期时用 absent，其他日期字段全部省略。没有合适操作时返回空数组。',
+    ...ASSISTANT_OPERATION_FORMAT_GUIDE,
     '',
     '分段规则：只有用户明显换到另一个独立话题时才用 split_before_user；普通追问、补充、修正和相似话题延续都使用 continue。',
     '摘要只保留事实、决定、未决问题和用户当前立场，不写寒暄，不把推测写成事实。',

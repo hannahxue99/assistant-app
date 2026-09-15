@@ -1,6 +1,8 @@
 import { withDatabaseConnection } from '../db';
 import type { AssistantOperation, AssistantOperationProposal } from './action-types';
 import type { AssistantProviderMetadata } from './provider';
+import type { AssistantRepairStatus } from './provider';
+import type { AssistantProtocolWarning } from './protocol';
 
 export interface AssistantDecisionContextRefs {
   recentMessageIds: string[];
@@ -18,6 +20,16 @@ export interface AssistantDecisionLog {
   validation: unknown;
   committedOperationIds: string[];
   errorCode: string | null;
+  errorDetail: string | null;
+  repairCount: number;
+  repairStatus: AssistantRepairStatus;
+  protocolWarnings: AssistantProtocolWarning[];
+}
+
+function boundedErrorDetail(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const compact = value.trim().replace(/\s+/g, ' ');
+  return compact.length <= 500 ? compact : `${compact.slice(0, 499)}…`;
 }
 
 export async function beginAssistantDecisionLog(input: {
@@ -44,7 +56,8 @@ export async function beginAssistantDecisionLog(input: {
          proposed_operations_json='[]', validation_json='{}', committed_operation_ids_json='[]',
          provider_started_at=NULL, provider_completed_at=NULL, commit_completed_at=NULL,
          finish_reason=NULL, prompt_tokens=NULL, completion_tokens=NULL, total_tokens=NULL,
-         error_code=NULL, updated_at=excluded.updated_at`,
+         error_code=NULL, error_detail=NULL, repair_count=0, repair_status='not_needed',
+         protocol_warnings_json='[]', updated_at=excluded.updated_at`,
       input.requestId, input.userMessageId, input.promptVersion, input.model,
       input.referenceAt, input.timeZone, JSON.stringify(input.contextRefs), createdAt, createdAt,
     );
@@ -68,12 +81,15 @@ export async function recordAssistantModelDecision(input: {
     `UPDATE assistant_decision_logs SET
        proposed_operations_json=?, status='model_received',
        provider_started_at=?, provider_completed_at=?, finish_reason=?,
-       prompt_tokens=?, completion_tokens=?, total_tokens=?, updated_at=?
+       prompt_tokens=?, completion_tokens=?, total_tokens=?, repair_count=?, repair_status=?,
+       protocol_warnings_json=?, updated_at=?
      WHERE request_id=?`,
     JSON.stringify(input.operations), input.metadata?.startedAt ?? null,
     input.metadata?.completedAt ?? updatedAt, input.metadata?.finishReason ?? null,
     input.metadata?.promptTokens ?? null, input.metadata?.completionTokens ?? null,
-    input.metadata?.totalTokens ?? null, updatedAt, input.requestId,
+    input.metadata?.totalTokens ?? null, input.metadata?.repairCount ?? 0,
+    input.metadata?.repairStatus ?? 'not_needed', JSON.stringify(input.metadata?.protocolWarnings ?? []),
+    updatedAt, input.requestId,
   ));
 }
 
@@ -108,16 +124,27 @@ export async function recordAssistantDecisionCommit(input: {
   ));
 }
 
-export async function recordAssistantDecisionFailure(
-  requestId: string,
-  errorCode: string,
-  updatedAt = Date.now(),
-): Promise<void> {
+export async function recordAssistantDecisionFailure(input: {
+  requestId: string;
+  errorCode: string;
+  errorDetail?: string | null;
+  repairCount?: number;
+  repairStatus?: AssistantRepairStatus;
+  protocolWarnings?: AssistantProtocolWarning[];
+  updatedAt?: number;
+}): Promise<void> {
+  const updatedAt = input.updatedAt ?? Date.now();
   await withDatabaseConnection(async database => database.runAsync(
-    `UPDATE assistant_decision_logs SET status='failed', error_code=?, updated_at=? WHERE request_id=?`,
-    errorCode,
+    `UPDATE assistant_decision_logs SET status='failed', error_code=?, error_detail=?,
+       repair_count=COALESCE(?, repair_count), repair_status=COALESCE(?, repair_status),
+       protocol_warnings_json=COALESCE(?, protocol_warnings_json), updated_at=? WHERE request_id=?`,
+    input.errorCode,
+    boundedErrorDetail(input.errorDetail),
+    input.repairCount ?? null,
+    input.repairStatus ?? null,
+    input.protocolWarnings ? JSON.stringify(input.protocolWarnings) : null,
     updatedAt,
-    requestId,
+    input.requestId,
   ));
 }
 
@@ -132,6 +159,10 @@ export async function getAssistantDecisionLog(requestId: string): Promise<Assist
       validation: JSON.parse(row.validation_json || '{}'),
       committedOperationIds: JSON.parse(row.committed_operation_ids_json || '[]'),
       errorCode: row.error_code ?? null,
+      errorDetail: row.error_detail ?? null,
+      repairCount: Number(row.repair_count ?? 0),
+      repairStatus: row.repair_status ?? 'not_needed',
+      protocolWarnings: JSON.parse(row.protocol_warnings_json || '[]'),
     };
   });
 }

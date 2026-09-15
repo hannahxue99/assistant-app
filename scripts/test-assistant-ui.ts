@@ -8,6 +8,7 @@ import {
   assistantReceiptState,
   assistantReceiptTarget,
   groupAssistantReceiptOperations,
+  shouldFollowAssistantEnd,
 } from '../src/assistant/ui-state';
 import { ASSISTANT_EMPTY_DESCRIPTION } from '../src/assistant/ui-copy';
 import type { AssistantMessage } from '../src/assistant/types';
@@ -74,6 +75,12 @@ check(canLoadOlderAssistantMessages('idle', false), '空闲时允许自动加载
 check(!canLoadOlderAssistantMessages('error', false), '分页失败后必须停止自动重试');
 check(canLoadOlderAssistantMessages('error', true), '用户点击重试后允许再次分页');
 check(!canLoadOlderAssistantMessages('loading', true), '分页进行中必须阻止重复请求');
+check(shouldFollowAssistantEnd({ contentHeight: 1200, viewportHeight: 600, offsetY: 540 }),
+  '距离末端很近时应跟随流式增长');
+check(!shouldFollowAssistantEnd({ contentHeight: 1200, viewportHeight: 600, offsetY: 300 }),
+  '用户上滑阅读历史时不得强制拉回末端');
+check(shouldFollowAssistantEnd({ contentHeight: 400, viewportHeight: 600, offsetY: 0 }),
+  '内容不足一屏时应视为位于末端');
 
 function operation(overrides: Partial<AssistantOperation> = {}): AssistantOperation {
   return {

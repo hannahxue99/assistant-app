@@ -154,6 +154,20 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
   await database.execAsync(assistantSchema);
   await database.execAsync(assistantActionSchema);
 
+  const decisionLogColumns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(assistant_decision_logs)');
+  if (!decisionLogColumns.some(column => column.name === 'error_detail')) {
+    await database.execAsync('ALTER TABLE assistant_decision_logs ADD COLUMN error_detail TEXT;');
+  }
+  if (!decisionLogColumns.some(column => column.name === 'repair_count')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN repair_count INTEGER NOT NULL DEFAULT 0;");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'repair_status')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN repair_status TEXT NOT NULL DEFAULT 'not_needed';");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'protocol_warnings_json')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN protocol_warnings_json TEXT NOT NULL DEFAULT '[]';");
+  }
+
   // 旧版本只有 created_at。先探测列再迁移，避免重复 ALTER 导致启动失败。
   const columns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(entries)');
   if (!columns.some((column) => column.name === 'updated_at')) {

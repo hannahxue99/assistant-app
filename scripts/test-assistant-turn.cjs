@@ -92,12 +92,53 @@ async function main() {
   }), /offline/);
   const failed = (await store.listMessages({ limit: 20 })).find(item => item.requestId === 'request-2');
   assert.equal(failed.status, 'failed', '模型失败后原话应保留为可重试');
+  const networkFailureLog = sqlite.prepare("SELECT * FROM assistant_decision_logs WHERE request_id='request-2'").get();
+  assert.equal(networkFailureLog.error_detail, 'offline', '失败日志必须保留精确且有界的错误原因');
 
   provider = async () => ({ reply: '网络恢复了。', segment: { action: 'continue' }, operations: [] });
   const retried = await orchestrator.retryAssistantTurn({ requestId: 'request-2', settings });
   assert.equal(retried.assistantMessage.content, '网络恢复了。');
   assert.equal((await store.listMessages({ limit: 20 })).filter(item => item.requestId === 'request-2').length, 2,
     '重试应复用用户消息，只新增一条助手回复');
+
+  provider = async () => {
+    const error = Object.assign(new Error('operations[0]: resolved 缺少 due_date'), {
+      code: 'invalid-response',
+      diagnostics: {
+        repairCount: 1,
+        repairStatus: 'failed',
+        protocolWarnings: ['reply_execution_claim'],
+      },
+    });
+    throw error;
+  };
+  await assert.rejects(orchestrator.sendAssistantTurn({
+    requestId: 'request-protocol-failure', content: '下个月11号还款10万', source: 'text', settings, createdAt: 2500,
+  }), /resolved 缺少 due_date/);
+  const protocolFailureLog = sqlite.prepare(
+    "SELECT * FROM assistant_decision_logs WHERE request_id='request-protocol-failure'",
+  ).get();
+  assert.equal(protocolFailureLog.error_detail, 'operations[0]: resolved 缺少 due_date');
+  assert.equal(protocolFailureLog.repair_count, 1);
+  assert.equal(protocolFailureLog.repair_status, 'failed');
+  assert.deepEqual(JSON.parse(protocolFailureLog.protocol_warnings_json), ['reply_execution_claim']);
+
+  provider = async () => ({
+    reply: '好的，已为你创建待办。',
+    segment: { action: 'continue' },
+    operations: [],
+    providerMetadata: {
+      startedAt: 2600, completedAt: 2650, finishReason: 'stop',
+      promptTokens: 10, completionTokens: 5, totalTokens: 15,
+      repairCount: 0, repairStatus: 'not_needed', protocolWarnings: ['reply_execution_claim'],
+    },
+  });
+  const falseClaim = await orchestrator.sendAssistantTurn({
+    requestId: 'request-false-claim', content: '帮我记一下', source: 'text', settings, createdAt: 2600,
+  });
+  assert.equal(falseClaim.operations.length, 0);
+  assert.ok(falseClaim.assistantMessage.content.includes('没有形成可保存的操作'),
+    '没有任何合法操作时不得保存模型的虚假成功措辞');
 
   provider = async () => ({
     reply: '我们换到新话题。',
@@ -210,6 +251,11 @@ async function main() {
     reply: '这只是自然回复，不能单独保存。',
     segment: { action: 'continue' },
     operations: [{ key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '不应留下的待办', dateStatus: 'absent' }],
+    providerMetadata: {
+      startedAt: 4900, completedAt: 4950, finishReason: 'stop',
+      promptTokens: 10, completionTokens: 5, totalTokens: 15,
+      repairCount: 1, repairStatus: 'succeeded', protocolWarnings: [],
+    },
   });
   await assert.rejects(orchestrator.sendAssistantTurn({
     requestId: 'request-rollback', content: '记一个不应留下的待办', source: 'text', settings, createdAt: 5000,
@@ -221,6 +267,9 @@ async function main() {
     '事务失败时不得留下助手成功回复');
   assert.equal(sqlite.prepare("SELECT status FROM assistant_requests WHERE id='request-rollback'").get().status, 'failed',
     '事务失败后用户原话应保留为可重试状态');
+  const rollbackLog = sqlite.prepare("SELECT * FROM assistant_decision_logs WHERE request_id='request-rollback'").get();
+  assert.equal(rollbackLog.repair_count, 1, '事务失败不得覆盖已经记录的模型修复元数据');
+  assert.equal(rollbackLog.repair_status, 'succeeded');
 
   console.log('assistant turn tests passed');
   sqlite.close();

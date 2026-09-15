@@ -6,6 +6,20 @@ import type {
 } from './types';
 import type { AssistantOperation } from './action-types';
 
+export interface AssistantScrollMetrics {
+  contentHeight: number;
+  viewportHeight: number;
+  offsetY: number;
+}
+
+export function shouldFollowAssistantEnd(
+  metrics: AssistantScrollMetrics,
+  threshold = 96,
+): boolean {
+  const distance = metrics.contentHeight - metrics.viewportHeight - metrics.offsetY;
+  return distance <= threshold;
+}
+
 /** 合并刷新页和历史页；以 id 去重，以更新时间较新的状态覆盖旧状态。 */
 export function mergeAssistantMessages(
   current: AssistantMessage[],

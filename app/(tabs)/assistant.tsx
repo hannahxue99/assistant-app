@@ -19,6 +19,7 @@ import {
   hasPendingAssistantReply,
   isAssistantComposerDisabled,
   mergeAssistantMessages,
+  shouldFollowAssistantEnd,
 } from '../../src/assistant/ui-state';
 import { retryAssistantTurn, sendAssistantTurn } from '../../src/assistant/orchestrator';
 import { listOperationsByRequestIds } from '../../src/assistant/action-store';
@@ -65,6 +66,8 @@ export default function AssistantScreen() {
   const mountedRef = useRef(true);
   const loadedOnceRef = useRef(false);
   const olderLoadRef = useRef<AssistantOlderLoadStatus>('idle');
+  const pendingEndScrollRef = useRef<{ animated: boolean } | null>(null);
+  const followEndRef = useRef(true);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [initialLoad, setInitialLoad] = useState<AssistantInitialLoadStatus>('loading');
   const [retryingInitialLoad, setRetryingInitialLoad] = useState(false);
@@ -76,6 +79,18 @@ export default function AssistantScreen() {
   const [streamingReplies, setStreamingReplies] = useState<Record<string, AssistantMessage>>({});
 
   const displayMessages = useMemo(() => mergeAssistantMessages(messages, Object.values(streamingReplies)), [messages, streamingReplies]);
+
+  const scrollToLatest = useCallback((animated: boolean, keepPending = true) => {
+    if (keepPending) pendingEndScrollRef.current = { animated };
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated }));
+  }, []);
+
+  const handleContentSizeChange = useCallback(() => {
+    const pending = pendingEndScrollRef.current;
+    if (!pending && !followEndRef.current) return;
+    pendingEndScrollRef.current = null;
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: pending?.animated ?? false }));
+  }, []);
 
   const updateStreamingReply = useCallback((requestId: string, createdAt: number, content: string) => {
     if (!mountedRef.current || !content) return;
@@ -95,8 +110,8 @@ export default function AssistantScreen() {
         errorCode: null,
       },
     }));
-    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: false }));
-  }, []);
+    if (followEndRef.current) scrollToLatest(false, false);
+  }, [scrollToLatest]);
 
   const clearStreamingReply = useCallback((requestId: string) => {
     setStreamingReplies((current) => {
@@ -130,8 +145,11 @@ export default function AssistantScreen() {
       : 'unknown');
     loadedOnceRef.current = true;
     setInitialLoad('ready');
-    if (scroll) requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
-  }, [attachOperations]);
+    if (scroll) {
+      followEndRef.current = true;
+      scrollToLatest(false);
+    }
+  }, [attachOperations, scrollToLatest]);
 
   useFocusEffect(
     useCallback(() => {
@@ -180,7 +198,8 @@ export default function AssistantScreen() {
     const userMessage = await saveUserTurn({ requestId, content, source });
     if (mountedRef.current) {
       setMessages(current => mergeAssistantMessages(current, [userMessage]));
-      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+      followEndRef.current = true;
+      scrollToLatest(true);
     }
     const job = sendAssistantTurn({
       requestId,
@@ -334,9 +353,15 @@ export default function AssistantScreen() {
               </Pressable>
             ) : null}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+            onContentSizeChange={handleContentSizeChange}
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
             onScroll={({ nativeEvent }) => {
+              followEndRef.current = shouldFollowAssistantEnd({
+                contentHeight: nativeEvent.contentSize.height,
+                viewportHeight: nativeEvent.layoutMeasurement.height,
+                offsetY: nativeEvent.contentOffset.y,
+              });
               if (nativeEvent.contentOffset.y < 32) void loadOlder();
             }}
             scrollEventThrottle={80}

@@ -181,11 +181,15 @@ async function runSavedTurn(input: {
       accepted: validation.accepted,
       rejected: validation.rejected,
     }));
+    const replyForCommit = output.providerMetadata?.protocolWarnings.includes('reply_execution_claim')
+      && validation.accepted.length === 0
+      ? '我理解了，但这次没有形成可保存的操作。请再告诉我一次要记录什么。'
+      : output.reply;
     const completed = await completeAssistantTurnWithActions({
       requestId: input.requestId,
       userMessageId: state.userMessage.id,
       userSource: state.userMessage.source,
-      reply: output.reply,
+      reply: replyForCommit,
       segment: output.segment,
       operations: validation.accepted,
       actionContext,
@@ -204,6 +208,9 @@ async function runSavedTurn(input: {
           ? output.providerMetadata.completedAt - output.providerMetadata.startedAt
           : null,
         tokens: output.providerMetadata?.totalTokens ?? null,
+        repairCount: output.providerMetadata?.repairCount ?? 0,
+        repairStatus: output.providerMetadata?.repairStatus ?? 'not_needed',
+        warnings: output.providerMetadata?.protocolWarnings ?? [],
       });
     }
     return {
@@ -218,7 +225,26 @@ async function runSavedTurn(input: {
     };
   } catch (error: any) {
     const errorCode = typeof error?.code === 'string' ? error.code : 'unknown';
-    await safelyLog(() => recordAssistantDecisionFailure(input.requestId, errorCode));
+    const diagnostics = error?.diagnostics;
+    const errorDetail = typeof error?.message === 'string' ? error.message : String(error ?? '未知错误');
+    await safelyLog(() => recordAssistantDecisionFailure({
+      requestId: input.requestId,
+      errorCode,
+      errorDetail,
+      repairCount: diagnostics?.repairCount,
+      repairStatus: diagnostics?.repairStatus,
+      protocolWarnings: diagnostics?.protocolWarnings,
+    }));
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn('[assistant-decision]', {
+        requestId: input.requestId,
+        status: 'failed',
+        errorCode,
+        errorDetail,
+        repairCount: diagnostics?.repairCount ?? 0,
+        repairStatus: diagnostics?.repairStatus ?? 'not_needed',
+      });
+    }
     await failTurn(input.requestId, errorCode).catch(() => {});
     throw error;
   }

@@ -18,6 +18,8 @@ export class AssistantProtocolError extends Error {
   }
 }
 
+export type AssistantProtocolWarning = 'reply_execution_claim';
+
 function parseJson(content: string): any {
   try {
     return JSON.parse(content);
@@ -38,9 +40,9 @@ function compactSummary(value: unknown): string | undefined {
   return normalized.length <= 240 ? normalized : `${normalized.slice(0, 239)}…`;
 }
 
-function assertNoExecutionClaim(reply: string): void {
-  const claim = /我(?:已经|已|刚刚)?(?:替你|帮你|为你)?(?:把[^，。！？]{0,30})?(?:记下|记录|保存|创建|新建|更新|修改|完成|置顶|关联)(?:了|好|完成)|(?:已经|已)(?:帮你|为你|替你)(?:把[^，。！？]{0,30})?(?:记下|记录|保存|创建|新建|更新|修改|完成|置顶|关联)|(?:待办|事件)(?:已经|已)(?:创建|保存|更新|完成)/;
-  if (claim.test(reply)) throw new AssistantProtocolError('自然回复不能声称候选操作已经成功');
+export function inspectAssistantReplyWarnings(reply: string): AssistantProtocolWarning[] {
+  const claim = /我(?:已经|已|刚刚)?(?:替你|帮你|为你)?(?:把[^，。！？]{0,30})?(?:记下|记录|保存|创建|新建|更新|修改|完成|置顶|关联)(?:了|好|完成)|(?:已经|已)(?:帮你|为你|替你)(?:把[^，。！？]{0,30})?(?:记下|记录|保存|创建|新建|更新|修改|完成|置顶|关联)|(?:待办|事件)(?:已经|已)(?:创建|保存|更新|完成)|(?:^|[，。！？；])(?:好的?[，,]?)?(?:已经|已)?(?:帮你|替你|为你)?(?:记下|记录|保存|创建|新建|更新|修改|完成|置顶|关联)(?:了|好|完成)/;
+  return claim.test(reply) ? ['reply_execution_claim'] : [];
 }
 
 function requiredText(value: unknown, field: string, limit: number): string {
@@ -205,7 +207,16 @@ function parseOperations(value: unknown): AssistantOperationProposal[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) throw new AssistantProtocolError('operations 必须是数组');
   if (value.length > 6) throw new AssistantProtocolError('单轮候选操作不能超过 6 个');
-  const operations = value.map(parseOperation);
+  const operations = value.map((operation, index) => {
+    try {
+      return parseOperation(operation);
+    } catch (error) {
+      if (error instanceof AssistantProtocolError) {
+        throw new AssistantProtocolError(`operations[${index}]: ${error.message}`);
+      }
+      throw error;
+    }
+  });
   const keys = new Set(operations.map(operation => operation.key));
   if (keys.size !== operations.length) throw new AssistantProtocolError('单轮候选操作键不能重复');
   return operations;
@@ -216,7 +227,6 @@ export function parseAssistantTurnOutput(content: string): AssistantTurnOutput {
   if (!raw || typeof raw !== 'object') throw new AssistantProtocolError('模型返回缺少对象');
   const reply = typeof raw.reply === 'string' ? raw.reply.trim() : '';
   if (!reply) throw new AssistantProtocolError('模型返回缺少自然回复');
-  assertNoExecutionClaim(reply);
   const action = raw.segment?.action;
   if (action !== 'continue' && action !== 'split_before_user') {
     throw new AssistantProtocolError('模型返回了非法分段动作');

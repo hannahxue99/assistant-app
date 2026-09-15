@@ -87,6 +87,10 @@ async function main() {
     const row = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table);
     assert.equal(row?.name, table, `${table} 应在数据库初始化时创建`);
   }
+  const decisionLogColumns = new Set(sqlite.prepare('PRAGMA table_info(assistant_decision_logs)').all().map(row => row.name));
+  for (const column of ['error_detail', 'repair_count', 'repair_status', 'protocol_warnings_json']) {
+    assert.ok(decisionLogColumns.has(column), `决策日志必须包含 ${column}`);
+  }
 
   sqlite.prepare(`INSERT INTO conversation_segments (
     id, summary, status, started_at, ended_at, updated_at
