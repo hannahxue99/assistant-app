@@ -426,6 +426,35 @@ export async function completeAssistantTaskWithDatabase(
   return getEntryWithDatabase(database, input.id);
 }
 
+export async function restoreAssistantTaskWithDatabase(
+  database: SQLite.SQLiteDatabase,
+  snapshot: Entry,
+  updatedAt: number,
+): Promise<Entry | null> {
+  const result = await database.runAsync(
+    `UPDATE entries SET raw_text=?, kind=?, summary=?, due_at=?, remind_at=?, topic=?, tags=?, persons=?,
+       parse_status=?, parse_source=?, corrected_from=?, updated_at=?, revision_at=MAX(revision_at+1, ?),
+       done=?, done_at=?, source=?
+     WHERE id=?`,
+    snapshot.rawText, snapshot.kind, snapshot.summary, snapshot.dueAt, snapshot.remindAt,
+    snapshot.topic, JSON.stringify(snapshot.tags), JSON.stringify(snapshot.persons),
+    snapshot.parseStatus, snapshot.parseSource, snapshot.correctedFrom, updatedAt, updatedAt,
+    snapshot.done, snapshot.doneAt, snapshot.source, snapshot.id,
+  );
+  if (result.changes === 0) return null;
+  await syncFtsWithDatabase(database, snapshot.id);
+  return getEntryWithDatabase(database, snapshot.id);
+}
+
+export async function deleteAssistantTaskWithDatabase(
+  database: SQLite.SQLiteDatabase,
+  id: string,
+): Promise<void> {
+  await database.runAsync('DELETE FROM entries WHERE id=?', id);
+  await database.runAsync('DELETE FROM entries_fts WHERE entry_id=?', id);
+  // calendar_delete 已写入补偿队列；不可删除 calendar_jobs。
+}
+
 /** 批量插入（供测试/恢复） */
 export async function insertEntries(items: NewEntryInput[]): Promise<Entry[]> {
   const out: Entry[] = [];

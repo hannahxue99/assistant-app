@@ -71,6 +71,8 @@ async function main() {
   const assistantStore = load('src/assistant/store.ts');
   const eventStore = load('src/assistant/event-store.ts');
   const eventMigration = load('src/assistant/event-migration.ts');
+  const actionStore = load('src/assistant/action-store.ts');
+  const actionUndo = load('src/assistant/action-undo.ts');
   await db.initDatabase();
 
   const expectedTables = [
@@ -207,6 +209,89 @@ async function main() {
   }, countsBeforeRetry, '重复迁移不得改变事件、进展或关系数量');
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM entries WHERE topic='换房计划'").get().count, 2,
     '旧 entries.topic 必须保留作为回滚来源');
+
+  const undoUser = await assistantStore.saveUserTurn({
+    requestId: 'request-undo-create', content: '持续跟进搬家，周六打包', source: 'text', createdAt: 4000,
+  });
+  const undoCreated = await actionStore.completeAssistantTurnWithActions({
+    requestId: 'request-undo-create',
+    userMessageId: undoUser.id,
+    userSource: undoUser.source,
+    reply: '我们继续处理搬家。',
+    segment: { action: 'continue' },
+    operations: [
+      { key: 'event', type: 'create_event', eventRef: 'event_1', title: '搬家计划', currentState: '准备打包' },
+      { key: 'progress', type: 'append_event_update', event: { kind: 'local', ref: 'event_1' }, content: '开始准备打包' },
+      { key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '周六打包', dueAt: 5000 },
+      { key: 'link', type: 'link_todo_event', todo: { kind: 'local', ref: 'todo_1' }, event: { kind: 'local', ref: 'event_1' } },
+    ],
+    actionContext: { events: [], todos: [], explicitEventId: null, segmentEventId: null },
+    createdAt: 4000,
+  });
+  const createdTodoId = undoCreated.operations.find(item => item.operationType === 'create_todo').objectId;
+  const createdEventId = undoCreated.operations.find(item => item.operationType === 'create_event').objectId;
+  assert.equal((await actionUndo.undoAssistantRequest('request-undo-create', 4100)).status, 'undone');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM entries WHERE id=?').get(createdTodoId).count, 0,
+    '撤销新建待办应移除该待办');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM assistant_events WHERE id=?').get(createdEventId).count, 0,
+    '撤销新建事件应移除事件及本轮进展');
+  assert.ok(sqlite.prepare('SELECT entry_id FROM calendar_jobs WHERE entry_id=?').get(createdTodoId),
+    '删除待办后必须保留日历补偿队列');
+  assert.equal((await actionUndo.undoAssistantRequest('request-undo-create', 4200)).status, 'already-undone',
+    '重复撤销必须幂等');
+
+  const mortgageBeforeUndo = await eventStore.getEvent(firstEvent.id);
+  const stateUser = await assistantStore.saveUserTurn({
+    requestId: 'request-undo-state', content: '房贷现在剩 20 万', source: 'text', createdAt: 4300,
+  });
+  await actionStore.completeAssistantTurnWithActions({
+    requestId: 'request-undo-state',
+    userMessageId: stateUser.id,
+    userSource: stateUser.source,
+    reply: '房贷状态有了变化。',
+    segment: { action: 'continue' },
+    operations: [{ key: 'state', type: 'update_event', eventId: firstEvent.id, currentState: '现在剩 20 万' }],
+    actionContext: {
+      events: [{
+        id: mortgageBeforeUndo.id, title: mortgageBeforeUndo.title,
+        currentState: mortgageBeforeUndo.currentState, aliases: [], linkedTodoTexts: [],
+        revision: mortgageBeforeUndo.revision, updatedAt: mortgageBeforeUndo.updatedAt, score: 1,
+      }],
+      todos: [], explicitEventId: firstEvent.id, segmentEventId: null,
+    },
+    createdAt: 4300,
+  });
+  assert.equal((await actionUndo.undoAssistantRequest('request-undo-state', 4400)).status, 'undone');
+  assert.equal((await eventStore.getEvent(firstEvent.id)).currentState, mortgageBeforeUndo.currentState,
+    '撤销状态更新应恢复操作前状态');
+
+  const conflictTodo = await db.insertEntry({ rawText: '整理合同', source: 'text', createdAt: 4500 }, {
+    kind: 'task', summary: '整理合同', dueAt: null, tags: [], topic: null, persons: [],
+  });
+  const conflictUser = await assistantStore.saveUserTurn({
+    requestId: 'request-undo-conflict', content: '改成整理贷款合同', source: 'text', createdAt: 4600,
+  });
+  await actionStore.completeAssistantTurnWithActions({
+    requestId: 'request-undo-conflict',
+    userMessageId: conflictUser.id,
+    userSource: conflictUser.source,
+    reply: '内容需要调整。',
+    segment: { action: 'continue' },
+    operations: [{ key: 'update', type: 'update_todo', todoId: conflictTodo.id, text: '整理贷款合同' }],
+    actionContext: {
+      events: [],
+      todos: [{
+        id: conflictTodo.id, text: conflictTodo.summary, dueAt: null,
+        revisionAt: conflictTodo.revisionAt, updatedAt: conflictTodo.updatedAt, score: 1,
+      }],
+      explicitEventId: null, segmentEventId: null,
+    },
+    createdAt: 4600,
+  });
+  await db.setDone(conflictTodo.id, true);
+  assert.equal((await actionUndo.undoAssistantRequest('request-undo-conflict', 4700)).status, 'conflict',
+    '本轮后对象发生变化时必须拒绝撤销');
+  assert.equal((await db.getEntry(conflictTodo.id)).summary, '整理贷款合同', '冲突撤销不得覆盖较新状态');
 
   console.log('assistant action database schema tests passed');
   sqlite.close();
