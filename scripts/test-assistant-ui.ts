@@ -2,6 +2,7 @@ import {
   assistantFailureLabel,
   canLoadOlderAssistantMessages,
   canRetryAssistantMessage,
+  hasPendingAssistantReply,
   isAssistantComposerDisabled,
   mergeAssistantMessages,
 } from '../src/assistant/ui-state';
@@ -59,6 +60,8 @@ check(canRetryAssistantMessage(missingKey, [missingKey], 'configured'), '配置�
 check(assistantFailureLabel(missingKey, false) === '尚未回复', '未配置时只说明尚未回复');
 
 const sending = { ...message('sending', 24), status: 'sending' as const };
+check(hasPendingAssistantReply([sending]), '发送中的用户消息应标记为等待回复');
+check(!hasPendingAssistantReply([latestFailure]), '失败消息不应继续标记为等待回复');
 check(isAssistantComposerDisabled('loading', []), '首次加载期间输入应禁用');
 check(isAssistantComposerDisabled('error', []), '首次加载失败时输入应禁用');
 check(isAssistantComposerDisabled('ready', [sending]), '有回复处理中时输入应禁用');

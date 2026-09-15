@@ -46,8 +46,11 @@ export function isAssistantComposerDisabled(
   initialLoad: AssistantInitialLoadStatus,
   messages: AssistantMessage[],
 ): boolean {
-  return initialLoad !== 'ready'
-    || messages.some(item => item.role === 'user' && item.status === 'sending');
+  return initialLoad !== 'ready' || hasPendingAssistantReply(messages);
+}
+
+export function hasPendingAssistantReply(messages: AssistantMessage[]): boolean {
+  return messages.some(item => item.role === 'user' && item.status === 'sending');
 }
 
 export function canLoadOlderAssistantMessages(

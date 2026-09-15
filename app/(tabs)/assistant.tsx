@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   canRetryAssistantMessage,
   canLoadOlderAssistantMessages,
+  hasPendingAssistantReply,
   isAssistantComposerDisabled,
   mergeAssistantMessages,
 } from '../../src/assistant/ui-state';
@@ -112,8 +113,11 @@ export default function AssistantScreen() {
 
   async function send(content: string, source: 'text' | 'voice') {
     const requestId = makeRequestId();
-    await saveUserTurn({ requestId, content, source });
-    await loadLatest(true);
+    const userMessage = await saveUserTurn({ requestId, content, source });
+    if (mountedRef.current) {
+      setMessages(current => mergeAssistantMessages(current, [userMessage]));
+      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+    }
     const job = sendAssistantTurn({ requestId, content, source });
     try {
       await job;
@@ -146,6 +150,7 @@ export default function AssistantScreen() {
   }
 
   const composerDisabled = isAssistantComposerDisabled(initialLoad, messages);
+  const composerProcessing = hasPendingAssistantReply(messages);
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
@@ -215,7 +220,11 @@ export default function AssistantScreen() {
         )}
 
         <View style={styles.composerWrap}>
-          <AssistantComposer onSend={send} disabled={composerDisabled} />
+          <AssistantComposer
+            onSend={send}
+            disabled={composerDisabled}
+            processing={composerProcessing}
+          />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
