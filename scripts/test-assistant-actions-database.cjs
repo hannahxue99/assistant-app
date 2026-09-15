@@ -71,6 +71,8 @@ async function main() {
   const assistantStore = load('src/assistant/store.ts');
   const eventStore = load('src/assistant/event-store.ts');
   const eventMigration = load('src/assistant/event-migration.ts');
+  const legacyBackup = load('src/engine/legacy-backup.ts');
+  const legacyImport = load('src/assistant/legacy-import.ts');
   const actionStore = load('src/assistant/action-store.ts');
   const actionUndo = load('src/assistant/action-undo.ts');
   await db.initDatabase();
@@ -340,6 +342,75 @@ async function main() {
   assert.equal((await actionUndo.undoAssistantRequest('request-undo-conflict', 4700)).status, 'conflict',
     '本轮后对象发生变化时必须拒绝撤销');
   assert.equal((await db.getEntry(conflictTodo.id)).summary, '整理贷款合同', '冲突撤销不得覆盖较新状态');
+
+  const legacyEnvelope = legacyBackup.parseLegacyExportMarkdown(`# 我的个人助手记录
+
+## 待办 · 2025/8/21 09:20:00
+
+> 下周五之前把材料交了
+
+**理解**：提交材料
+
+主题：年度述职
+
+时间：2025/8/29 09:00:00
+
+---
+
+## 信息 · 2025/8/22 18:30:00
+
+> 述职材料已经完成初稿
+
+主题：年度述职
+
+---
+
+## 想法 · 2025/8/23 10:00:00
+
+> 复盘时可以先讲三个关键结果
+
+---
+`);
+  const legacyPreview = await legacyImport.previewLegacyImport(legacyEnvelope);
+  assert.equal(JSON.stringify(legacyPreview), JSON.stringify({
+    conversations: 3, todos: 1, events: 1, duplicates: 0,
+  }), '旧日志预览应分别统计对话、待办、事件和重复');
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM assistant_messages WHERE source='legacy'").get().count, 3,
+    '预览不得写入任何消息');
+
+  const importedLegacy = await legacyImport.importLegacyExport(legacyEnvelope);
+  assert.equal(importedLegacy.conversations, 3);
+  assert.equal(importedLegacy.todos, 1);
+  assert.equal(importedLegacy.events, 1);
+  const importedMessages = sqlite.prepare(
+    "SELECT content, created_at FROM assistant_messages WHERE source='legacy' AND created_at>=? ORDER BY created_at, id",
+  ).all(new Date(2025, 7, 21, 0, 0).getTime());
+  assert.deepEqual(importedMessages.map(row => row.content), [
+    '下周五之前把材料交了', '述职材料已经完成初稿', '复盘时可以先讲三个关键结果',
+  ], '旧原文必须按原时间进入小知历史且不生成助手回复');
+  const importedTodo = sqlite.prepare("SELECT * FROM entries WHERE summary='提交材料'").get();
+  assert.equal(importedTodo.kind, 'task');
+  assert.equal(importedTodo.due_at, new Date(2025, 7, 29, 9, 0).getTime(), '旧待办日期必须直接保留');
+  const importedEvent = sqlite.prepare("SELECT * FROM assistant_events WHERE title='年度述职'").get();
+  assert.equal(importedEvent.current_state, '述职材料已经完成初稿', '事件当前状态应取主题最新记录');
+  assert.equal(sqlite.prepare(
+    'SELECT COUNT(*) AS count FROM assistant_event_updates WHERE event_id=? AND stable_key LIKE ?',
+  ).get(importedEvent.id, 'legacy-import:%').count, 2, '主题内每条旧记录都应保留为事件进展');
+  assert.equal(sqlite.prepare(
+    "SELECT COUNT(*) AS count FROM assistant_object_relations WHERE from_type='todo' AND from_id=? AND to_id=?",
+  ).get(importedTodo.id, importedEvent.id).count, 1, '带主题旧待办应关联到对应事件');
+
+  const repeatPreview = await legacyImport.previewLegacyImport(legacyEnvelope);
+  assert.equal(JSON.stringify(repeatPreview), JSON.stringify({
+    conversations: 0, todos: 0, events: 0, duplicates: 3,
+  }), '重复导入前应明确显示全部记录已存在');
+  await legacyImport.importLegacyExport(legacyEnvelope);
+  assert.equal(sqlite.prepare(
+    "SELECT COUNT(*) AS count FROM assistant_messages WHERE content='下周五之前把材料交了'",
+  ).get().count, 1, '重复导入不得重复生成小知消息');
+  assert.equal(sqlite.prepare(
+    'SELECT COUNT(*) AS count FROM assistant_event_updates WHERE event_id=? AND stable_key LIKE ?',
+  ).get(importedEvent.id, 'legacy-import:%').count, 2, '重复导入不得重复生成事件进展');
 
   console.log('assistant action database schema tests passed');
   sqlite.close();

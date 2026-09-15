@@ -2,22 +2,12 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { withDatabaseConnection, withExclusiveDatabaseTransaction } from '../db';
 import { appendEventUpdate, createEvent, linkObjects } from './event-store';
+import { stableLocalHash } from './stable-id';
 
 type LegacyTopicRow = {
   topic: string;
   pinned_at: number | null;
 };
-
-function stableHash(value: string): string {
-  let first = 2166136261;
-  let second = 2246822519;
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    first = Math.imul(first ^ code, 16777619);
-    second = Math.imul(second ^ code, 3266489917);
-  }
-  return `${(first >>> 0).toString(36)}${(second >>> 0).toString(36)}`;
-}
 
 function migrationKey(topic: string): string {
   return `legacy-topic-v1:${topic}`;
@@ -51,7 +41,7 @@ async function migrateTopic(topicRow: LegacyTopicRow): Promise<boolean> {
     );
     if (!latest) return false;
 
-    const eventId = `legacy-event-${stableHash(topicRow.topic)}`;
+    const eventId = `legacy-event-${stableLocalHash(topicRow.topic)}`;
     const event = await createEvent({
       id: eventId,
       title: topicRow.topic,
@@ -64,7 +54,7 @@ async function migrateTopic(topicRow: LegacyTopicRow): Promise<boolean> {
       'SELECT id FROM assistant_messages WHERE legacy_entry_id=? LIMIT 1', latest.id,
     );
     await appendEventUpdate({
-      id: `legacy-update-${stableHash(topicRow.topic)}`,
+      id: `legacy-update-${stableLocalHash(topicRow.topic)}`,
       eventId: event.id,
       content: latest.summary || latest.raw_text,
       occurredAt: Number(latest.updated_at ?? latest.created_at),
@@ -82,7 +72,7 @@ async function migrateTopic(topicRow: LegacyTopicRow): Promise<boolean> {
     );
     for (const message of messages) {
       await linkObjects({
-        id: `legacy-source-${stableHash(`${topicRow.topic}:${message.id}`)}`,
+        id: `legacy-source-${stableLocalHash(`${topicRow.topic}:${message.id}`)}`,
         fromType: 'message',
         fromId: message.id,
         relationType: 'source',

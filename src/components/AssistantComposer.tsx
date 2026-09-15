@@ -13,6 +13,11 @@ import {
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
 
+import {
+  assistantComposerMode,
+  canSendAssistantComposer,
+  joinAssistantComposerText,
+} from '../assistant/composer-state';
 import { theme } from '../theme';
 
 interface AssistantComposerProps {
@@ -33,24 +38,31 @@ export function AssistantComposer({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const baseTextRef = useRef('');
   const finalTextRef = useRef('');
-  const pressingRef = useRef(false);
   const recognitionActiveRef = useRef(false);
   const usedVoiceRef = useRef(false);
 
   useEffect(() => () => {
-    pressingRef.current = false;
     if (recognitionActiveRef.current) ExpoSpeechRecognitionModule.abort();
     recognitionActiveRef.current = false;
   }, []);
 
+  useEffect(() => {
+    if (!disabled && !processing) return;
+    if (recognitionActiveRef.current) ExpoSpeechRecognitionModule.abort();
+    recognitionActiveRef.current = false;
+    setListening(false);
+  }, [disabled, processing]);
+
   useSpeechRecognitionEvent('result', (event) => {
     const transcript = event.results?.[0]?.transcript?.trim();
     if (!transcript) return;
-    if (event.isFinal) finalTextRef.current = joinText(finalTextRef.current, transcript);
+    if (event.isFinal) {
+      finalTextRef.current = joinAssistantComposerText(finalTextRef.current, transcript);
+    }
     const spoken = event.isFinal
       ? finalTextRef.current
-      : joinText(finalTextRef.current, transcript);
-    setText(joinText(baseTextRef.current, spoken));
+      : joinAssistantComposerText(finalTextRef.current, transcript);
+    setText(joinAssistantComposerText(baseTextRef.current, spoken));
     usedVoiceRef.current = true;
   });
 
@@ -67,7 +79,8 @@ export function AssistantComposer({
 
   async function submit() {
     const content = text.trim();
-    if (!content || sending || disabled || processing) return;
+    const unavailable = sending || disabled || processing;
+    if (!canSendAssistantComposer({ text: content, listening, unavailable })) return;
     const source = usedVoiceRef.current ? 'voice' : 'text';
     setSending(true);
     setSubmitError(null);
@@ -88,7 +101,7 @@ export function AssistantComposer({
   }
 
   async function startListening() {
-    if (listening || sending || disabled || processing) return;
+    if (recognitionActiveRef.current || sending || disabled || processing) return;
     try {
       setRecognitionError(null);
       if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
@@ -101,12 +114,12 @@ export function AssistantComposer({
         setRecognitionError('需要麦克风权限：设置 → 私人助手 → 打开麦克风');
         return;
       }
-      if (!pressingRef.current) return;
       baseTextRef.current = text.trim();
       finalTextRef.current = '';
       usedVoiceRef.current = false;
       recognitionActiveRef.current = true;
       setListening(true);
+      Keyboard.dismiss();
       ExpoSpeechRecognitionModule.start({ lang: 'zh-CN', interimResults: true, continuous: true });
     } catch {
       recognitionActiveRef.current = false;
@@ -116,30 +129,40 @@ export function AssistantComposer({
   }
 
   function stopListening() {
-    pressingRef.current = false;
     if (!recognitionActiveRef.current) return;
     ExpoSpeechRecognitionModule.stop();
     recognitionActiveRef.current = false;
     setListening(false);
   }
 
+  function toggleListening() {
+    if (recognitionActiveRef.current || listening) {
+      stopListening();
+      return;
+    }
+    void startListening();
+  }
+
   const unavailable = sending || disabled || processing;
   const awaitingReply = sending || processing;
+  const mode = assistantComposerMode({ text, listening, unavailable });
+  const canSend = canSendAssistantComposer({ text, listening, unavailable });
 
   return (
     <View style={styles.wrap}>
       <View
-        style={[styles.composer, unavailable && styles.composerDisabled]}
+        style={[
+          styles.composer,
+          mode === 'listening' && styles.composerListening,
+          mode === 'processing' && styles.composerDisabled,
+        ]}
         accessibilityState={{ disabled: unavailable, busy: awaitingReply }}
       >
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={listening ? '松开结束语音输入' : '按住说话'}
-          onPressIn={() => {
-            pressingRef.current = true;
-            void startListening();
-          }}
-          onPressOut={stopListening}
+          accessibilityLabel={listening ? '停止语音输入' : '开始语音输入'}
+          accessibilityState={{ selected: listening, disabled: unavailable }}
+          onPress={toggleListening}
           disabled={unavailable}
           style={({ pressed }) => [
             styles.iconButton,
@@ -148,8 +171,8 @@ export function AssistantComposer({
           ]}
         >
           <Ionicons
-            name={listening ? 'mic' : 'mic-outline'}
-            size={20}
+            name={listening ? 'stop' : 'mic-outline'}
+            size={listening ? 17 : 20}
             color={listening ? '#FFFFFF' : unavailable ? theme.colors.textDim : theme.colors.accent}
           />
         </Pressable>
@@ -159,8 +182,8 @@ export function AssistantComposer({
             setText(value);
             if (submitError) setSubmitError(null);
           }}
-          editable={!unavailable}
-          placeholder={awaitingReply ? '小知回复后可继续输入' : '告诉小知你在想什么…'}
+          editable={!unavailable && !listening}
+          placeholder={awaitingReply ? '小知回复后可继续输入' : '发消息给小知'}
           placeholderTextColor={theme.colors.textDim}
           selectionColor={theme.colors.accent}
           multiline
@@ -171,47 +194,46 @@ export function AssistantComposer({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="发送消息"
-          disabled={!text.trim() || unavailable}
+          disabled={!canSend}
           onPress={() => { void submit(); }}
           style={({ pressed }) => [
             styles.sendButton,
-            (!text.trim() || unavailable) && styles.sendDisabled,
+            !canSend && styles.sendDisabled,
             pressed && styles.pressed,
           ]}
         >
           <Ionicons
             name="arrow-up"
             size={20}
-            color={!text.trim() || unavailable ? theme.colors.textDim : '#FFFFFF'}
+            color={!canSend ? theme.colors.textDim : '#FFFFFF'}
           />
         </Pressable>
       </View>
-      {listening ? <Text style={styles.helper}>正在听，松开结束</Text> : null}
+      {listening ? <Text style={styles.helper}>正在听，再点一下结束</Text> : null}
       {recognitionError ? <Text style={styles.error}>{recognitionError}</Text> : null}
       {submitError ? <Text style={styles.error}>{submitError}</Text> : null}
     </View>
   );
 }
 
-function joinText(left: string, right: string): string {
-  const first = left.trim();
-  const second = right.trim();
-  if (!first) return second;
-  if (!second) return first;
-  return `${first} ${second}`;
-}
-
 const styles = StyleSheet.create({
-  wrap: { gap: 5 },
+  wrap: { gap: 6 },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 6,
+    gap: 4,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: 16,
+    borderRadius: 26,
     backgroundColor: theme.colors.card,
-    padding: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    minHeight: 58,
+    ...theme.shadow,
+  },
+  composerListening: {
+    borderColor: theme.colors.accent,
+    backgroundColor: '#FFFCFA',
   },
   composerDisabled: {
     borderColor: '#DED8D2',
@@ -219,32 +241,33 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    minHeight: 40,
-    maxHeight: 120,
-    paddingHorizontal: 6,
-    paddingVertical: 9,
+    minHeight: 44,
+    maxHeight: 124,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
     color: theme.colors.text,
     fontSize: 16,
-    lineHeight: 22,
+    lineHeight: 23,
   },
   iconButton: {
     width: theme.touchTarget,
     height: theme.touchTarget,
-    borderRadius: 13,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: theme.colors.accentSoft,
   },
   micActive: { backgroundColor: theme.colors.accent },
   sendButton: {
     width: theme.touchTarget,
     height: theme.touchTarget,
-    borderRadius: 13,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.accent,
   },
   sendDisabled: { backgroundColor: '#D8D2CC' },
   pressed: { opacity: 0.72 },
-  helper: { color: theme.colors.accent, fontSize: theme.font.small, paddingHorizontal: 4 },
+  helper: { color: theme.colors.accent, fontSize: theme.font.small, paddingHorizontal: 10 },
   error: { color: theme.colors.red, fontSize: theme.font.small, paddingHorizontal: 4 },
 });

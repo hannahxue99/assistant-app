@@ -1,5 +1,5 @@
 /**
- * 「我的」页 — 主人页头 + 画像卡（原地编辑）+ 行内提醒开关 + 导出 + 统计 + 理解引擎入口
+ * 「我的」页 — 主人页头 + 画像卡（原地编辑）+ 行内提醒开关 + 数据管理 + 统计 + 理解引擎入口
  * 设计：不开子页（理解引擎除外）；统计纯展示；导出直接调系统分享面板
  */
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -23,7 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { EditAction } from '../../src/components/EditAction';
 import { CalendarSyncSetting } from '../../src/components/CalendarSyncSetting';
 import { ImportFeedbackModal } from '../../src/components/ImportFeedbackModal';
-import { ImportPreviewModal } from '../../src/components/ImportPreviewModal';
+import { ImportPreviewModal, type ImportPreviewData } from '../../src/components/ImportPreviewModal';
 import {
   clearPendingNotificationSync,
   countEntries,
@@ -36,7 +36,14 @@ import {
   saveProfile,
 } from '../../src/db';
 import { BackupFormatError, parseImportableMarkdown } from '../../src/engine/backup-format';
-import type { ImportPreview } from '../../src/engine/import-merge';
+import {
+  LegacyBackupFormatError,
+  parseLegacyExportMarkdown,
+  type LegacyBackupEnvelope,
+} from '../../src/engine/legacy-backup';
+import { importLegacyExport, previewLegacyImport } from '../../src/assistant/legacy-import';
+import { migrateLegacyEntriesToAssistantHistory } from '../../src/assistant/migration';
+import { migrateLegacyTopicsToEvents } from '../../src/assistant/event-migration';
 import {
   ensurePermissions,
   scheduleDailyNotifications,
@@ -47,6 +54,10 @@ import { theme } from '../../src/theme';
 
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 
+type ImportCandidate =
+  | { kind: 'v2'; envelope: BackupEnvelope; preview: ImportPreviewData }
+  | { kind: 'legacy'; envelope: LegacyBackupEnvelope; preview: ImportPreviewData };
+
 export default function ProfileScreen() {
   const router = useRouter();
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -56,8 +67,7 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [goalsText, setGoalsText] = useState('');
   const [avoidText, setAvoidText] = useState('');
-  const [importEnvelope, setImportEnvelope] = useState<BackupEnvelope | null>(null);
-  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importCandidate, setImportCandidate] = useState<ImportCandidate | null>(null);
   const [importFileName, setImportFileName] = useState('');
   const [importing, setImporting] = useState(false);
   const [importFeedback, setImportFeedback] = useState<{
@@ -116,7 +126,7 @@ export default function ProfileScreen() {
       const md = await exportMarkdown();
       // 写成 .md 文件再分享：微信等应用不接受纯文本分享，文件形式全平台可用
       const stamp = new Date().toISOString().slice(0, 10);
-      const uri = `${FileSystem.cacheDirectory}主人的备忘录-${stamp}.md`;
+      const uri = `${FileSystem.cacheDirectory}私人助手备份-${stamp}.md`;
       await FileSystem.writeAsStringAsync(uri, md);
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
@@ -125,7 +135,7 @@ export default function ProfileScreen() {
           UTI: 'public.text',
         });
       } else {
-        await Share.share({ message: md, title: '主人的备忘录' });
+        await Share.share({ message: md, title: '私人助手备份' });
       }
     } catch (e: any) {
       Alert.alert('导出失败', String(e?.message ?? e));
@@ -134,21 +144,18 @@ export default function ProfileScreen() {
 
   function importErrorMessage(error: unknown): string {
     if (error instanceof BackupFormatError) {
-      if (error.code === 'LEGACY_OR_UNKNOWN') {
-        return '这是旧版导出文件，缺少完整恢复数据。请使用新版「私人助手」导出的 Markdown。';
-      }
       if (error.code === 'UNSUPPORTED_VERSION') {
         return '该备份由更新版本的 App 生成，请升级「私人助手」后再导入。';
       }
       return `备份文件无效：${error.message}`;
     }
+    if (error instanceof LegacyBackupFormatError) return `旧版日志无效：${error.message}`;
     return String((error as any)?.message ?? error);
   }
 
   function closeImportPreview() {
     if (importing) return;
-    setImportEnvelope(null);
-    setImportPreview(null);
+    setImportCandidate(null);
     setImportFileName('');
   }
 
@@ -172,22 +179,46 @@ export default function ProfileScreen() {
         return;
       }
       const markdown = await FileSystem.readAsStringAsync(asset.uri);
-      const envelope = parseImportableMarkdown(markdown);
-      const preview = await previewBackupImport(envelope.payload);
+      let candidate: ImportCandidate;
+      try {
+        const envelope = parseImportableMarkdown(markdown);
+        const preview = await previewBackupImport(envelope.payload);
+        candidate = { kind: 'v2', envelope, preview: { kind: 'v2', value: preview } };
+      } catch (error) {
+        if (!(error instanceof BackupFormatError) || error.code !== 'LEGACY_OR_UNKNOWN') throw error;
+        const envelope = parseLegacyExportMarkdown(markdown);
+        const preview = await previewLegacyImport(envelope);
+        candidate = { kind: 'legacy', envelope, preview: { kind: 'legacy', value: preview } };
+      }
       setImportFileName(asset.name);
-      setImportEnvelope(envelope);
-      setImportPreview(preview);
+      setImportCandidate(candidate);
     } catch (error) {
       setImportFeedback({ kind: 'error', message: `${importErrorMessage(error)}\n现有数据没有发生变化。` });
     }
   }
 
   async function confirmImport() {
-    if (!importEnvelope || importing) return;
+    if (!importCandidate || importing) return;
     setImporting(true);
-    let result;
+    let affectedEntries = [] as Awaited<ReturnType<typeof importBackup>>['affectedEntries'];
+    let summary = '';
+    let projectionWarning = false;
     try {
-      result = await importBackup(importEnvelope);
+      if (importCandidate.kind === 'legacy') {
+        const result = await importLegacyExport(importCandidate.envelope);
+        affectedEntries = result.affectedEntries;
+        summary = `导入对话 ${result.conversations} 条、待办 ${result.todos} 条、事件 ${result.events} 个；跳过重复 ${result.duplicates} 条。`;
+      } else {
+        const result = await importBackup(importCandidate.envelope);
+        affectedEntries = result.affectedEntries;
+        summary = `新增 ${result.added} 条，更新 ${result.updated} 条，忽略 ${result.ignored} 条，保留本地冲突 ${result.conflicts} 条。`;
+        try {
+          await migrateLegacyEntriesToAssistantHistory();
+          await migrateLegacyTopicsToEvents();
+        } catch {
+          projectionWarning = true;
+        }
+      }
     } catch (error) {
       setImportFeedback({ kind: 'error', message: `${importErrorMessage(error)}\n现有数据没有发生变化。` });
       setImporting(false);
@@ -196,8 +227,8 @@ export default function ProfileScreen() {
 
     let notificationWarning = false;
     try {
-      await syncEntryReminders(result.affectedEntries);
-      await clearPendingNotificationSync(result.affectedEntries.map((entry) => entry.id));
+      await syncEntryReminders(affectedEntries);
+      await clearPendingNotificationSync(affectedEntries.map((entry) => entry.id));
     } catch {
       notificationWarning = true;
     }
@@ -206,13 +237,15 @@ export default function ProfileScreen() {
     } catch {
       // 导入已提交；页面下次聚焦或重启时会重新加载。
     }
-    setImportEnvelope(null);
-    setImportPreview(null);
+    setImportCandidate(null);
     setImportFileName('');
-    const summary = `新增 ${result.added} 条，更新 ${result.updated} 条，忽略 ${result.ignored} 条，保留本地冲突 ${result.conflicts} 条。`;
+    const warnings = [
+      projectionWarning ? '部分历史将在下次启动时继续整理。' : '',
+      notificationWarning ? '部分提醒将在下次启动时补建。' : '',
+    ].filter(Boolean).join('\n');
     setImportFeedback({
       kind: 'success',
-      message: notificationWarning ? `${summary}\n\n部分提醒将在下次启动时补建。` : summary,
+      message: warnings ? `${summary}\n\n${warnings}` : summary,
     });
     setImporting(false);
   }
@@ -228,7 +261,7 @@ export default function ProfileScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.h1}>主人</Text>
         <Text style={styles.companion}>
-          {total > 0 ? `已陪伴 ${days} 天 · 共 ${total} 条记录` : '还没有记录，去首页说第一句话吧'}
+          {total > 0 ? `已陪伴 ${days} 天 · 共 ${total} 条记录` : '还没有记录，去小知说第一句话吧'}
         </Text>
 
         {/* 画像卡 */}
@@ -331,10 +364,10 @@ export default function ProfileScreen() {
 
       </ScrollView>
       <ImportPreviewModal
-        visible={!!importEnvelope}
+        visible={!!importCandidate}
         fileName={importFileName}
-        exportedAt={importEnvelope?.exportedAt ?? null}
-        preview={importPreview}
+        exportedAt={importCandidate?.envelope.exportedAt ?? null}
+        preview={importCandidate?.preview ?? null}
         importing={importing}
         onCancel={closeImportPreview}
         onConfirm={confirmImport}
