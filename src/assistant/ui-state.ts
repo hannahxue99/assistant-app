@@ -20,6 +20,19 @@ export interface AssistantTodoNavigationIntent {
   isNew: boolean;
 }
 
+export type AssistantListLoadState = 'loading' | 'ready' | 'error';
+
+/**
+ * A focused screen refresh must keep already-rendered content mounted. Replacing
+ * a ready list with a spinner temporarily shortens its ScrollView and forces the
+ * native scroll offset back to the top before navigation returns control.
+ */
+export function listStateWhileRefreshing(
+  current: AssistantListLoadState,
+): AssistantListLoadState {
+  return current === 'ready' ? 'ready' : 'loading';
+}
+
 /** 跳链只负责一次性进入定位；相同参数不得在重渲染时覆盖用户的手动 Tab 选择。 */
 export function assistantTodoNavigationIntent(
   todoView: string | undefined,

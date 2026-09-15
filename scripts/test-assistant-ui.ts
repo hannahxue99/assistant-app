@@ -9,6 +9,7 @@ import {
   assistantReceiptTarget,
   assistantTodoNavigationIntent,
   groupAssistantReceiptOperations,
+  listStateWhileRefreshing,
   shouldFollowAssistantEnd,
 } from '../src/assistant/ui-state';
 import { ASSISTANT_EMPTY_DESCRIPTION } from '../src/assistant/ui-copy';
@@ -93,6 +94,12 @@ check(repeatedTodoIntent?.isNew === false, '相同跳链重渲染时不得再次
 const nextTodoIntent = assistantTodoNavigationIntent('week', 'todo-week', firstTodoIntent.key);
 check(nextTodoIntent?.isNew && nextTodoIntent.view === 'week', '新的小知回执仍应切换并定位正确列表');
 check(assistantTodoNavigationIntent('other', 'todo-1', '') === null, '无效待办视图参数必须忽略');
+
+check(listStateWhileRefreshing('ready') === 'ready',
+  '从详情返回刷新时必须保留已渲染列表，避免页面变短导致滚动归零');
+check(listStateWhileRefreshing('error') === 'loading'
+  && listStateWhileRefreshing('loading') === 'loading',
+  '首次加载或错误重试仍应显示加载状态');
 
 function operation(overrides: Partial<AssistantOperation> = {}): AssistantOperation {
   return {

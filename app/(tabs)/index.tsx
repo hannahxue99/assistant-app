@@ -30,7 +30,10 @@ import {
 import type { Entry } from '../../src/types';
 import type { AssistantEvent } from '../../src/assistant/action-types';
 import { listEvents, setEventPinned } from '../../src/assistant/event-store';
-import { assistantTodoNavigationIntent } from '../../src/assistant/ui-state';
+import {
+  assistantTodoNavigationIntent,
+  listStateWhileRefreshing,
+} from '../../src/assistant/ui-state';
 import { theme } from '../../src/theme';
 
 type TodoView = 'week' | 'all';
@@ -55,7 +58,7 @@ export default function HomeScreen() {
   const loadVersion = useRef(0);
 
   const loadEvents = useCallback(async (version = loadVersion.current) => {
-    setEventsState('loading');
+    setEventsState(listStateWhileRefreshing);
     try {
       const value = await listEvents({ status: 'active', limit: 20 });
       if (version !== loadVersion.current) return;
@@ -70,7 +73,7 @@ export default function HomeScreen() {
   const load = useCallback(async () => {
     const version = ++loadVersion.current;
     void loadEvents(version);
-    setTodosState(current => current === 'ready' ? current : 'loading');
+    setTodosState(listStateWhileRefreshing);
     const todoLists = await Promise.all([listWeekTasks(), listLongTermTasks()])
       .then(([week, longTerm]) => ({ week, longTerm, failed: false as const }))
       .catch(() => ({ week: [] as Entry[], longTerm: [] as Entry[], failed: true as const }));
