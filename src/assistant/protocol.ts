@@ -11,12 +11,18 @@ import type {
   AssistantEventDeltaTarget,
   AssistantEventDeltaTodoMutation,
 } from './event-delta-types';
+import type {
+  AssistantMemoryCategory,
+  AssistantMemoryDeltaProposal,
+  AssistantMemorySensitivity,
+} from './memory-types';
 
 export interface AssistantTurnOutput {
   reply: string;
   segment: AssistantSegmentDecision;
   operations: AssistantOperationProposal[];
   eventDeltas: AssistantEventDelta[];
+  memoryDeltas: AssistantMemoryDeltaProposal[];
 }
 
 export class AssistantProtocolError extends Error {
@@ -74,6 +80,10 @@ const TODO_REF = /^todo_[1-9][0-9]*$/;
 const CHANGE_TYPES = new Set<AssistantEventDeltaChangeType>([
   'fact', 'decision', 'result', 'blocker', 'plan', 'correction',
 ]);
+const MEMORY_CATEGORIES = new Set<AssistantMemoryCategory>([
+  'preference', 'principle', 'long_term_goal', 'important_relationship', 'recurring_pattern',
+]);
+const MEMORY_SENSITIVITIES = new Set<AssistantMemorySensitivity>(['ordinary', 'sensitive']);
 
 function identifier(value: unknown, field: string): string {
   const parsed = requiredText(value, field, 160);
@@ -371,6 +381,72 @@ function parseEventDeltas(value: unknown): AssistantEventDelta[] {
   return deltas;
 }
 
+function parseMemoryDeltas(value: unknown): AssistantMemoryDeltaProposal[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new AssistantProtocolError('memory_deltas 必须是数组');
+  if (value.length > 2) throw new AssistantProtocolError('单轮记忆增量不能超过 2 个');
+  return value.map((candidate, index) => {
+    try {
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+        throw new AssistantProtocolError('记忆增量必须是对象');
+      }
+      const raw = candidate as any;
+      const key = `memory_delta_${index + 1}`;
+      const action = requiredText(raw.action, 'memory_delta.action', 32);
+      const evidence = requiredText(raw.evidence, 'memory_delta.evidence', 200);
+      if (action === 'create_candidate' || action === 'create_active') {
+        const category = requiredText(raw.category, 'memory_delta.category', 32) as AssistantMemoryCategory;
+        const sensitivity = requiredText(raw.sensitivity, 'memory_delta.sensitivity', 16) as AssistantMemorySensitivity;
+        if (!MEMORY_CATEGORIES.has(category)) throw new AssistantProtocolError('memory_delta.category 非法');
+        if (!MEMORY_SENSITIVITIES.has(sensitivity)) throw new AssistantProtocolError('memory_delta.sensitivity 非法');
+        const admissionBasis = requiredText(raw.admission_basis, 'memory_delta.admission_basis', 16);
+        const content = requiredText(raw.content, 'memory_delta.content', 200);
+        if (action === 'create_active') {
+          if (admissionBasis !== 'explicit') throw new AssistantProtocolError('create_active 的准入依据非法');
+          return { key, action, category, content, sensitivity, admissionBasis: 'explicit', evidence };
+        }
+        if (admissionBasis !== 'inferred') throw new AssistantProtocolError('create_candidate 的准入依据非法');
+        return { key, action, category, content, sensitivity, admissionBasis: 'inferred', evidence };
+      }
+      const memoryId = identifier(raw.memory_id, 'memory_delta.memory_id');
+      const expectedRevision = raw.expected_revision;
+      if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
+        throw new AssistantProtocolError('memory_delta.expected_revision 非法');
+      }
+      if (action === 'activate_candidate') {
+        const admissionBasis = requiredText(raw.admission_basis, 'memory_delta.admission_basis', 16);
+        if (admissionBasis !== 'repeated' && admissionBasis !== 'confirmed') {
+          throw new AssistantProtocolError('activate_candidate 的准入依据非法');
+        }
+        return { key, action, memoryId, expectedRevision, admissionBasis, evidence };
+      }
+      if (action === 'supersede_memory') {
+        const category = requiredText(raw.category, 'memory_delta.category', 32) as AssistantMemoryCategory;
+        const sensitivity = requiredText(raw.sensitivity, 'memory_delta.sensitivity', 16) as AssistantMemorySensitivity;
+        if (!MEMORY_CATEGORIES.has(category)) throw new AssistantProtocolError('memory_delta.category 非法');
+        if (!MEMORY_SENSITIVITIES.has(sensitivity)) throw new AssistantProtocolError('memory_delta.sensitivity 非法');
+        return {
+          key,
+          action,
+          memoryId,
+          expectedRevision,
+          category,
+          content: requiredText(raw.content, 'memory_delta.content', 200),
+          sensitivity,
+          evidence,
+        };
+      }
+      if (action === 'forget_memory') return { key, action, memoryId, expectedRevision, evidence };
+      throw new AssistantProtocolError('memory_delta.action 非法');
+    } catch (error) {
+      if (error instanceof AssistantProtocolError) {
+        throw new AssistantProtocolError(`memory_deltas[${index}]: ${error.message}`);
+      }
+      throw error;
+    }
+  });
+}
+
 export function parseAssistantTurnOutput(content: string): AssistantTurnOutput {
   const raw = parseJson(content);
   if (!raw || typeof raw !== 'object') throw new AssistantProtocolError('模型返回缺少对象');
@@ -389,5 +465,6 @@ export function parseAssistantTurnOutput(content: string): AssistantTurnOutput {
     },
     operations: parseOperations(raw.operations),
     eventDeltas: parseEventDeltas(raw.event_deltas),
+    memoryDeltas: parseMemoryDeltas(raw.memory_deltas),
   };
 }

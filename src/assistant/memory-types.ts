@@ -43,11 +43,20 @@ export interface AssistantMemorySource {
 export type AssistantMemoryDeltaProposal =
   | {
     key: string;
-    action: 'create_candidate' | 'create_active';
+    action: 'create_candidate';
     category: AssistantMemoryCategory;
     content: string;
     sensitivity: AssistantMemorySensitivity;
-    admissionBasis: 'inferred' | 'explicit';
+    admissionBasis: 'inferred';
+    evidence: string;
+  }
+  | {
+    key: string;
+    action: 'create_active';
+    category: AssistantMemoryCategory;
+    content: string;
+    sensitivity: AssistantMemorySensitivity;
+    admissionBasis: 'explicit';
     evidence: string;
   }
   | {

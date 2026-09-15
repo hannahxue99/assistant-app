@@ -18,6 +18,7 @@ const parsed = parseAssistantTurnOutput(JSON.stringify({
 check(parsed.reply === '我们先从最小一步开始。', '应解析自然回复');
 check(parsed.segment.action === 'continue', '应解析分段动作');
 check(parsed.operations.length === 0, '旧返回未提供 operations 时应兼容为空数组');
+check(parsed.memoryDeltas.length === 0, '旧返回未提供 memory_deltas 时应兼容为空数组');
 
 const withOperations = parseAssistantTurnOutput(JSON.stringify({
   reply: '可以，我们把它作为一条持续主线。',
@@ -91,6 +92,28 @@ const ignoredModelDeltaKeys = parseAssistantTurnOutput(JSON.stringify({
 }));
 check(ignoredModelDeltaKeys.eventDeltas.map(delta => delta.key).join(',') === 'event_delta_1,event_delta_2',
   '模型返回的内部 key 应被忽略，由本地按顺序重新生成');
+
+const withMemoryDeltas = parseAssistantTurnOutput(JSON.stringify({
+  reply: '以后会按这个习惯配合你。',
+  segment: { action: 'continue' },
+  memory_deltas: [
+    {
+      key: '../../unsafe', action: 'create_active', category: 'preference',
+      content: '不喜欢早会', sensitivity: 'ordinary', admission_basis: 'explicit',
+      evidence: '记住，我不喜欢早会',
+    },
+    {
+      key: '../../unsafe', action: 'activate_candidate', memory_id: 'memory-old',
+      expected_revision: 2, admission_basis: 'repeated', evidence: '重要决策先理清关键问题',
+    },
+  ],
+}));
+check(withMemoryDeltas.memoryDeltas.length === 2, '应解析长期记忆增量');
+check(withMemoryDeltas.memoryDeltas.map(delta => delta.key).join(',') === 'memory_delta_1,memory_delta_2',
+  '记忆增量键必须由本地稳定生成');
+check(withMemoryDeltas.memoryDeltas[0].action === 'create_active'
+  && withMemoryDeltas.memoryDeltas[0].admissionBasis === 'explicit',
+'明确记住只能按 explicit 直接生效');
 
 const fenced = parseAssistantTurnOutput('```json\n{"reply":"好的","segment":{"action":"split_before_user","previous_summary":"旧话题结束","summary":"新话题开始"}}\n```');
 check(fenced.segment.action === 'split_before_user', '应容忍 JSON 代码块');
@@ -198,6 +221,24 @@ try {
 }
 check(tooManyDeltasRejected, '单轮事件增量必须限制数量');
 
+for (const [label, memoryDeltas] of [
+  ['缺少证据', [{ action: 'create_candidate', category: 'preference', content: '喜欢茶', sensitivity: 'ordinary', admission_basis: 'inferred' }]],
+  ['直接生效依据错误', [{ action: 'create_active', category: 'preference', content: '喜欢茶', sensitivity: 'ordinary', admission_basis: 'inferred', evidence: '喜欢茶' }]],
+  ['未知类别', [{ action: 'create_candidate', category: 'account', content: '喜欢茶', sensitivity: 'ordinary', admission_basis: 'inferred', evidence: '喜欢茶' }]],
+  ['非法版本', [{ action: 'forget_memory', memory_id: 'memory-a', expected_revision: 0, evidence: '忘掉' }]],
+  ['超过两项', Array.from({ length: 3 }, () => ({ action: 'create_candidate', category: 'preference', content: '喜欢茶', sensitivity: 'ordinary', admission_basis: 'inferred', evidence: '喜欢茶' }))],
+] as const) {
+  let rejected = false;
+  try {
+    parseAssistantTurnOutput(JSON.stringify({
+      reply: '收到', segment: { action: 'continue' }, memory_deltas: memoryDeltas,
+    }));
+  } catch (error) {
+    rejected = error instanceof AssistantProtocolError;
+  }
+  check(rejected, `记忆增量协议：${label}必须被拒绝`);
+}
+
 const prompt = buildAssistantPromptMessages({
   contextBlock: '当前分段摘要：用户正在设计私人 AI。',
   recentMessages: [
@@ -214,6 +255,8 @@ check(prompt[0].content.includes('陈述句而不是“提醒我”'), '提示�
 check(prompt[0].content.includes('下个月11号还款10万'), '提示词必须包含真实遗漏场景的正例');
 check(prompt[0].content.includes('银行说下个月可能调整利率'), '提示词必须包含非用户承诺的反例');
 check(prompt[0].content.includes('due_date'), '提示词必须要求模型解析日期');
+check(prompt[0].content.includes('memory_deltas'), '提示词必须要求模型独立判断长期记忆');
+check(prompt[0].content.includes('临时状态'), '提示词必须区分临时状态与长期记忆');
 check(prompt.at(-1)?.content === '那继续梳理。', '最近原话必须保持角色与顺序');
 check(extractPartialJsonStringField('{"reply":"第一行\\n第', 'reply') === '第一行\n第',
   '流式 JSON 应解码完整转义并保留未闭合回复');

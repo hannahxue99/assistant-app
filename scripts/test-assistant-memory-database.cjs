@@ -96,6 +96,7 @@ async function main() {
   await db.initDatabase();
   const memoryStore = load('src/assistant/memory-store.ts');
   const memoryMigration = load('src/assistant/memory-migration.ts');
+  const memoryValidator = load('src/assistant/memory-validator.ts');
   for (const table of ['assistant_memories', 'assistant_memory_sources']) {
     assert.equal(sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)?.name, table);
   }
@@ -131,6 +132,38 @@ async function main() {
   });
   assert.equal((await memoryStore.listMemorySources(sourceMemory.id)).length, 1,
     '同一用户消息不能重复增加记忆证据数');
+  const repeatedValidation = await memoryValidator.validateAssistantMemoryDeltas({
+    deltas: [{
+      key: 'memory_delta_1', action: 'activate_candidate', memoryId: sourceMemory.id,
+      expectedRevision: sourceMemory.revision, admissionBasis: 'repeated', evidence: '重要决策先理清关键问题',
+    }],
+    context: { active: [], candidates: [sourceMemory] },
+    userMessage: '我还是觉得重要决策先理清关键问题',
+    userMessageId: 'message-repeat',
+  });
+  assert.equal(repeatedValidation.accepted.length, 1,
+    '候选存在一条旧来源且本轮是新消息时允许 repeated 生效');
+  const inventedEvidence = await memoryValidator.validateAssistantMemoryDeltas({
+    deltas: [{
+      key: 'memory_delta_1', action: 'create_active', category: 'preference',
+      content: '不喜欢加班', sensitivity: 'ordinary', admissionBasis: 'explicit', evidence: '用户不喜欢加班',
+    }],
+    context: { active: [], candidates: [] },
+    userMessage: '记住，我不喜欢加班',
+    userMessageId: 'message-invented',
+  });
+  assert.equal(inventedEvidence.rejected[0].reason, 'evidence_not_in_user_message',
+    '模型改写不得冒充用户原话证据');
+  const secretValidation = await memoryValidator.validateAssistantMemoryDeltas({
+    deltas: [{
+      key: 'memory_delta_1', action: 'create_active', category: 'preference',
+      content: '登录密码是 abc123', sensitivity: 'sensitive', admissionBasis: 'explicit', evidence: '登录密码是 abc123',
+    }],
+    context: { active: [], candidates: [] },
+    userMessage: '登录密码是 abc123',
+    userMessageId: 'message-secret',
+  });
+  assert.equal(secretValidation.rejected[0].reason, 'forbidden_secret', '凭证类信息始终不得入库');
 
   const beforeEdit = migratedActive[0];
   const edited = await memoryStore.editMemory({

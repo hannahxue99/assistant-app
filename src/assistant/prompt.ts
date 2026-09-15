@@ -5,7 +5,20 @@ export interface AssistantPromptMessage {
   content: string;
 }
 
-export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v6-local-delta-key';
+export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v7-long-term-memory';
+
+export const ASSISTANT_MEMORY_DELTA_FORMAT_GUIDE = [
+  '长期记忆增量格式（每轮最多2项；不需要 key，本地生成幂等键）：',
+  '- 只保存关于用户、跨当前事件仍可能成立、并会影响未来建议或安排的认知。完整对话、临时状态、事件进展和待办不是长期记忆。',
+  '- 五类：preference（偏好）、principle（做事原则）、long_term_goal（长期目标）、important_relationship（重要关系）、recurring_pattern（反复模式）。',
+  '- 单次推断只建候选：{"action":"create_candidate","category":"...","content":"...","sensitivity":"ordinary|sensitive","admission_basis":"inferred","evidence":"本轮原话"}。',
+  '- 用户明确说“记住/以后按这个来”等，可直接生效：create_active，admission_basis 必须为 explicit。',
+  '- 候选再次被用户表达：activate_candidate，提供 memory_id、expected_revision、admission_basis=repeated；用户明确确认候选则用 confirmed。',
+  '- 用户明确纠正已生效记忆：supersede_memory，提供旧 memory_id、expected_revision、新 category/content/sensitivity。',
+  '- 用户明确要求忘记：forget_memory，提供 memory_id、expected_revision。不要把“这次不用”理解为长期忘记。',
+  '- evidence 必须逐字来自本轮用户消息，不能引用助手回复、摘要、事件状态或你的改写。',
+  '- 密码、验证码、证件号和完整金融账号不得返回；敏感候选不能仅靠重复自动生效。',
+] as const;
 
 export const ASSISTANT_EVENT_DELTA_FORMAT_GUIDE = [
   '事件增量格式（已有或新建持续事件统一使用 event_deltas，不要拆成互不关联的事件/进展/待办操作）：',
@@ -63,6 +76,7 @@ export function buildAssistantPromptMessages(input: {
     '- 若行动承诺属于持续主线，必须在同一个 event_delta 中完整判断当前状态、关键进展和相关待办；把计划写进 current state 不能替代 todo。',
     '- 可能性、假设、预测、他人的动作，以及用户尚未接受的建议都不是用户行动承诺，不得据此创建待办。',
     '- 只有明确持续跟进、多阶段，或已有主线出现新状态时才建/更新事件。',
+    '- 独立判断长期记忆：不要因为内容进入事件或待办就自动记忆，也不要把今天/最近的情绪和计划误当长期特征。',
     '- 不确定是否属于某个已有事件时不要静默合并；自然回复只追问一个必要问题，event_deltas 和 operations 都留空。',
     '',
     '严格只输出 JSON，不要代码块或额外文字：',
@@ -74,10 +88,13 @@ export function buildAssistantPromptMessages(input: {
     '    "summary": "仅有重要新增时填写：当前分段滚动摘要，不超过240字"',
     '  },',
     '  "event_deltas": [最多2个完整事件增量],',
+    '  "memory_deltas": [最多2个长期记忆增量],',
     '  "operations": [最多6个与事件增量无关的候选操作]',
     '}',
     '',
     ...ASSISTANT_EVENT_DELTA_FORMAT_GUIDE,
+    '',
+    ...ASSISTANT_MEMORY_DELTA_FORMAT_GUIDE,
     '',
     '普通候选操作只用于独立待办、重命名、置顶等不属于 event_delta 的动作：',
     ...ASSISTANT_OPERATION_FORMAT_GUIDE,
