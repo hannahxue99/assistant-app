@@ -61,6 +61,16 @@ export function shouldFollowAssistantEnd(
   return distance <= threshold;
 }
 
+export function shouldScrollAssistantOnFocus(input: {
+  loadedOnce: boolean;
+  followingEnd: boolean;
+  preserveReturn: boolean;
+}): boolean {
+  if (!input.loadedOnce) return true;
+  if (input.preserveReturn) return false;
+  return input.followingEnd;
+}
+
 /** 合并刷新页和历史页；以 id 去重，以更新时间较新的状态覆盖旧状态。 */
 export function mergeAssistantMessages(
   current: AssistantMessage[],

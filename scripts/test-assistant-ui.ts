@@ -10,6 +10,7 @@ import {
   assistantTodoNavigationIntent,
   groupAssistantReceiptOperations,
   listStateWhileRefreshing,
+  shouldScrollAssistantOnFocus,
   shouldFollowAssistantEnd,
 } from '../src/assistant/ui-state';
 import { ASSISTANT_EMPTY_DESCRIPTION } from '../src/assistant/ui-copy';
@@ -100,6 +101,14 @@ check(listStateWhileRefreshing('ready') === 'ready',
 check(listStateWhileRefreshing('error') === 'loading'
   && listStateWhileRefreshing('loading') === 'loading',
   '首次加载或错误重试仍应显示加载状态');
+check(shouldScrollAssistantOnFocus({ loadedOnce: false, followingEnd: false, preserveReturn: false }),
+  '小知首次进入必须定位到最新消息');
+check(shouldScrollAssistantOnFocus({ loadedOnce: true, followingEnd: true, preserveReturn: false }),
+  '普通切回且原本在末端时应继续跟随最新消息');
+check(!shouldScrollAssistantOnFocus({ loadedOnce: true, followingEnd: true, preserveReturn: true }),
+  '从关联待办或事件返回时，即使离开前靠近末端也必须保留原位置');
+check(!shouldScrollAssistantOnFocus({ loadedOnce: true, followingEnd: false, preserveReturn: false }),
+  '用户正在阅读历史时，普通切回也不应抢走滚动位置');
 
 function operation(overrides: Partial<AssistantOperation> = {}): AssistantOperation {
   return {

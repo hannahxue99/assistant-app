@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Always open Xiaozhi at the latest message, preserve in-flight turns across tab changes, and recover safely from model JSON protocol mistakes.
+**Goal:** Open Xiaozhi at the latest message when appropriate, preserve the user's reading position across linked-object navigation, keep in-flight turns across tab changes, and recover safely from model JSON protocol mistakes.
 
 **Architecture:** Keep the existing module-level turn job and atomic SQLite commit. Add a layout-driven one-shot scroll intent plus near-end following in the screen, then make provider parsing resilient by accepting natural completion wording and repairing malformed JSON once with a compact response-only request. Persist exact bounded diagnostic details and repair metadata without storing prompts, keys, or response bodies.
 
@@ -33,7 +33,8 @@
 2. Keep a one-shot pending scroll ref when Xiaozhi gains focus or the user sends a message.
 3. Execute the pending scroll from `onContentSizeChange`, after the final message and receipt height is known; keep an immediate requestAnimationFrame fallback for already-laid-out content.
 4. Follow streaming growth only while the user remains near the bottom; loading older messages and reading history must not jump down.
-5. Run UI tests.
+5. Mark navigation from a message receipt as position-preserving. On return, refresh messages without creating a bottom-scroll intent or re-enabling near-end following.
+6. Run UI tests.
 
 ### Task 3: Repair malformed model JSON once
 

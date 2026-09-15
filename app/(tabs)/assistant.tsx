@@ -20,6 +20,7 @@ import {
   isAssistantComposerDisabled,
   mergeAssistantMessages,
   shouldFollowAssistantEnd,
+  shouldScrollAssistantOnFocus,
 } from '../../src/assistant/ui-state';
 import { retryAssistantTurn, sendAssistantTurn } from '../../src/assistant/orchestrator';
 import { listOperationsByRequestIds } from '../../src/assistant/action-store';
@@ -68,6 +69,7 @@ export default function AssistantScreen() {
   const olderLoadRef = useRef<AssistantOlderLoadStatus>('idle');
   const pendingEndScrollRef = useRef<{ animated: boolean } | null>(null);
   const followEndRef = useRef(true);
+  const preservePositionOnNextFocusRef = useRef(false);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [initialLoad, setInitialLoad] = useState<AssistantInitialLoadStatus>('loading');
   const [retryingInitialLoad, setRetryingInitialLoad] = useState(false);
@@ -156,13 +158,32 @@ export default function AssistantScreen() {
       mountedRef.current = true;
       olderLoadRef.current = 'idle';
       setOlderLoad('idle');
-      if (!loadedOnceRef.current) setInitialLoad('loading');
-      void loadLatest(true).catch(() => {
+      const loadedOnce = loadedOnceRef.current;
+      const preserveReturn = preservePositionOnNextFocusRef.current;
+      preservePositionOnNextFocusRef.current = false;
+      const shouldScroll = shouldScrollAssistantOnFocus({
+        loadedOnce,
+        followingEnd: followEndRef.current,
+        preserveReturn,
+      });
+      if (preserveReturn) {
+        pendingEndScrollRef.current = null;
+        followEndRef.current = false;
+      }
+      if (!loadedOnce) setInitialLoad('loading');
+      void loadLatest(shouldScroll).catch(() => {
         if (mountedRef.current && !loadedOnceRef.current) setInitialLoad('error');
       });
       return () => { mountedRef.current = false; };
     }, [loadLatest]),
   );
+
+  const navigateFromMessage = useCallback((target: string) => {
+    preservePositionOnNextFocusRef.current = true;
+    pendingEndScrollRef.current = null;
+    followEndRef.current = false;
+    router.push(target as never);
+  }, [router]);
 
   async function loadOlder(force = false) {
     if (!hasOlder || messages.length === 0 || initialLoad !== 'ready') return;
@@ -331,7 +352,7 @@ export default function AssistantScreen() {
                 message={item}
                 onRetry={retry}
                 canRetry={canRetryAssistantMessage(item, messages, engineStatus)}
-                onNavigate={target => router.push(target as never)}
+                onNavigate={navigateFromMessage}
                 onUndo={undo}
                 undoing={undoingRequestId === item.requestId}
                 undoError={undoErrors[item.requestId]}
