@@ -156,6 +156,33 @@ async function main() {
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM assistant_events WHERE title='换房计划'").get().count, 1,
     '成功请求重试不得重复创建事件');
 
+  provider = async () => ({
+    reply: '先保留这件事，时间可以接着补。',
+    segment: { action: 'continue' },
+    operations: [{ key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '整理照片' }],
+  });
+  await orchestrator.sendAssistantTurn({
+    requestId: 'request-hidden-todo', content: '有空整理一下照片', source: 'text', settings, createdAt: 4800,
+  });
+  const hiddenTodo = sqlite.prepare("SELECT * FROM entries WHERE kind='task' AND summary='整理照片'").get();
+  assert.equal(hiddenTodo.due_at, null, '首次无日期行动应保存为隐藏待办');
+  provider = async input => {
+    assert.ok(input.context.contextBlock.includes(hiddenTodo.id), '当前分段最近待办必须进入补日期上下文');
+    return {
+      reply: '时间按周六继续安排。',
+      segment: { action: 'continue' },
+      operations: [{ key: 'date', type: 'update_todo', todoId: hiddenTodo.id, dateText: '周六' }],
+    };
+  };
+  await orchestrator.sendAssistantTurn({
+    requestId: 'request-hidden-todo-date', content: '那就周六吧', source: 'text', settings,
+    createdAt: new Date('2026-09-15T12:00:00+08:00').getTime(),
+  });
+  assert.ok(sqlite.prepare('SELECT due_at FROM entries WHERE id=?').get(hiddenTodo.id).due_at,
+    '日期补充应更新同一条隐藏待办');
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM entries WHERE kind='task' AND summary='整理照片'").get().count, 1,
+    '补日期不得创建重复待办');
+
   sqlite.exec(`CREATE TRIGGER fail_assistant_operation
     BEFORE INSERT ON assistant_operations BEGIN SELECT RAISE(ABORT, 'forced operation failure'); END;`);
   provider = async () => ({

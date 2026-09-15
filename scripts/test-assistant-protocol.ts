@@ -60,6 +60,7 @@ for (const invalid of [
   '{}',
   '{"reply":"","segment":{"action":"continue"}}',
   '{"reply":"好","segment":{"action":"unknown"}}',
+  '{"reply":"好的，已为你创建待办","segment":{"action":"continue"},"operations":[]}',
 ]) {
   let rejected = false;
   try {

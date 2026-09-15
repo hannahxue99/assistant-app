@@ -44,6 +44,25 @@ const ambiguous = classifyEventCandidates([
 ]);
 check(ambiguous.kind === 'ambiguous', '两个相近强候选必须要求澄清');
 
+const ambiguousCreate = validateAssistantActions({
+  operations: [{
+    key: 'event', type: 'create_event', eventRef: 'event_1',
+    title: '新的房子事件', currentState: '今天有进展',
+  }],
+  actionContext: {
+    events: [
+      eventCandidate({ id: 'event-house-a', score: 0.82 }),
+      eventCandidate({ id: 'event-house-b', title: '父母换房', score: 0.78 }),
+    ],
+    todos: [], explicitEventId: null, segmentEventId: null,
+  },
+  currentMessage: '房子后续要持续跟进',
+  recentEvidence: [],
+  referenceAt: now,
+});
+check(ambiguousCreate.accepted.length === 0 && ambiguousCreate.rejected[0]?.reason === 'ambiguous_candidate',
+  '已有事件候选歧义时不得绕过澄清新建重复事件');
+
 const context: AssistantActionContext = {
   events: [eventCandidate()],
   todos: [{
@@ -141,4 +160,3 @@ const contextualUpdate = validateAssistantActions({
 check(contextualUpdate.accepted.length === 1, '从事件详情进入时应允许更新该稳定事件 ID');
 
 console.log('assistant action validation tests passed');
-

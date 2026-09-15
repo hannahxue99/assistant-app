@@ -140,9 +140,8 @@ export async function loadAssistantActionContext(input: {
       ? await database.getFirstAsync<{ event_id: string }>(
         `SELECT r.to_id AS event_id
          FROM assistant_object_relations r
-         JOIN assistant_messages m ON m.id=r.from_id
-         WHERE m.segment_id=? AND r.from_type='message' AND r.relation_type='source'
-           AND r.to_type='event' AND r.undone_at IS NULL
+         JOIN assistant_messages m ON m.id=r.source_message_id
+         WHERE m.segment_id=? AND r.to_type='event' AND r.undone_at IS NULL
          ORDER BY r.created_at DESC LIMIT 1`,
         input.currentSegmentId,
       )
@@ -165,8 +164,19 @@ export async function loadAssistantActionContext(input: {
       updatedAt: Number(row.updated_at),
       score: 0,
     }));
+    const segmentTodoBinding = input.currentSegmentId
+      ? await database.getFirstAsync<{ todo_id: string }>(
+        `SELECT r.to_id AS todo_id
+         FROM assistant_object_relations r
+         JOIN assistant_messages m ON m.id=r.source_message_id
+         WHERE m.segment_id=? AND r.to_type='todo' AND r.undone_at IS NULL
+         ORDER BY r.created_at DESC LIMIT 1`,
+        input.currentSegmentId,
+      )
+      : null;
     let todos = rankTodoCandidates(input.query, allTodos);
     const explicitTodoId = input.launchContext?.kind === 'todo' ? input.launchContext.id : null;
+    todos = forceCandidate(todos, allTodos, segmentTodoBinding?.todo_id ?? null);
     todos = forceCandidate(todos, allTodos, explicitTodoId);
 
     return {
@@ -174,6 +184,7 @@ export async function loadAssistantActionContext(input: {
       todos,
       explicitEventId,
       segmentEventId: segmentBinding?.event_id ?? null,
+      segmentTodoId: segmentTodoBinding?.todo_id ?? null,
     };
   });
 }

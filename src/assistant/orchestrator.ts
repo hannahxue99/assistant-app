@@ -140,7 +140,6 @@ async function runSavedTurn(input: {
       segment: output.segment,
       operations: validation.accepted,
       actionContext,
-      createdAt: state.userMessage.createdAt,
     });
     return {
       userMessage: (await getRequestState(input.requestId))?.userMessage ?? state.userMessage,

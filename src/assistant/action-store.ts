@@ -295,6 +295,14 @@ async function applyActions(database: SQLiteDatabase, input: {
       const afterEvent = await getEvent(eventId, database);
       if (!afterEvent) throw new Error('事件进展写入后事件丢失');
       eventRevisions.set(eventId, afterEvent.revision);
+      await linkMessageSource(database, {
+        requestId: input.requestId,
+        operationKey: operation.key,
+        messageId: input.userMessageId,
+        objectType: 'event',
+        objectId: eventId,
+        createdAt: input.createdAt,
+      });
       committed.push(await insertOperation(database, {
         requestId: input.requestId,
         operation,

@@ -34,6 +34,11 @@ function compactSummary(value: unknown): string | undefined {
   return normalized.length <= 240 ? normalized : `${normalized.slice(0, 239)}…`;
 }
 
+function assertNoExecutionClaim(reply: string): void {
+  const claim = /我(?:已经|已|刚刚)?(?:替你|帮你|为你)?(?:把[^，。！？]{0,30})?(?:记下|记录|保存|创建|新建|更新|修改|完成|置顶|关联)(?:了|好|完成)|(?:已经|已)(?:帮你|为你|替你)(?:把[^，。！？]{0,30})?(?:记下|记录|保存|创建|新建|更新|修改|完成|置顶|关联)|(?:待办|事件)(?:已经|已)(?:创建|保存|更新|完成)/;
+  if (claim.test(reply)) throw new AssistantProtocolError('自然回复不能声称候选操作已经成功');
+}
+
 function requiredText(value: unknown, field: string, limit: number): string {
   if (typeof value !== 'string' || !value.trim()) {
     throw new AssistantProtocolError(`模型返回缺少 ${field}`);
@@ -174,6 +179,7 @@ export function parseAssistantTurnOutput(content: string): AssistantTurnOutput {
   if (!raw || typeof raw !== 'object') throw new AssistantProtocolError('模型返回缺少对象');
   const reply = typeof raw.reply === 'string' ? raw.reply.trim() : '';
   if (!reply) throw new AssistantProtocolError('模型返回缺少自然回复');
+  assertNoExecutionClaim(reply);
   const action = raw.segment?.action;
   if (action !== 'continue' && action !== 'split_before_user') {
     throw new AssistantProtocolError('模型返回了非法分段动作');

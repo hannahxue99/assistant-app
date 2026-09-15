@@ -232,6 +232,16 @@ async function main() {
   assert.ok(mortgageDetail.todos.some(todo => todo.dueAt === 9000));
   assert.equal(mortgageDetail.updates[0].content, '已提前还款 30 万', '关键进展应按最新在前展示');
   assert.equal(await eventStore.getEventDetail('missing-event'), null, '不存在事件应返回局部空结果');
+  const relink = await eventStore.linkObjects({
+    fromType: 'todo', fromId: hiddenRelatedTodo.id, relationType: 'related',
+    toType: 'event', toId: firstEvent.id, createdAt: 3500,
+  });
+  sqlite.prepare('UPDATE assistant_object_relations SET undone_at=3600 WHERE id=?').run(relink.id);
+  const reactivated = await eventStore.linkObjects({
+    fromType: 'todo', fromId: hiddenRelatedTodo.id, relationType: 'related',
+    toType: 'event', toId: firstEvent.id, createdAt: 3700,
+  });
+  assert.equal(reactivated.undoneAt, null, '撤销后的对象关系必须允许再次建立');
 
   const undoUser = await assistantStore.saveUserTurn({
     requestId: 'request-undo-create', content: '持续跟进搬家，周六打包', source: 'text', createdAt: 4000,

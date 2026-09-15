@@ -97,6 +97,12 @@ export function validateAssistantActions(input: {
     }
 
     if (operation.type === 'create_event') {
+      if (eventDecision.kind === 'ambiguous'
+        && !input.actionContext.explicitEventId
+        && !input.actionContext.segmentEventId) {
+        reject(operation, 'ambiguous_candidate');
+        continue;
+      }
       if (!shouldAdmitNewEvent(input.currentMessage, input.recentEvidence)) {
         reject(operation, 'event_admission_failed');
         continue;
@@ -155,4 +161,3 @@ export function validateAssistantActions(input: {
 
   return { accepted, rejected };
 }
-

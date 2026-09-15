@@ -119,6 +119,7 @@ export interface AssistantActionContext {
   todos: AssistantTodoCandidate[];
   explicitEventId: string | null;
   segmentEventId: string | null;
+  segmentTodoId?: string | null;
 }
 
 export type ValidatedAssistantOperation =

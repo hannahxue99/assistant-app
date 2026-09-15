@@ -281,10 +281,13 @@ export function linkObjects(input: {
   const id = input.id ?? makeId('relation', createdAt);
   return writeWith(database, async (connection) => {
     await connection.runAsync(
-      `INSERT OR IGNORE INTO assistant_object_relations (
+      `INSERT INTO assistant_object_relations (
          id, from_type, from_id, relation_type, to_type, to_id,
          source_message_id, created_at, undone_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+       ON CONFLICT(from_type, from_id, relation_type, to_type, to_id)
+       DO UPDATE SET source_message_id=excluded.source_message_id,
+         created_at=excluded.created_at, undone_at=NULL`,
       id, input.fromType, input.fromId, input.relationType, input.toType, input.toId,
       input.sourceMessageId ?? null, createdAt,
     );
