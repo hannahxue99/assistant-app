@@ -135,7 +135,16 @@ export async function beginRetry(requestId: string, updatedAt = Date.now()): Pro
 export async function completeTurn(input: CompleteTurnInput): Promise<AssistantMessage> {
   const reply = input.reply.trim();
   if (!reply) throw new Error('助手回复不能为空');
-  return withExclusiveDatabaseTransaction(async (txn) => {
+  return withExclusiveDatabaseTransaction(txn => completeTurnWithDatabase(txn, input));
+}
+
+/** 在调用方事务内完成分段和回复，用于把对象操作与成功回执原子提交。 */
+export async function completeTurnWithDatabase(
+  txn: SQLiteDatabase,
+  input: CompleteTurnInput,
+): Promise<AssistantMessage> {
+    const reply = input.reply.trim();
+    if (!reply) throw new Error('助手回复不能为空');
     const existing = await txn.getFirstAsync<any>(
       "SELECT * FROM assistant_messages WHERE request_id=? AND role='assistant'",
       input.requestId,
@@ -194,7 +203,6 @@ export async function completeTurn(input: CompleteTurnInput): Promise<AssistantM
       createdAt, input.requestId,
     );
     return rowToMessage(await txn.getFirstAsync<any>('SELECT * FROM assistant_messages WHERE id=?', replyId));
-  });
 }
 
 export async function failTurn(requestId: string, errorCode: string, updatedAt = Date.now()): Promise<void> {

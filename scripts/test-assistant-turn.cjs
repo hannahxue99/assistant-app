@@ -20,7 +20,7 @@ const adapter = {
 };
 
 let providerCalls = 0;
-let provider = async () => ({ reply: '默认回复', segment: { action: 'continue' } });
+let provider = async () => ({ reply: '默认回复', segment: { action: 'continue' }, operations: [] });
 const cache = new Map();
 function load(file) {
   const normalized = path.posix.normalize(file);
@@ -82,7 +82,7 @@ async function main() {
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(first, duplicate, '同一请求并发发送必须共享同一个任务');
   assert.equal(providerCalls, 1, '同一请求并发只能调用一次模型');
-  release({ reply: '好，我们继续。', segment: { action: 'continue', summary: '用户继续讨论照片整理。' } });
+  release({ reply: '好，我们继续。', segment: { action: 'continue', summary: '用户继续讨论照片整理。' }, operations: [] });
   const completed = await first;
   assert.equal(completed.assistantMessage.content, '好，我们继续。');
 
@@ -93,7 +93,7 @@ async function main() {
   const failed = (await store.listMessages({ limit: 20 })).find(item => item.requestId === 'request-2');
   assert.equal(failed.status, 'failed', '模型失败后原话应保留为可重试');
 
-  provider = async () => ({ reply: '网络恢复了。', segment: { action: 'continue' } });
+  provider = async () => ({ reply: '网络恢复了。', segment: { action: 'continue' }, operations: [] });
   const retried = await orchestrator.retryAssistantTurn({ requestId: 'request-2', settings });
   assert.equal(retried.assistantMessage.content, '网络恢复了。');
   assert.equal((await store.listMessages({ limit: 20 })).filter(item => item.requestId === 'request-2').length, 2,
@@ -102,6 +102,7 @@ async function main() {
   provider = async () => ({
     reply: '我们换到新话题。',
     segment: { action: 'split_before_user', previousSummary: '照片整理讨论结束。', summary: '开始讨论旅行。' },
+    operations: [],
   });
   await orchestrator.sendAssistantTurn({
     requestId: 'request-3', content: '说说下次旅行吧', source: 'text', settings, createdAt: 3000,
@@ -110,6 +111,68 @@ async function main() {
   assert.equal(segments.filter(item => item.status === 'current').length, 1, '始终只能有一个当前分段');
   assert.ok(segments.some(item => item.status === 'closed' && item.summary === '照片整理讨论结束。'),
     '切换话题必须关闭旧分段并保存最终摘要');
+
+  provider = async () => ({
+    reply: '好，明天买牛奶。',
+    segment: { action: 'continue' },
+    operations: [
+      { key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '买牛奶', dateText: '明天' },
+      { key: 'event', type: 'create_event', eventRef: 'event_1', title: '买牛奶', currentState: '准备购买' },
+    ],
+  });
+  const oneOff = await orchestrator.sendAssistantTurn({
+    requestId: 'request-4', content: '明天买牛奶', source: 'text', settings,
+    createdAt: new Date('2026-09-15T10:00:00+08:00').getTime(),
+  });
+  assert.equal(oneOff.operations.length, 1, '一次性行动只应提交待办，不提交事件');
+  assert.equal(oneOff.operations[0].operationType, 'create_todo');
+  const milkTodo = sqlite.prepare("SELECT * FROM entries WHERE kind='task' AND summary='买牛奶'").get();
+  assert.ok(milkTodo?.due_at, '有日期待办应写入现有 entries 并解析日期');
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM assistant_events WHERE title='买牛奶'").get().count, 0);
+
+  provider = async () => ({
+    reply: '我们继续沿着换房这条主线聊。',
+    segment: { action: 'continue', summary: '用户开始持续推进换房计划。' },
+    operations: [
+      { key: 'event', type: 'create_event', eventRef: 'event_1', title: '换房计划', currentState: '开始看房' },
+      { key: 'progress', type: 'append_event_update', event: { kind: 'local', ref: 'event_1' }, content: '开始看房' },
+      { key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '周六看第二套房', dateText: '周六' },
+      { key: 'link', type: 'link_todo_event', todo: { kind: 'local', ref: 'todo_1' }, event: { kind: 'local', ref: 'event_1' } },
+    ],
+  });
+  const eventTurn = await orchestrator.sendAssistantTurn({
+    requestId: 'request-5', content: '换房计划要持续跟进，周六看第二套房', source: 'text', settings,
+    createdAt: new Date('2026-09-15T11:00:00+08:00').getTime(),
+  });
+  assert.equal(eventTurn.operations.length, 4, '同轮事件、进展、待办和关联应合并提交');
+  const houseEvent = sqlite.prepare("SELECT * FROM assistant_events WHERE title='换房计划'").get();
+  assert.equal(houseEvent.current_state, '开始看房');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM assistant_event_updates WHERE event_id=?').get(houseEvent.id).count, 1);
+  assert.equal(sqlite.prepare(`SELECT COUNT(*) AS count FROM assistant_object_relations
+    WHERE from_type='todo' AND relation_type='belongs_to' AND to_id=?`).get(houseEvent.id).count, 1);
+
+  const retriedSucceeded = await orchestrator.retryAssistantTurn({ requestId: 'request-5', settings });
+  assert.equal(retriedSucceeded.operations.length, 4, '成功请求重试应读取原操作回执');
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM assistant_events WHERE title='换房计划'").get().count, 1,
+    '成功请求重试不得重复创建事件');
+
+  sqlite.exec(`CREATE TRIGGER fail_assistant_operation
+    BEFORE INSERT ON assistant_operations BEGIN SELECT RAISE(ABORT, 'forced operation failure'); END;`);
+  provider = async () => ({
+    reply: '这只是自然回复，不能单独保存。',
+    segment: { action: 'continue' },
+    operations: [{ key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '不应留下的待办' }],
+  });
+  await assert.rejects(orchestrator.sendAssistantTurn({
+    requestId: 'request-rollback', content: '记一个不应留下的待办', source: 'text', settings, createdAt: 5000,
+  }), /forced operation failure/);
+  sqlite.exec('DROP TRIGGER fail_assistant_operation');
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM entries WHERE summary='不应留下的待办'").get().count, 0,
+    '操作日志失败时对象写入必须一起回滚');
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM assistant_messages WHERE request_id='request-rollback' AND role='assistant'").get().count, 0,
+    '事务失败时不得留下助手成功回复');
+  assert.equal(sqlite.prepare("SELECT status FROM assistant_requests WHERE id='request-rollback'").get().status, 'failed',
+    '事务失败后用户原话应保留为可重试状态');
 
   console.log('assistant turn tests passed');
   sqlite.close();

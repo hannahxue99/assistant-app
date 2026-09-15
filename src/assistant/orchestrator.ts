@@ -2,11 +2,12 @@ import { getSettings, listByKeyword, listEntries } from '../db';
 import type { Settings } from '../types';
 import { buildAssistantContext, type AssistantLaunchContext } from './context';
 import { loadAssistantActionContext } from './action-context';
+import { completeAssistantTurnWithActions, listCommittedOperationsByRequest } from './action-store';
+import { validateAssistantActions } from './action-validator';
 import { requestAssistantTurn } from './provider';
 import { rankRelevantEntries, rankRelevantSegments } from './retrieval';
 import {
   beginRetry,
-  completeTurn,
   failTurn,
   getCurrentSegment,
   getRequestState,
@@ -15,10 +16,12 @@ import {
   saveUserTurn,
 } from './store';
 import type { AssistantMessage } from './types';
+import type { AssistantOperation } from './action-types';
 
 export interface AssistantTurnResult {
   userMessage: AssistantMessage;
   assistantMessage: AssistantMessage;
+  operations: AssistantOperation[];
   contextStats: {
     estimatedTokens: number;
     selectedSegments: number;
@@ -73,6 +76,7 @@ async function runSavedTurn(input: {
     return {
       userMessage: state.userMessage,
       assistantMessage: state.assistantMessage,
+      operations: await listCommittedOperationsByRequest(input.requestId),
       contextStats: { estimatedTokens: 0, selectedSegments: 0, selectedEntries: 0 },
     };
   }
@@ -118,14 +122,30 @@ async function runSavedTurn(input: {
       context,
       referenceAt: state.userMessage.createdAt,
     });
-    const assistantMessage = await completeTurn({
+    const validation = validateAssistantActions({
+      operations: output.operations ?? [],
+      actionContext,
+      currentMessage: state.userMessage.content,
+      recentEvidence: messages
+        .filter(message => message.role === 'user' && message.id !== state.userMessage.id)
+        .slice(-6)
+        .map(message => message.content),
+      referenceAt: state.userMessage.createdAt,
+    });
+    const completed = await completeAssistantTurnWithActions({
       requestId: input.requestId,
+      userMessageId: state.userMessage.id,
+      userSource: state.userMessage.source,
       reply: output.reply,
       segment: output.segment,
+      operations: validation.accepted,
+      actionContext,
+      createdAt: state.userMessage.createdAt,
     });
     return {
       userMessage: (await getRequestState(input.requestId))?.userMessage ?? state.userMessage,
-      assistantMessage,
+      assistantMessage: completed.assistantMessage,
+      operations: completed.operations,
       contextStats: {
         estimatedTokens: context.estimatedTokens,
         selectedSegments: context.selectedSegmentIds.length,

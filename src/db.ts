@@ -351,6 +351,81 @@ export async function insertEntry(input: NewEntryInput, parsed?: {
   return (await getEntry(id))!;
 }
 
+/** 小知事务内创建待办；调用方必须使用当前独占事务连接。 */
+export async function insertAssistantTaskWithDatabase(
+  database: SQLite.SQLiteDatabase,
+  input: {
+    id: string;
+    text: string;
+    dueAt: number | null;
+    source: 'text' | 'voice';
+    createdAt: number;
+  },
+): Promise<Entry> {
+  const text = input.text.trim();
+  if (!text) throw new Error('待办内容不能为空');
+  await database.runAsync(
+    `INSERT INTO entries (
+       id, raw_text, kind, summary, due_at, remind_at, topic, tags, persons,
+       parse_status, parse_source, created_at, updated_at, revision_at, done, done_at, source
+     ) VALUES (?, ?, 'task', ?, ?, ?, NULL, '[]', '[]', 'ok', 'llm', ?, ?, ?, 0, NULL, ?)
+     ON CONFLICT(id) DO NOTHING`,
+    input.id, text, text, input.dueAt, input.dueAt,
+    input.createdAt, input.createdAt, input.createdAt, input.source,
+  );
+  await syncFtsWithDatabase(database, input.id);
+  const row = await database.getFirstAsync<any>('SELECT * FROM entries WHERE id=?', input.id);
+  if (!row) throw new Error('待办创建失败');
+  return rowToEntry(row);
+}
+
+export async function getEntryWithDatabase(
+  database: SQLite.SQLiteDatabase,
+  id: string,
+): Promise<Entry | null> {
+  const row = await database.getFirstAsync<any>('SELECT * FROM entries WHERE id=?', id);
+  return row ? rowToEntry(row) : null;
+}
+
+/** 小知事务内修改待办；revision 不一致时返回 null，避免覆盖用户较新的修改。 */
+export async function updateAssistantTaskWithDatabase(
+  database: SQLite.SQLiteDatabase,
+  input: {
+    id: string;
+    expectedRevisionAt: number;
+    text?: string;
+    dueAt?: number;
+    updatedAt: number;
+  },
+): Promise<Entry | null> {
+  const current = await getEntryWithDatabase(database, input.id);
+  if (!current || current.kind !== 'task' || current.revisionAt !== input.expectedRevisionAt) return null;
+  const text = input.text?.trim() || current.summary;
+  const dueAt = input.dueAt !== undefined ? input.dueAt : current.dueAt;
+  const result = await database.runAsync(
+    `UPDATE entries SET summary=?, due_at=?, remind_at=?, parse_status='ok', parse_source='llm',
+       updated_at=?, revision_at=MAX(revision_at+1, ?)
+     WHERE id=? AND kind='task' AND revision_at=?`,
+    text, dueAt, dueAt, input.updatedAt, input.updatedAt, input.id, input.expectedRevisionAt,
+  );
+  if (result.changes === 0) return null;
+  await syncFtsWithDatabase(database, input.id);
+  return getEntryWithDatabase(database, input.id);
+}
+
+export async function completeAssistantTaskWithDatabase(
+  database: SQLite.SQLiteDatabase,
+  input: { id: string; expectedRevisionAt: number; completedAt: number },
+): Promise<Entry | null> {
+  const result = await database.runAsync(
+    `UPDATE entries SET done=1, done_at=?, updated_at=?, revision_at=MAX(revision_at+1, ?)
+     WHERE id=? AND kind='task' AND done=0 AND revision_at=?`,
+    input.completedAt, input.completedAt, input.completedAt, input.id, input.expectedRevisionAt,
+  );
+  if (result.changes === 0) return null;
+  return getEntryWithDatabase(database, input.id);
+}
+
 /** 批量插入（供测试/恢复） */
 export async function insertEntries(items: NewEntryInput[]): Promise<Entry[]> {
   const out: Entry[] = [];
