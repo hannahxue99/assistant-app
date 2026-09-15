@@ -1,6 +1,7 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 import baseAppJson from '../app.json';
 import resolveAppConfig, { resolveAppVariant } from '../app.config';
+import packageJson from '../package.json';
 
 type Variant = 'development' | 'production' | undefined;
 
@@ -60,6 +61,15 @@ try {
 check(
   invalidVariantError instanceof Error && /Unsupported APP_VARIANT: preview/.test(invalidVariantError.message),
   'Unknown variants must fail configuration',
+);
+
+check(
+  packageJson.scripts['ios:dev'].includes('ios-device-build.cjs development'),
+  'Dev installation must use the signed device build wrapper',
+);
+check(
+  packageJson.scripts['ios:release'].includes('ios-device-build.cjs production'),
+  'Release installation must use the signed device build wrapper',
 );
 
 delete process.env.APP_VARIANT;

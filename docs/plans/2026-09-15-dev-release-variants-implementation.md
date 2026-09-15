@@ -95,7 +95,7 @@ Add a config plugin using `withEntitlementsPlist` to delete `aps-environment`, m
 
 **Step 3: Add safe commands**
 
-Add explicit `start:dev`, `prebuild:ios:dev`, `prebuild:ios:release`, `ios:dev`, and `ios:release` scripts. Both device build commands run their matching clean Prebuild first.
+Add explicit `start:dev`, `prebuild:ios:dev`, `prebuild:ios:release`, `ios:dev`, and `ios:release` scripts. Both device build commands run their matching clean Prebuild first, then use a shared device-build wrapper that selects a physical iPhone, allows Xcode to create or renew provisioning, stages the exact `.app`, and installs it without starting Metro.
 
 **Step 4: Run the focused test**
 
@@ -118,7 +118,7 @@ Expected: PASS.
 
 **Step 1: Generate the non-destructive icon variant**
 
-Edit `assets/images/icon.png` with high input fidelity. Keep the original icon unchanged and add only a small, legible `DEV` badge in the lower-right safe area.
+Edit `assets/images/icon.png` with high input fidelity. Keep the original icon unchanged and add only a small, legible `DEV` badge in the upper-left safe area.
 
 **Step 2: Inspect the result**
 
@@ -163,7 +163,7 @@ Expected: generated project uses `com.huanxue.assistantapp`, `UMP8R97X9B`, and h
 
 Run: `APP_VARIANT=development npx expo prebuild --platform ios --clean`
 
-Expected: Pods install and the worktree is ready for `npm run ios:dev`.
+Expected: Pods install and the worktree is ready for the signed device-build wrapper used by `npm run ios:dev`.
 
 ### Task 6: Update operator documentation and run full checks
 
@@ -209,9 +209,9 @@ Create the PR with base `codex/xiaozhi-conversation-v03`, clearly marking the de
 
 **Step 3: Install Dev on the connected iPhone**
 
-Run: `npm run ios:dev`
+Run: `npm run ios:dev -- <optional-device-UDID-or-name>`
 
-Expected: “私人助手 Dev” installs beside “私人助手”.
+Expected: Xcode automatically creates or renews the Personal Team provisioning profile, then “私人助手 Dev” installs beside “私人助手” without starting Metro.
 
 **Step 4: Start Metro and execute manual cases**
 

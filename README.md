@@ -55,7 +55,7 @@ npm install
 npm run ios:dev
 ```
 
-- 首次会让你选开发团队（Apple ID 即可，免费 Personal Team）。
+- 脚本会自动选择唯一连接的真机，并让 Xcode 创建或续期 Personal Team 描述文件；连接多台设备时可执行 `npm run ios:dev -- <设备 UDID 或名称>` 指定。
 - 编译完成后会安装独立的“私人助手 Dev”，不会覆盖手机上的“私人助手” Release。首次打开若提示"不受信任的开发者"：
   **设置 → 通用 → VPN与设备管理 → 信任你的 Apple ID**。
 - 免费证书 7 天过期，到期重跑一次命令即可（自用完全够）。
@@ -72,7 +72,7 @@ npm run start:dev
 
 ### 第 3 步 · 完整功能（dev build）
 
-第 1 步编译出的就是 dev client。只有原生依赖、权限、图标或 App Config 改变时才需要重新执行 `npm run ios:dev`；普通 JS、文案和样式改动只需 `npm run start:dev`。
+第 1 步编译出的就是 dev client。`npm run ios:dev` 只负责生成和安装，不会重复启动 Metro；安装后再执行 `npm run start:dev`。只有原生依赖、权限、图标或 App Config 改变时才需要重新安装，普通 JS、文案和样式改动只需启动 Metro。
 
 ## 二、配置 LLM 理解（可选但推荐）
 
