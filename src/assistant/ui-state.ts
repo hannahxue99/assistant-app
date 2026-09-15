@@ -13,6 +13,33 @@ export interface AssistantScrollMetrics {
   offsetY: number;
 }
 
+export interface AssistantTodoNavigationIntent {
+  view: 'week' | 'all';
+  focusTodoId: string | null;
+  key: string;
+  isNew: boolean;
+}
+
+/** 跳链只负责一次性进入定位；相同参数不得在重渲染时覆盖用户的手动 Tab 选择。 */
+export function assistantTodoNavigationIntent(
+  todoView: string | undefined,
+  focusTodoId: string | undefined,
+  consumedKey: string,
+): AssistantTodoNavigationIntent | null {
+  const view = todoView === 'week' || todoView === 'all' ? todoView : null;
+  if (!view) return null;
+  const normalizedFocusTodoId = typeof focusTodoId === 'string' && focusTodoId.length > 0
+    ? focusTodoId
+    : null;
+  const key = `${view}:${normalizedFocusTodoId ?? ''}`;
+  return {
+    view,
+    focusTodoId: normalizedFocusTodoId,
+    key,
+    isNew: key !== consumedKey,
+  };
+}
+
 export function shouldFollowAssistantEnd(
   metrics: AssistantScrollMetrics,
   threshold = 96,

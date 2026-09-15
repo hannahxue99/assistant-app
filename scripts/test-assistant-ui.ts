@@ -7,6 +7,7 @@ import {
   mergeAssistantMessages,
   assistantReceiptState,
   assistantReceiptTarget,
+  assistantTodoNavigationIntent,
   groupAssistantReceiptOperations,
   shouldFollowAssistantEnd,
 } from '../src/assistant/ui-state';
@@ -84,6 +85,14 @@ check(!shouldFollowAssistantEnd({ contentHeight: 1200, viewportHeight: 600, offs
   '用户上滑阅读历史时不得强制拉回末端');
 check(shouldFollowAssistantEnd({ contentHeight: 400, viewportHeight: 600, offsetY: 0 }),
   '内容不足一屏时应视为位于末端');
+
+const firstTodoIntent = assistantTodoNavigationIntent('all', 'todo-long', '');
+check(firstTodoIntent?.isNew && firstTodoIntent.view === 'all', '新的全部待办跳链应被首次消费');
+const repeatedTodoIntent = assistantTodoNavigationIntent('all', 'todo-long', firstTodoIntent.key);
+check(repeatedTodoIntent?.isNew === false, '相同跳链重渲染时不得再次覆盖用户选择');
+const nextTodoIntent = assistantTodoNavigationIntent('week', 'todo-week', firstTodoIntent.key);
+check(nextTodoIntent?.isNew && nextTodoIntent.view === 'week', '新的小知回执仍应切换并定位正确列表');
+check(assistantTodoNavigationIntent('other', 'todo-1', '') === null, '无效待办视图参数必须忽略');
 
 function operation(overrides: Partial<AssistantOperation> = {}): AssistantOperation {
   return {

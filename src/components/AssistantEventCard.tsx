@@ -46,7 +46,6 @@ export function AssistantEventCard({
 
 const styles = StyleSheet.create({
   card: {
-    minHeight: 102,
     position: 'relative',
     borderRadius: theme.radius.card,
     borderWidth: 1,
@@ -54,10 +53,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.card,
   },
   pinned: { borderColor: '#E2C77F', backgroundColor: '#FFFCF3' },
-  content: { minHeight: 100, paddingHorizontal: 12, paddingVertical: 12, gap: 4 },
+  content: { paddingHorizontal: 12, paddingVertical: 10, gap: 3 },
   title: { color: theme.colors.text, fontSize: 17, lineHeight: 23, fontWeight: theme.fontWeight.semibold, paddingRight: 38 },
   state: { color: theme.colors.text, fontSize: theme.font.small, lineHeight: 19, paddingRight: 20 },
-  time: { color: theme.colors.textDim, fontSize: 11, marginTop: 1 },
+  time: { color: theme.colors.textDim, fontSize: 11, lineHeight: 16 },
   pinButton: {
     position: 'absolute',
     right: 0,

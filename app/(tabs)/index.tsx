@@ -48,6 +48,7 @@ import {
 import type { Entry, Settings, TopicGroup } from '../../src/types';
 import type { AssistantEvent } from '../../src/assistant/action-types';
 import { listEvents, setEventPinned } from '../../src/assistant/event-store';
+import { assistantTodoNavigationIntent } from '../../src/assistant/ui-state';
 import { theme } from '../../src/theme';
 
 type MemoTab = 'aggregate' | 'voice';
@@ -141,15 +142,17 @@ export default function HomeScreen() {
   }, [todoView]);
 
   useEffect(() => {
-    const nextView = params.todoView === 'all' ? 'all' : params.todoView === 'week' ? 'week' : null;
-    if (nextView) setTodoView(nextView);
-    const focusTodoId = typeof params.focusTodoId === 'string' ? params.focusTodoId : null;
-    if (!nextView || !focusTodoId) return;
-    const intent = `${nextView}:${focusTodoId}`;
-    if (lastFocusIntent.current === intent) return;
-    lastFocusIntent.current = intent;
-    pendingFocusTodoId.current = focusTodoId;
-    setHighlightedTodoId(focusTodoId);
+    const intent = assistantTodoNavigationIntent(
+      params.todoView,
+      params.focusTodoId,
+      lastFocusIntent.current,
+    );
+    if (!intent?.isNew) return;
+    lastFocusIntent.current = intent.key;
+    setTodoView(intent.view);
+    if (!intent.focusTodoId) return;
+    pendingFocusTodoId.current = intent.focusTodoId;
+    setHighlightedTodoId(intent.focusTodoId);
     if (highlightTimer.current) clearTimeout(highlightTimer.current);
     highlightTimer.current = setTimeout(() => setHighlightedTodoId(null), 1800);
     requestAnimationFrame(tryFocusTodo);
