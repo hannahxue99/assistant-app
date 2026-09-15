@@ -97,6 +97,10 @@ async function main() {
   const memoryStore = load('src/assistant/memory-store.ts');
   const memoryMigration = load('src/assistant/memory-migration.ts');
   const memoryValidator = load('src/assistant/memory-validator.ts');
+  const assistantStore = load('src/assistant/store.ts');
+  const actionStore = load('src/assistant/action-store.ts');
+  const actionUndo = load('src/assistant/action-undo.ts');
+  const uiState = load('src/assistant/ui-state.ts');
   for (const table of ['assistant_memories', 'assistant_memory_sources']) {
     assert.equal(sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)?.name, table);
   }
@@ -186,6 +190,33 @@ async function main() {
   assert.equal(await memoryStore.forgetMemory({
     id: activeAgain.id, expectedRevision: activeAgain.revision - 1, updatedAt: 4400,
   }), null, '旧 revision 不得覆盖较新记忆');
+
+  const memoryUser = await assistantStore.saveUserTurn({
+    requestId: 'request-memory-atomic', content: '记住我不喜欢临时开会，我通常先写提纲',
+    source: 'text', createdAt: 5000,
+  });
+  const memoryTurn = await actionStore.completeAssistantTurnWithActions({
+    requestId: 'request-memory-atomic', userMessageId: memoryUser.id, userSource: memoryUser.source,
+    reply: '记住了。', segment: { action: 'continue' }, operations: [],
+    memoryDeltas: [{
+      key: 'memory_delta_1', action: 'create_active', category: 'preference',
+      content: '不喜欢临时开会', sensitivity: 'ordinary', admissionBasis: 'explicit', evidence: '不喜欢临时开会',
+    }, {
+      key: 'memory_delta_2', action: 'create_candidate', category: 'recurring_pattern',
+      content: '通常先写提纲', sensitivity: 'ordinary', admissionBasis: 'inferred', evidence: '通常先写提纲',
+    }],
+    actionContext: { events: [], todos: [], explicitEventId: null, segmentEventId: null },
+    createdAt: 5000,
+  });
+  assert.equal(memoryTurn.operations.length, 2, '显式和候选记忆应与回复原子提交并进入内部操作日志');
+  const receipt = uiState.assistantReceiptState(memoryTurn.operations);
+  assert.equal(receipt.groups.length, 1, '后台候选记忆不得出现在用户回执');
+  assert.match(receipt.groups[0].summaries[0], /不喜欢临时开会/);
+  assert.equal(await actionUndo.undoAssistantRequest('request-memory-atomic', 5100).then(result => result.status), 'undone');
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM assistant_memories WHERE created_at=5000").get().count, 0,
+    '撤销整轮时应移除本轮新建的显式和候选记忆');
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM assistant_memory_sources WHERE created_at=5000").get().count, 0,
+    '撤销整轮时应同时移除本轮记忆来源');
   console.log('assistant memory database tests passed');
   sqlite.close();
 }

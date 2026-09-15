@@ -133,13 +133,21 @@ export function assistantReceiptState(operations: AssistantOperation[]): {
   operations: AssistantOperation[];
   groups: AssistantReceiptGroup[];
 } {
-  const sorted = [...operations].sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id));
+  const sorted = operations
+    .filter(operation => !isHiddenMemoryCandidateOperation(operation))
+    .sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id));
   return {
     visible: sorted.length > 0,
     canUndo: sorted.length > 0 && sorted.some(operation => operation.status === 'committed'),
     operations: sorted,
     groups: groupAssistantReceiptOperations(sorted),
   };
+}
+
+function isHiddenMemoryCandidateOperation(operation: AssistantOperation): boolean {
+  if (operation.objectType !== 'memory' || operation.operationType !== 'create_memory') return false;
+  const after = snapshot(operation.afterSnapshot);
+  return after?.status === 'candidate';
 }
 
 export interface AssistantReceiptGroup {
@@ -192,6 +200,7 @@ export function assistantReceiptTarget(operation: AssistantOperation, now = Date
     return `/?todoView=${view}&focusTodoId=${encodeURIComponent(operation.objectId)}`;
   }
   if (operation.objectType === 'event') return `/event/${encodeURIComponent(operation.objectId)}`;
+  if (operation.objectType === 'memory') return '/profile';
   const after = snapshot(operation.afterSnapshot);
   if (operation.objectType === 'event_update') {
     const eventId = after?.event?.id ?? after?.eventId ?? after?.event_id;

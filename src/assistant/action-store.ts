@@ -15,6 +15,16 @@ import type {
   ValidatedAssistantOperation,
 } from './action-types';
 import {
+  activateMemoryWithDatabase,
+  addMemorySourceWithDatabase,
+  createMemoryWithDatabase,
+  deterministicMemoryId,
+  forgetMemoryWithDatabase,
+  getMemoryWithDatabase,
+  supersedeMemoryWithDatabase,
+} from './memory-store';
+import type { ValidatedAssistantMemoryDelta } from './memory-types';
+import {
   appendEventUpdate,
   createEvent,
   getEvent,
@@ -61,7 +71,7 @@ function rowToOperation(row: any): AssistantOperation {
 
 async function insertOperation(database: SQLiteDatabase, input: {
   requestId: string;
-  operation: ValidatedAssistantOperation;
+  operation: { key: string; type: AssistantOperation['operationType'] };
   objectType: AssistantOperation['objectType'];
   objectId: string;
   before: unknown | null;
@@ -110,13 +120,14 @@ async function applyActions(database: SQLiteDatabase, input: {
   operations: ValidatedAssistantOperation[];
   actionContext: AssistantActionContext;
   createdAt: number;
+  sequenceStart?: number;
 }): Promise<AssistantOperation[]> {
   const committed: AssistantOperation[] = [];
   const localTodoRefs = new Map<string, string>();
   const localEventRefs = new Map<string, string>();
   const todoRevisions = new Map(input.actionContext.todos.map(todo => [todo.id, todo.revisionAt]));
   const eventRevisions = new Map(input.actionContext.events.map(event => [event.id, event.revision]));
-  let sequence = 0;
+  let sequence = input.sequenceStart ?? 0;
 
   for (const operation of input.operations) {
     if (operation.type === 'create_todo') {
@@ -358,6 +369,140 @@ async function applyActions(database: SQLiteDatabase, input: {
   return committed;
 }
 
+async function applyMemoryDeltas(database: SQLiteDatabase, input: {
+  requestId: string;
+  userMessageId: string;
+  deltas: ValidatedAssistantMemoryDelta[];
+  createdAt: number;
+  sequenceStart: number;
+}): Promise<AssistantOperation[]> {
+  const committed: AssistantOperation[] = [];
+  let sequence = input.sequenceStart;
+
+  for (const delta of input.deltas) {
+    const sourceId = deterministicId('assistant-memory-source', input.requestId, delta.key);
+    if (delta.action === 'create_candidate' || delta.action === 'create_active') {
+      const memory = await createMemoryWithDatabase(database, {
+        id: deterministicMemoryId(input.requestId, delta.key),
+        category: delta.category,
+        content: delta.content,
+        status: delta.action === 'create_active' ? 'active' : 'candidate',
+        sensitivity: delta.sensitivity,
+        admissionBasis: delta.admissionBasis,
+        createdAt: input.createdAt,
+      });
+      await addMemorySourceWithDatabase(database, {
+        id: sourceId,
+        memoryId: memory.id,
+        sourceMessageId: input.userMessageId,
+        evidence: delta.evidence,
+        createdAt: input.createdAt,
+      });
+      committed.push(await insertOperation(database, {
+        requestId: input.requestId,
+        operation: { key: delta.key, type: 'create_memory' },
+        objectType: 'memory',
+        objectId: memory.id,
+        before: null,
+        after: memory,
+        receiptSummary: memory.status === 'active' ? `记住：${memory.content}` : '候选记忆（未展示）',
+        sequence: sequence++,
+        createdAt: input.createdAt,
+      }));
+      continue;
+    }
+
+    if (delta.action === 'activate_candidate') {
+      const before = await getMemoryWithDatabase(database, delta.memoryId);
+      const after = before && await activateMemoryWithDatabase(database, {
+        id: delta.memoryId,
+        expectedRevision: delta.expectedRevision,
+        admissionBasis: delta.admissionBasis,
+        updatedAt: input.createdAt,
+      });
+      if (!before || !after) throw new Error('候选记忆激活时发生版本冲突');
+      await addMemorySourceWithDatabase(database, {
+        id: sourceId,
+        memoryId: after.id,
+        sourceMessageId: input.userMessageId,
+        evidence: delta.evidence,
+        createdAt: input.createdAt,
+      });
+      committed.push(await insertOperation(database, {
+        requestId: input.requestId,
+        operation: { key: delta.key, type: 'activate_memory' },
+        objectType: 'memory',
+        objectId: after.id,
+        before,
+        after,
+        receiptSummary: `记住：${after.content}`,
+        sequence: sequence++,
+        createdAt: input.createdAt,
+      }));
+      continue;
+    }
+
+    if (delta.action === 'supersede_memory') {
+      const result = await supersedeMemoryWithDatabase(database, {
+        id: delta.memoryId,
+        expectedRevision: delta.expectedRevision,
+        successorId: deterministicMemoryId(input.requestId, delta.key),
+        category: delta.category,
+        content: delta.content,
+        sensitivity: delta.sensitivity,
+        admissionBasis: 'explicit',
+        updatedAt: input.createdAt,
+      });
+      if (!result) throw new Error('长期记忆更新时发生版本冲突');
+      await addMemorySourceWithDatabase(database, {
+        id: sourceId,
+        memoryId: result.successor.id,
+        sourceMessageId: input.userMessageId,
+        evidence: delta.evidence,
+        createdAt: input.createdAt,
+      });
+      committed.push(await insertOperation(database, {
+        requestId: input.requestId,
+        operation: { key: delta.key, type: 'supersede_memory' },
+        objectType: 'memory',
+        objectId: result.before.id,
+        before: result.before,
+        after: { old: result.old, successor: result.successor },
+        receiptSummary: `更新记忆：${result.successor.content}`,
+        sequence: sequence++,
+        createdAt: input.createdAt,
+      }));
+      continue;
+    }
+
+    const result = await forgetMemoryWithDatabase(database, {
+      id: delta.memoryId,
+      expectedRevision: delta.expectedRevision,
+      updatedAt: input.createdAt,
+    });
+    if (!result) throw new Error('长期记忆忘记时发生版本冲突');
+    await addMemorySourceWithDatabase(database, {
+      id: sourceId,
+      memoryId: result.after.id,
+      sourceMessageId: input.userMessageId,
+      evidence: delta.evidence,
+      createdAt: input.createdAt,
+    });
+    committed.push(await insertOperation(database, {
+      requestId: input.requestId,
+      operation: { key: delta.key, type: 'forget_memory' },
+      objectType: 'memory',
+      objectId: result.after.id,
+      before: result.before,
+      after: result.after,
+      receiptSummary: `忘记：${result.before.content}`,
+      sequence: sequence++,
+      createdAt: input.createdAt,
+    }));
+  }
+  return committed;
+}
+
 export function listCommittedOperationsByRequest(
   requestId: string,
   database?: SQLiteDatabase,
@@ -402,18 +547,26 @@ export async function completeAssistantTurnWithActions(input: {
   reply: string;
   segment: AssistantSegmentDecision;
   operations: ValidatedAssistantOperation[];
+  memoryDeltas?: ValidatedAssistantMemoryDelta[];
   actionContext: AssistantActionContext;
   createdAt?: number;
 }): Promise<{ assistantMessage: AssistantMessage; operations: AssistantOperation[] }> {
   const createdAt = input.createdAt ?? Date.now();
   return withExclusiveDatabaseTransaction(async (database) => {
     const operations = await applyActions(database, { ...input, createdAt });
+    const memoryOperations = await applyMemoryDeltas(database, {
+      requestId: input.requestId,
+      userMessageId: input.userMessageId,
+      deltas: input.memoryDeltas ?? [],
+      createdAt,
+      sequenceStart: operations.length,
+    });
     const assistantMessage = await completeTurnWithDatabase(database, {
       requestId: input.requestId,
       reply: input.reply,
       segment: input.segment,
       createdAt,
     });
-    return { assistantMessage, operations };
+    return { assistantMessage, operations: [...operations, ...memoryOperations] };
   });
 }

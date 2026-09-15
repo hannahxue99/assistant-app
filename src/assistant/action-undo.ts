@@ -10,6 +10,8 @@ import type { Entry } from '../types';
 import type { AssistantEvent, AssistantOperation } from './action-types';
 import { listCommittedOperationsByRequest } from './action-store';
 import { getEvent } from './event-store';
+import { getMemoryWithDatabase } from './memory-store';
+import type { AssistantMemory } from './memory-types';
 
 export type AssistantUndoStatus = 'undone' | 'already-undone' | 'conflict';
 
@@ -25,6 +27,7 @@ function parseSnapshot<T>(value: string | null): T | null {
 function finalObjectRevisions(operations: AssistantOperation[]) {
   const todos = new Map<string, number>();
   const events = new Map<string, number>();
+  const memories = new Map<string, { revision: number; status: AssistantMemory['status'] }>();
   for (const operation of operations) {
     if (operation.objectType === 'todo') {
       const after = parseSnapshot<Entry>(operation.afterSnapshot);
@@ -35,9 +38,20 @@ function finalObjectRevisions(operations: AssistantOperation[]) {
     } else if (operation.objectType === 'event_update') {
       const after = parseSnapshot<{ event?: AssistantEvent }>(operation.afterSnapshot);
       if (after?.event) events.set(after.event.id, after.event.revision);
+    } else if (operation.objectType === 'memory') {
+      if (operation.operationType === 'supersede_memory') {
+        const after = parseSnapshot<{ old?: AssistantMemory; successor?: AssistantMemory }>(operation.afterSnapshot);
+        if (after?.old) memories.set(after.old.id, { revision: after.old.revision, status: after.old.status });
+        if (after?.successor) {
+          memories.set(after.successor.id, { revision: after.successor.revision, status: after.successor.status });
+        }
+      } else {
+        const after = parseSnapshot<AssistantMemory>(operation.afterSnapshot);
+        if (after) memories.set(after.id, { revision: after.revision, status: after.status });
+      }
     }
   }
-  return { todos, events };
+  return { todos, events, memories };
 }
 
 async function canUndo(database: SQLiteDatabase, operations: AssistantOperation[]): Promise<boolean> {
@@ -49,6 +63,10 @@ async function canUndo(database: SQLiteDatabase, operations: AssistantOperation[
   for (const [id, revision] of revisions.events) {
     const current = await getEvent(id, database);
     if (!current || current.revision !== revision) return false;
+  }
+  for (const [id, expected] of revisions.memories) {
+    const current = await getMemoryWithDatabase(database, id);
+    if (!current || current.revision !== expected.revision || current.status !== expected.status) return false;
   }
   for (const operation of operations) {
     if (operation.objectType === 'event_update') {
@@ -81,11 +99,50 @@ async function restoreEvent(
   );
 }
 
+async function restoreMemory(
+  database: SQLiteDatabase,
+  snapshot: AssistantMemory,
+  updatedAt: number,
+): Promise<void> {
+  await database.runAsync(
+    `UPDATE assistant_memories SET category=?, content=?, normalized_content=?, status=?,
+       sensitivity=?, admission_basis=?, superseded_by_id=?, revision=revision+1,
+       updated_at=?, activated_at=?, superseded_at=?, forgotten_at=? WHERE id=?`,
+    snapshot.category, snapshot.content, snapshot.normalizedContent, snapshot.status,
+    snapshot.sensitivity, snapshot.admissionBasis, snapshot.supersededById,
+    Math.max(snapshot.updatedAt, updatedAt), snapshot.activatedAt, snapshot.supersededAt,
+    snapshot.forgottenAt, snapshot.id,
+  );
+}
+
 async function undoOperation(
   database: SQLiteDatabase,
   operation: AssistantOperation,
   undoneAt: number,
 ): Promise<void> {
+  if (operation.operationType === 'create_memory') {
+    await database.runAsync('DELETE FROM assistant_memory_sources WHERE memory_id=?', operation.objectId);
+    await database.runAsync('DELETE FROM assistant_memories WHERE id=?', operation.objectId);
+    return;
+  }
+
+  if (operation.operationType === 'activate_memory' || operation.operationType === 'forget_memory') {
+    const before = parseSnapshot<AssistantMemory>(operation.beforeSnapshot);
+    if (!before) throw new Error('记忆撤销快照损坏');
+    await restoreMemory(database, before, undoneAt);
+    return;
+  }
+
+  if (operation.operationType === 'supersede_memory') {
+    const before = parseSnapshot<AssistantMemory>(operation.beforeSnapshot);
+    const after = parseSnapshot<{ successor?: AssistantMemory }>(operation.afterSnapshot);
+    if (!before || !after?.successor) throw new Error('记忆更新撤销快照损坏');
+    await database.runAsync('DELETE FROM assistant_memory_sources WHERE memory_id=?', after.successor.id);
+    await database.runAsync('DELETE FROM assistant_memories WHERE id=?', after.successor.id);
+    await restoreMemory(database, before, undoneAt);
+    return;
+  }
+
   if (operation.operationType === 'link_todo_event') {
     await database.runAsync(
       'UPDATE assistant_object_relations SET undone_at=? WHERE id=? AND undone_at IS NULL',
@@ -155,12 +212,18 @@ export async function undoAssistantRequest(
     const operations = all.filter(operation => operation.status === 'committed');
     if (!(await canUndo(database, operations))) return { status: 'conflict' };
 
-    for (const operation of [...operations].sort((left, right) => right.sequence - left.sequence)) {
-      await undoOperation(database, operation, undoneAt);
-    }
     const userMessage = await database.getFirstAsync<{ user_message_id: string }>(
       'SELECT user_message_id FROM assistant_requests WHERE id=?', requestId,
     );
+    if (userMessage) {
+      await database.runAsync(
+        'DELETE FROM assistant_memory_sources WHERE source_message_id=?',
+        userMessage.user_message_id,
+      );
+    }
+    for (const operation of [...operations].sort((left, right) => right.sequence - left.sequence)) {
+      await undoOperation(database, operation, undoneAt);
+    }
     if (userMessage) {
       await database.runAsync(
         `UPDATE assistant_object_relations SET undone_at=?

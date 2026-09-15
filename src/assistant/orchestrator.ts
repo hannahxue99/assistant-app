@@ -6,6 +6,8 @@ import { completeAssistantTurnWithActions, listCommittedOperationsByRequest } fr
 import { prepareAssistantActions } from './event-delta';
 import { requestAssistantTurn } from './provider';
 import { ASSISTANT_PROMPT_VERSION } from './prompt';
+import { loadAssistantMemoryContext } from './memory-retrieval';
+import { validateAssistantMemoryDeltas } from './memory-validator';
 import {
   beginAssistantDecisionLog,
   recordAssistantDecisionCommit,
@@ -34,6 +36,7 @@ export interface AssistantTurnResult {
     estimatedTokens: number;
     selectedSegments: number;
     selectedEntries: number;
+    selectedMemories: number;
   };
 }
 
@@ -96,16 +99,17 @@ async function runSavedTurn(input: {
       userMessage: state.userMessage,
       assistantMessage: state.assistantMessage,
       operations: await listCommittedOperationsByRequest(input.requestId),
-      contextStats: { estimatedTokens: 0, selectedSegments: 0, selectedEntries: 0 },
+      contextStats: { estimatedTokens: 0, selectedSegments: 0, selectedEntries: 0, selectedMemories: 0 },
     };
   }
 
-  const [messages, currentSegment, closedSegments, relevantEntries, settings] = await Promise.all([
+  const [messages, currentSegment, closedSegments, relevantEntries, settings, memoryContext] = await Promise.all([
     listMessages({ limit: 12 }),
     getCurrentSegment(),
     listClosedSegments(100),
     findRelatedEntries(state.userMessage.content),
     input.settings ? Promise.resolve(input.settings) : getSettings(),
+    loadAssistantMemoryContext(state.userMessage.content),
   ]);
   const actionContext = await loadAssistantActionContext({
     query: state.userMessage.content,
@@ -125,6 +129,7 @@ async function runSavedTurn(input: {
     relevantEntries: relevantEntries.filter(item => !recentLegacyIds.has(item.id)),
     launchContext: input.launchContext,
     actionContext,
+    memoryContext,
     inputBudget: 6000,
   });
   console.log('[assistant-context]', {
@@ -132,6 +137,7 @@ async function runSavedTurn(input: {
     recentMessages: context.recentMessages.length,
     selectedSegments: context.selectedSegmentIds.length,
     selectedEntries: context.selectedEntryIds.length,
+    selectedMemories: context.selectedMemoryIds.length,
     trimmed: context.stats,
   });
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
@@ -148,6 +154,7 @@ async function runSavedTurn(input: {
       entryIds: context.selectedEntryIds,
       eventCandidateIds: actionContext.events.map(event => event.id),
       todoCandidateIds: actionContext.todos.map(todo => todo.id),
+      memoryIds: context.selectedMemoryIds,
       launchContextId: input.launchContext?.id ?? null,
     },
     createdAt: state.userMessage.createdAt,
@@ -162,10 +169,12 @@ async function runSavedTurn(input: {
       onReplyText: input.onReplyText,
     });
     const eventDeltas = output.eventDeltas ?? [];
+    const memoryDeltas = output.memoryDeltas ?? [];
     await safelyLog(() => recordAssistantModelDecision({
       requestId: input.requestId,
       operations: output.operations ?? [],
       eventDeltas,
+      memoryDeltas,
       metadata: output.providerMetadata,
     }));
     const recentEvidence = messages
@@ -180,14 +189,27 @@ async function runSavedTurn(input: {
       recentEvidence,
       referenceAt: state.userMessage.createdAt,
     });
+    const selectedMemoryIdSet = new Set(context.selectedMemoryIds);
+    const memoryValidation = await validateAssistantMemoryDeltas({
+      deltas: memoryDeltas,
+      context: {
+        active: memoryContext.active.filter(memory => selectedMemoryIdSet.has(memory.id)),
+        candidates: memoryContext.candidates.filter(memory => selectedMemoryIdSet.has(memory.id)),
+      },
+      userMessage: state.userMessage.content,
+      userMessageId: state.userMessage.id,
+    });
     await safelyLog(() => recordAssistantValidation({
       requestId: input.requestId,
       accepted: validation.accepted,
       rejected: validation.rejected,
       compiled: validation.compiled,
+      acceptedMemoryDeltas: memoryValidation.accepted,
+      rejectedMemoryDeltas: memoryValidation.rejected,
     }));
     const replyForCommit = output.providerMetadata?.protocolWarnings.includes('reply_execution_claim')
       && validation.accepted.length === 0
+      && memoryValidation.accepted.length === 0
       ? '我理解了，但这次没有形成可保存的操作。请再告诉我一次要记录什么。'
       : output.reply;
     const completed = await completeAssistantTurnWithActions({
@@ -197,6 +219,7 @@ async function runSavedTurn(input: {
       reply: replyForCommit,
       segment: output.segment,
       operations: validation.accepted,
+      memoryDeltas: memoryValidation.accepted,
       actionContext,
     });
     await safelyLog(() => recordAssistantDecisionCommit({
@@ -208,7 +231,9 @@ async function runSavedTurn(input: {
         requestId: input.requestId,
         proposed: (output.operations ?? []).map(operation => operation.type),
         eventDeltas: eventDeltas.map(delta => delta.key),
+        memoryDeltas: memoryDeltas.map(delta => `${delta.action}:${delta.key}`),
         rejected: validation.rejected.map(item => `${item.type}:${item.reason}`),
+        rejectedMemories: memoryValidation.rejected.map(item => `${item.action}:${item.reason}`),
         committed: completed.operations.map(operation => operation.operationType),
         modelMs: output.providerMetadata
           ? output.providerMetadata.completedAt - output.providerMetadata.startedAt
@@ -227,6 +252,7 @@ async function runSavedTurn(input: {
         estimatedTokens: context.estimatedTokens,
         selectedSegments: context.selectedSegmentIds.length,
         selectedEntries: context.selectedEntryIds.length,
+        selectedMemories: context.selectedMemoryIds.length,
       },
     };
   } catch (error: any) {

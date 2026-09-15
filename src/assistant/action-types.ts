@@ -1,4 +1,4 @@
-export type AssistantObjectType = 'message' | 'todo' | 'event' | 'event_update' | 'relation';
+export type AssistantObjectType = 'message' | 'todo' | 'event' | 'event_update' | 'relation' | 'memory';
 export type AssistantEventStatus = 'active' | 'closed';
 export type AssistantOperationStatus = 'committed' | 'undone';
 export type AssistantRelationType = 'source' | 'belongs_to' | 'follows' | 'related';
@@ -60,7 +60,11 @@ export type AssistantOperationType =
   | 'append_event_update'
   | 'rename_event'
   | 'pin_event'
-  | 'link_todo_event';
+  | 'link_todo_event'
+  | 'create_memory'
+  | 'activate_memory'
+  | 'supersede_memory'
+  | 'forget_memory';
 
 export type AssistantDateStatus = 'resolved' | 'ambiguous' | 'absent';
 export type AssistantTimePrecision = 'date' | 'dateTime';
