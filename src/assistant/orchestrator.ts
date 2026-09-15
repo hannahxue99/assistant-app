@@ -1,6 +1,7 @@
 import { getSettings, listByKeyword, listEntries } from '../db';
 import type { Settings } from '../types';
 import { buildAssistantContext, type AssistantLaunchContext } from './context';
+import { loadAssistantActionContext } from './action-context';
 import { requestAssistantTurn } from './provider';
 import { rankRelevantEntries, rankRelevantSegments } from './retrieval';
 import {
@@ -83,6 +84,11 @@ async function runSavedTurn(input: {
     findRelatedEntries(state.userMessage.content),
     input.settings ? Promise.resolve(input.settings) : getSettings(),
   ]);
+  const actionContext = await loadAssistantActionContext({
+    query: state.userMessage.content,
+    launchContext: input.launchContext,
+    currentSegmentId: currentSegment?.id,
+  });
   const recentLegacyIds = new Set(messages.map(item => item.legacyEntryId).filter(Boolean));
   const context = buildAssistantContext({
     recentMessages: messages.map(item => ({
@@ -95,6 +101,7 @@ async function runSavedTurn(input: {
     retrievedSegments: rankRelevantSegments(state.userMessage.content, closedSegments),
     relevantEntries: relevantEntries.filter(item => !recentLegacyIds.has(item.id)),
     launchContext: input.launchContext,
+    actionContext,
     inputBudget: 6000,
   });
   console.log('[assistant-context]', {

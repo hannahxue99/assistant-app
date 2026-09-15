@@ -1,4 +1,5 @@
 import { estimateAssistantTokens, truncateToAssistantTokenBudget } from './token-budget';
+import type { AssistantActionContext } from './action-types';
 
 export { estimateAssistantTokens } from './token-budget';
 
@@ -38,6 +39,7 @@ export interface AssistantContextInput {
   retrievedSegments?: RetrievedSegment[];
   relevantEntries?: RelevantEntry[];
   launchContext?: AssistantLaunchContext | null;
+  actionContext?: AssistantActionContext;
   inputBudget?: number;
 }
 
@@ -71,6 +73,7 @@ function renderContextBlock(input: {
   currentSummary: string;
   segments: RetrievedSegment[];
   entries: RelevantEntry[];
+  actionContext?: AssistantActionContext;
 }): string {
   const sections = [
     '上下文使用规则：历史摘要或旧记录与最近原话冲突时，以最近原话为准；不要把未提及的旧内容强行带入当前回答。',
@@ -90,6 +93,16 @@ function renderContextBlock(input: {
   }
   if (input.entries.length) {
     sections.push(`相关旧记录：\n${input.entries.map(item => `- ${item.text}`).join('\n')}`);
+  }
+  if (input.actionContext?.events.length) {
+    sections.push(`可更新的事件候选（只能使用这些 ID）：\n${input.actionContext.events.map(item => (
+      `- ${item.id}｜${item.title}｜当前：${item.currentState || '暂无状态'}`
+    )).join('\n')}`);
+  }
+  if (input.actionContext?.todos.length) {
+    sections.push(`可更新的待办候选（只能使用这些 ID）：\n${input.actionContext.todos.map(item => (
+      `- ${item.id}｜${item.text}${item.dueAt ? `｜日期：${new Date(item.dueAt).toLocaleString('zh-CN')}` : '｜暂无日期'}`
+    )).join('\n')}`);
   }
   return sections.join('\n\n');
 }
@@ -132,15 +145,16 @@ export function buildAssistantContext(input: AssistantContextInput): AssistantCo
     currentSummary,
     segments,
     entries,
+    actionContext: input.actionContext,
   });
 
   while (totalTokens(contextBlock, recentMessages) > inputBudget && entries.length) {
     entries = entries.slice(0, -1);
-    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries });
+    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, actionContext: input.actionContext });
   }
   while (totalTokens(contextBlock, recentMessages) > inputBudget && segments.length) {
     segments = segments.slice(0, -1);
-    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries });
+    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, actionContext: input.actionContext });
   }
   while (totalTokens(contextBlock, recentMessages) > inputBudget && recentMessages.length > 1) {
     recentMessages = recentMessages.slice(1);
@@ -153,10 +167,11 @@ export function buildAssistantContext(input: AssistantContextInput): AssistantCo
       currentSummary: '',
       segments: [],
       entries: [],
+      actionContext: input.actionContext,
     });
     const summaryBudget = Math.max(0, inputBudget - messagesCost - estimateAssistantTokens(fixedBlock) - 8);
     currentSummary = truncateToAssistantTokenBudget(currentSummary, summaryBudget);
-    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries });
+    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, actionContext: input.actionContext });
   }
 
   if (totalTokens(contextBlock, recentMessages) > inputBudget && recentMessages.length) {

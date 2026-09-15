@@ -78,3 +78,48 @@ export type AssistantOperationProposal =
   | { key: string; type: 'rename_event'; eventId: string; title: string }
   | { key: string; type: 'pin_event'; eventId: string; pinned: boolean }
   | { key: string; type: 'link_todo_event'; todo: AssistantObjectRef; event: AssistantObjectRef };
+
+export interface AssistantEventCandidate {
+  id: string;
+  title: string;
+  currentState: string;
+  aliases: string[];
+  linkedTodoTexts: string[];
+  recentUpdateTexts?: string[];
+  revision: number;
+  updatedAt: number;
+  score: number;
+}
+
+export interface AssistantTodoCandidate {
+  id: string;
+  text: string;
+  dueAt: number | null;
+  revisionAt: number;
+  updatedAt: number;
+  score: number;
+}
+
+export interface AssistantActionContext {
+  events: AssistantEventCandidate[];
+  todos: AssistantTodoCandidate[];
+  explicitEventId: string | null;
+  segmentEventId: string | null;
+}
+
+export type ValidatedAssistantOperation =
+  | (Extract<AssistantOperationProposal, { type: 'create_todo' }> & { dueAt: number | null })
+  | (Extract<AssistantOperationProposal, { type: 'update_todo' }> & { dueAt?: number })
+  | Exclude<AssistantOperationProposal, { type: 'create_todo' | 'update_todo' }>;
+
+export interface AssistantActionRejection {
+  key: string;
+  type: AssistantOperationType;
+  reason:
+    | 'candidate_not_allowed'
+    | 'ambiguous_candidate'
+    | 'event_admission_failed'
+    | 'duplicate_content'
+    | 'invalid_date'
+    | 'invalid_local_reference';
+}
