@@ -7,7 +7,7 @@
 1. **本机 git https 传输不可靠**：`git push`/`fetch` 会无限挂起（疑 Clash 代理干扰 443 大流量），但 `gh api` 通道正常。推送失败时**不要反复重试**，直接走 GitHub API 四步：blob 上传（`base64 | jq | gh api git/blobs`）→ 组 tree（基于远端 HEAD 的 base_tree）→ 建 commit → PATCH ref。见 `github-ci-and-git-toolchain.md`。
 2. **必须用 `/usr/bin/git` 2.50.1**（AGENTS.md 规定）：PATH 里的 `/usr/local/bin/git` 2.6.4 是 Xcode 附带旧版，会半途挂起且难察觉——`ps aux | grep git` 看到 `/Applications/Xcode.app/.../git` 就该杀掉重来。
 3. **expo CLI 设备识别两种 ID**：`devicectl` 的 coredevice UUID（15988BB1-…）expo 不认，要用 `xctrace` 的 UDID（00008150-…）或设备名；设备名解析偶发失败，UDID 最稳。锁屏只影响「自动启动」，不影响安装——装上了就是装上了。
-4. **Metro 隧道是手机联网前提**（Mac 在 11.x 企业内网）：`npx expo start --tunnel --dev-client`，地址每次重启都变。Debug 版 App 没有它就是砖。
+4. **Reload 是 Metro 地址契约，不是自动找最新版**：Dev App 会继续请求当前 host/port。交付前先用 `lsof -nP -iTCP:<port> -sTCP:LISTEN` 找监听者，再用 `lsof -a -p <pid> -d cwd -Fn` 核对工作目录；必须让当前功能 worktree 接管 App 已连接的同一端口。旧分支占 8081、新分支开 8082 时，Reload 仍然只会加载旧版。只有看到手机发起 bundle 请求并出现成功的 `iOS Bundled`，才可以说“Reload 已生效”。企业网络确实不可达时再使用 tunnel，但 tunnel 地址变化意味着必须重新连接，不能再承诺只点 Reload。
 5. **prebuild 后必查两处**（详见 `app-icon-redesign.md`）：`ios/app/app.entitlements` 被写回 `aps-environment` 要清掉；签名配置可能被重置。
 
 ## 二、真机验收方法论（这是本案最大教训）
@@ -19,6 +19,13 @@
 3. **小尺寸视觉问题的诊断顺序**：占比 → 对比度 → 信息密度。「糊」不一定是分辨率问题，本案真根因是品牌橙对纸底对比度只有 1.72:1（加深一档到 2.03:1 解决）；格线灰雾是第三层。**别在第一层假设上反复调参**。
 4. **用户反馈「不对劲」时先量化再动手**：用户说「虚、不实，不是大小问题」——一算对比度立刻定位。用户说「没居中」——一算质心发现 bbox 对齐偏了 (54,79)px。主观反馈 + 客观量化 = 快速收敛。
 5. **平台限制先行验证**：「按尺寸出图标」在本项目不可行——iOS 26 appiconset 只认单一 1024px（actool 实测）。先花 10 分钟验证平台能力，再设计方案，避免整个方向返工。
+
+### Reload 交付固定流程
+
+1. 确认 Dev App 当前连接的 host/port，不另起一个“新版端口”让用户手动切换。
+2. 精确核对当前监听进程的 PID、工作目录和分支；只停止已确认的旧 Metro。
+3. 从待验收功能 worktree 在原 host/port 启动 Metro。
+4. 主动触发 Reload，等待真机请求与完整打包成功；没有设备请求就不能宣称手机已运行新版。
 
 ## 三、设计协作流程（走通了的一套）
 
@@ -57,8 +64,8 @@ npx expo prebuild --platform ios --no-install
 npx expo run:ios --device 00008150-000E4C963C01401C          # Debug
 npx expo run:ios --device 00008150-000E4C963C01401C --configuration Release
 
-# 手机连不上 App（Error loading app）
-npx expo start --tunnel --dev-client       # 地址在输出里，手机杀 App 重开
+# 手机连不上 App（Error loading app，且确认局域网不可达）
+npx expo start --tunnel --dev-client       # 地址会变化，必须明确重新连接，不能只说 Reload
 
 # git push 挂起时的 API 推送（详见 github-ci-and-git-toolchain.md）
 ```
