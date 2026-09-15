@@ -29,6 +29,11 @@ export const assistantActionSchema = `
   CREATE INDEX IF NOT EXISTS idx_assistant_event_aliases_alias
     ON assistant_event_aliases(alias COLLATE NOCASE);
 
+  CREATE TABLE IF NOT EXISTS assistant_migrations (
+    migration_key TEXT PRIMARY KEY,
+    completed_at INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS assistant_event_updates (
     id TEXT PRIMARY KEY,
     event_id TEXT NOT NULL,
@@ -48,10 +53,10 @@ export const assistantActionSchema = `
 
   CREATE TABLE IF NOT EXISTS assistant_object_relations (
     id TEXT PRIMARY KEY,
-    from_type TEXT NOT NULL CHECK (from_type IN ('todo', 'event', 'event_update', 'relation')),
+    from_type TEXT NOT NULL CHECK (from_type IN ('message', 'todo', 'event', 'event_update', 'relation')),
     from_id TEXT NOT NULL,
     relation_type TEXT NOT NULL CHECK (relation_type IN ('source', 'belongs_to', 'follows', 'related')),
-    to_type TEXT NOT NULL CHECK (to_type IN ('todo', 'event', 'event_update', 'relation')),
+    to_type TEXT NOT NULL CHECK (to_type IN ('message', 'todo', 'event', 'event_update', 'relation')),
     to_id TEXT NOT NULL,
     source_message_id TEXT,
     created_at INTEGER NOT NULL,
@@ -92,4 +97,3 @@ export const assistantActionSchema = `
   CREATE INDEX IF NOT EXISTS idx_assistant_operations_object
     ON assistant_operations(object_type, object_id, created_at DESC);
 `;
-

@@ -19,6 +19,7 @@ import {
 } from '@/src/engine/notifications';
 import { retryFailedUnderstandings } from '@/src/engine/understand';
 import { migrateLegacyEntriesToAssistantHistory } from '@/src/assistant/migration';
+import { migrateLegacyTopicsToEvents } from '@/src/assistant/event-migration';
 import { recoverInterruptedAssistantRequests } from '@/src/assistant/store';
 import { theme } from '@/src/theme';
 
@@ -64,6 +65,12 @@ export default function RootLayout() {
       } catch (e) {
         // 旧表仍是事实来源；迁移失败不阻塞 App，下次启动从未迁移条目继续。
         console.warn('旧原声迁移未完成，将在下次启动续跑', e);
+      }
+      try {
+        await migrateLegacyTopicsToEvents();
+      } catch (e) {
+        // 旧 topic/entries 仍完整保留；事件迁移按主题幂等，下次启动可继续。
+        console.warn('旧主题迁移未完成，将在下次启动续跑', e);
       }
       setStartupState('ready');
     } catch (e) {

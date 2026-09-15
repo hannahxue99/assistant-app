@@ -1,4 +1,4 @@
-export type AssistantObjectType = 'todo' | 'event' | 'event_update' | 'relation';
+export type AssistantObjectType = 'message' | 'todo' | 'event' | 'event_update' | 'relation';
 export type AssistantEventStatus = 'active' | 'closed';
 export type AssistantOperationStatus = 'committed' | 'undone';
 export type AssistantRelationType = 'source' | 'belongs_to' | 'follows' | 'related';
@@ -78,4 +78,3 @@ export type AssistantOperationProposal =
   | { key: string; type: 'rename_event'; eventId: string; title: string }
   | { key: string; type: 'pin_event'; eventId: string; pinned: boolean }
   | { key: string; type: 'link_todo_event'; todo: AssistantObjectRef; event: AssistantObjectRef };
-
