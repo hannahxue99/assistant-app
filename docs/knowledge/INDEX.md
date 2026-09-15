@@ -5,7 +5,7 @@
 | 专题 | 内容 | 最近更新 |
 |---|---|---|
 | [小知发送状态：单一反馈与草稿安全](xiaozhi-sending-state.md) | 立即清空与置灰、消息区唯一进度、落库边界、失败恢复与PR #17回滚 | 2026-09-15 |
-| [Agent 开发实战手册](agent-dev-playbook.md) | 环境铁律、Metro Reload 端点契约、真机验收方法论、设计协作与流程纪律 | 2026-09-15 |
+| [Agent 开发实战手册](agent-dev-playbook.md) | 环境铁律、Tunnel/USB/Metro Reload 端点契约、真机验收方法论与流程纪律 | 2026-09-15 |
 | [App 图标重设计](app-icon-redesign.md) | 一勾即安定稿、60px对比度诊断、iOS 26单尺寸限制与prebuild连环坑 | 2026-09-09 |
 | [苹果日历同步](calendar-sync.md) | 全天/定时、设备映射、删除墓碑、重试、跨日坑与PR #14发布 | 2026-09-08 |
 | [GitHub CI 与 Git 工具链](github-ci-and-git-toolchain.md) | PR自动门禁、Git版本抢占、workflow scope与凭据helper优先级 | 2026-09-08 |

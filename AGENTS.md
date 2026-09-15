@@ -25,8 +25,11 @@ For every new product or feature request, follow this sequence:
   - A Bundle ID change creates a different App identity and requires an explicit data migration plan.
 - Treat “Reload” as an endpoint contract, not merely a button press. Before telling the user that Reload is sufficient:
   - Resolve the Metro listener on the Dev App's current host/port and verify its working directory and Git branch.
+  - Preserve the working transport as well as the port. For this project's physical iPhone on the corporate network, the established path is Expo/ngrok tunnel; do not replace an existing tunnel URL with LAN merely because both use Metro port 8081.
+  - Treat USB/CoreDevice as an app install, launch, and control channel, not as proof that the phone can reach a LAN Metro URL.
   - Make the current feature worktree own that same endpoint. Never leave an old branch on the current port, start the new branch on another port, and claim that Reload will switch versions.
-  - After replacing a stale listener, trigger Reload and wait for an actual device bundle request plus a successful `iOS Bundled` result with no runtime error.
+  - Before an automated physical-device launch, read `devicectl device info lockState`; do not discover a locked device only after launch fails.
+  - After replacing a stale listener, trigger Reload and wait for an actual physical-device bundle request plus a successful `iOS Bundled` result with no runtime error. A generic iOS bundle while Simulator is connected is not phone-verification evidence.
   - If the endpoint must change, Reload alone is not sufficient; either restore the existing endpoint or explicitly describe the required reconnection.
 - Do not expose internal component previews, debug tools, test data, or developer-only copy in user-facing navigation, including Debug builds used for product acceptance. Keep such tools behind internal routes or developer tooling.
 - Automated checks only make a change ready for device acceptance; they do not by themselves complete release.

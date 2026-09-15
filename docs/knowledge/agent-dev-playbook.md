@@ -7,7 +7,7 @@
 1. **本机 git https 传输不可靠**：`git push`/`fetch` 会无限挂起（疑 Clash 代理干扰 443 大流量），但 `gh api` 通道正常。推送失败时**不要反复重试**，直接走 GitHub API 四步：blob 上传（`base64 | jq | gh api git/blobs`）→ 组 tree（基于远端 HEAD 的 base_tree）→ 建 commit → PATCH ref。见 `github-ci-and-git-toolchain.md`。
 2. **必须用 `/usr/bin/git` 2.50.1**（AGENTS.md 规定）：PATH 里的 `/usr/local/bin/git` 2.6.4 是 Xcode 附带旧版，会半途挂起且难察觉——`ps aux | grep git` 看到 `/Applications/Xcode.app/.../git` 就该杀掉重来。
 3. **expo CLI 设备识别两种 ID**：`devicectl` 的 coredevice UUID（15988BB1-…）expo 不认，要用 `xctrace` 的 UDID（00008150-…）或设备名；设备名解析偶发失败，UDID 最稳。锁屏只影响「自动启动」，不影响安装——装上了就是装上了。
-4. **Reload 是 Metro 地址契约，不是自动找最新版**：Dev App 会继续请求当前 host/port。交付前先用 `lsof -nP -iTCP:<port> -sTCP:LISTEN` 找监听者，再用 `lsof -a -p <pid> -d cwd -Fn` 核对工作目录；必须让当前功能 worktree 接管 App 已连接的同一端口。旧分支占 8081、新分支开 8082 时，Reload 仍然只会加载旧版。只有看到手机发起 bundle 请求并出现成功的 `iOS Bundled`，才可以说“Reload 已生效”。企业网络确实不可达时再使用 tunnel，但 tunnel 地址变化意味着必须重新连接，不能再承诺只点 Reload。
+4. **Reload 是完整 Metro 端点契约，不只是端口**：Dev App 会继续请求当前 scheme/host/port。本项目物理 iPhone 在企业网下已走通的是 Expo/ngrok tunnel；不得因为 LAN 也能占 8081，就把原 tunnel 换成 `11.x:8081`。USB/CoreDevice 只负责安装、启动和传入 URL，不会自动让手机访问 Mac 的企业网 LAN。交付前用 `lsof -nP -iTCP:<port> -sTCP:LISTEN` 找监听者，再用 `lsof -a -p <pid> -d cwd -Fn` 核对工作目录，并确认 Expo 输出仍为预期 transport。旧分支占 8081、新分支开 8082时，Reload 仍只加载旧版；原来是 tunnel、新版却改成 LAN 时，手机会直接报 `Error loading app`。
 5. **prebuild 后必查两处**（详见 `app-icon-redesign.md`）：`ios/app/app.entitlements` 被写回 `aps-environment` 要清掉；签名配置可能被重置。
 
 ## 二、真机验收方法论（这是本案最大教训）
@@ -22,10 +22,11 @@
 
 ### Reload 交付固定流程
 
-1. 确认 Dev App 当前连接的 host/port，不另起一个“新版端口”让用户手动切换。
-2. 精确核对当前监听进程的 PID、工作目录和分支；只停止已确认的旧 Metro。
-3. 从待验收功能 worktree 在原 host/port 启动 Metro。
-4. 主动触发 Reload，等待真机请求与完整打包成功；没有设备请求就不能宣称手机已运行新版。
+1. 确认 Dev App 当前连接的 scheme/host/port 和 transport；本项目物理机默认保留已工作的 Expo tunnel，不擅自改成 LAN，也不另起“新版端口”。
+2. 精确核对当前监听进程的 PID、工作目录和分支；只停止已确认的旧 Metro，再从待验收功能 worktree恢复相同 transport。
+3. USB 自动启动前先读取 `devicectl device info lockState`；解锁后用 `--payload-url` 打开当前 Expo 输出的 Dev URL。
+4. 主动触发 Reload，等待启动动作之后的真机请求与完整打包成功。Simulator 同时在线时，单独一条 `iOS Bundled` 不能证明手机已运行新版。
+5. 保持已验证的 tunnel 进程运行；如果 tunnel URL 确实变化，优先通过 USB 自动传入新 URL，不把切换成本交给用户。
 
 ## 三、设计协作流程（走通了的一套）
 
