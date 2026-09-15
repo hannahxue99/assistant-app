@@ -363,6 +363,28 @@ export function listCommittedOperationsByRequest(
   return database ? read(database) : withDatabaseConnection(read);
 }
 
+export function listOperationsByRequestIds(
+  requestIds: string[],
+): Promise<Map<string, AssistantOperation[]>> {
+  const ids = [...new Set(requestIds.filter(Boolean))].slice(0, 100);
+  if (ids.length === 0) return Promise.resolve(new Map());
+  return withDatabaseConnection(async (database) => {
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = await database.getAllAsync<any>(
+      `SELECT * FROM assistant_operations
+       WHERE request_id IN (${placeholders})
+       ORDER BY request_id, sequence, id`,
+      ...ids,
+    );
+    const result = new Map<string, AssistantOperation[]>();
+    for (const row of rows) {
+      const operation = rowToOperation(row);
+      result.set(operation.requestId, [...(result.get(operation.requestId) ?? []), operation]);
+    }
+    return result;
+  });
+}
+
 export async function completeAssistantTurnWithActions(input: {
   requestId: string;
   userMessageId: string;

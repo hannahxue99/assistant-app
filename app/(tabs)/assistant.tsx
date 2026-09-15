@@ -20,6 +20,8 @@ import {
   mergeAssistantMessages,
 } from '../../src/assistant/ui-state';
 import { retryAssistantTurn, sendAssistantTurn } from '../../src/assistant/orchestrator';
+import { listOperationsByRequestIds } from '../../src/assistant/action-store';
+import { undoAssistantRequest } from '../../src/assistant/action-undo';
 import { getRequestState, listMessages, saveUserTurn } from '../../src/assistant/store';
 import type {
   AssistantEngineStatus,
@@ -52,12 +54,24 @@ export default function AssistantScreen() {
   const [olderLoad, setOlderLoad] = useState<AssistantOlderLoadStatus>('idle');
   const [hasOlder, setHasOlder] = useState(false);
   const [engineStatus, setEngineStatus] = useState<AssistantEngineStatus>('unknown');
+  const [undoingRequestId, setUndoingRequestId] = useState<string | null>(null);
+  const [undoErrors, setUndoErrors] = useState<Record<string, string>>({});
+
+  const attachOperations = useCallback(async (page: AssistantMessage[]) => {
+    const byRequest = await listOperationsByRequestIds(
+      page.filter(message => message.role === 'assistant').map(message => message.requestId),
+    );
+    return page.map(message => message.role === 'assistant'
+      ? { ...message, operations: byRequest.get(message.requestId) ?? [] }
+      : message);
+  }, []);
 
   const loadLatest = useCallback(async (scroll = false) => {
-    const [page, settings] = await Promise.all([
+    const [rawPage, settings] = await Promise.all([
       listMessages({ limit: PAGE_SIZE }),
       getSettings().catch(() => null),
     ]);
+    const page = await attachOperations(rawPage);
     if (!mountedRef.current) return;
     setMessages(current => mergeAssistantMessages(current, page));
     setHasOlder(page.length === PAGE_SIZE);
@@ -67,7 +81,7 @@ export default function AssistantScreen() {
     loadedOnceRef.current = true;
     setInitialLoad('ready');
     if (scroll) requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
-  }, []);
+  }, [attachOperations]);
 
   useFocusEffect(
     useCallback(() => {
@@ -88,7 +102,7 @@ export default function AssistantScreen() {
     olderLoadRef.current = 'loading';
     setOlderLoad('loading');
     try {
-      const page = await listMessages({ limit: PAGE_SIZE, before: messages[0] });
+      const page = await attachOperations(await listMessages({ limit: PAGE_SIZE, before: messages[0] }));
       if (!mountedRef.current) return;
       setMessages(current => mergeAssistantMessages(current, page));
       setHasOlder(page.length === PAGE_SIZE);
@@ -149,6 +163,25 @@ export default function AssistantScreen() {
     })();
   }
 
+  function undo(requestId: string) {
+    if (undoingRequestId) return;
+    setUndoingRequestId(requestId);
+    setUndoErrors(current => ({ ...current, [requestId]: '' }));
+    void undoAssistantRequest(requestId)
+      .then((result) => {
+        if (result.status === 'conflict') {
+          setUndoErrors(current => ({ ...current, [requestId]: '这件事后来有了新变化，不能自动撤销。可以直接告诉小知要怎么改。' }));
+        }
+      })
+      .catch(() => {
+        setUndoErrors(current => ({ ...current, [requestId]: '暂时没能撤销，请稍后再试。' }));
+      })
+      .finally(async () => {
+        await loadLatest(false).catch(() => {});
+        if (mountedRef.current) setUndoingRequestId(null);
+      });
+  }
+
   const composerDisabled = isAssistantComposerDisabled(initialLoad, messages);
   const composerProcessing = hasPendingAssistantReply(messages);
 
@@ -192,6 +225,10 @@ export default function AssistantScreen() {
                 message={item}
                 onRetry={retry}
                 canRetry={canRetryAssistantMessage(item, messages, engineStatus)}
+                onNavigate={target => router.push(target as never)}
+                onUndo={undo}
+                undoing={undoingRequestId === item.requestId}
+                undoError={undoErrors[item.requestId]}
               />
             )}
             contentContainerStyle={[styles.listContent, messages.length === 0 && styles.emptyList]}

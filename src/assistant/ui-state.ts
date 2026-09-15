@@ -4,6 +4,7 @@ import type {
   AssistantMessage,
   AssistantOlderLoadStatus,
 } from './types';
+import type { AssistantOperation } from './action-types';
 
 /** 合并刷新页和历史页；以 id 去重，以更新时间较新的状态覆盖旧状态。 */
 export function mergeAssistantMessages(
@@ -59,4 +60,42 @@ export function canLoadOlderAssistantMessages(
 ): boolean {
   if (status === 'loading') return false;
   return status === 'idle' || (status === 'error' && force);
+}
+
+export function assistantReceiptState(operations: AssistantOperation[]): {
+  visible: boolean;
+  canUndo: boolean;
+  operations: AssistantOperation[];
+} {
+  const sorted = [...operations].sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id));
+  return {
+    visible: sorted.length > 0,
+    canUndo: sorted.length > 0 && sorted.some(operation => operation.status === 'committed'),
+    operations: sorted,
+  };
+}
+
+function snapshot(value: string): any | null {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+export function assistantReceiptTarget(operation: AssistantOperation): string | null {
+  if (operation.objectType === 'todo') return `/entry/${encodeURIComponent(operation.objectId)}`;
+  if (operation.objectType === 'event') return `/event/${encodeURIComponent(operation.objectId)}`;
+  const after = snapshot(operation.afterSnapshot);
+  if (operation.objectType === 'event_update') {
+    const eventId = after?.event?.id ?? after?.eventId ?? after?.event_id;
+    return typeof eventId === 'string' ? `/event/${encodeURIComponent(eventId)}` : null;
+  }
+  if (operation.objectType === 'relation') {
+    const eventId = after?.toType === 'event'
+      ? after.toId
+      : after?.fromType === 'event' ? after.fromId : null;
+    return typeof eventId === 'string' ? `/event/${encodeURIComponent(eventId)}` : null;
+  }
+  return null;
 }

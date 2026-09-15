@@ -3,14 +3,27 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { assistantFailureLabel } from '../assistant/ui-state';
 import type { AssistantMessage } from '../assistant/types';
 import { theme } from '../theme';
+import { AssistantActionReceipt } from './AssistantActionReceipt';
 
 interface AssistantMessageBubbleProps {
   message: AssistantMessage;
   onRetry: (requestId: string) => void;
   canRetry?: boolean;
+  onNavigate?: (target: string) => void;
+  onUndo?: (requestId: string) => void;
+  undoing?: boolean;
+  undoError?: string | null;
 }
 
-export function AssistantMessageBubble({ message, onRetry, canRetry = false }: AssistantMessageBubbleProps) {
+export function AssistantMessageBubble({
+  message,
+  onRetry,
+  canRetry = false,
+  onNavigate = () => {},
+  onUndo = () => {},
+  undoing = false,
+  undoError = null,
+}: AssistantMessageBubbleProps) {
   const isUser = message.role === 'user';
   return (
     <View style={[styles.row, isUser ? styles.userRow : styles.assistantRow]}>
@@ -18,6 +31,17 @@ export function AssistantMessageBubble({ message, onRetry, canRetry = false }: A
         <Text style={[styles.content, isUser && styles.userContent]}>{message.content}</Text>
         <Text style={[styles.time, isUser && styles.userTime]}>{formatMessageTime(message.createdAt)}</Text>
       </View>
+      {!isUser && message.operations?.length ? (
+        <View style={styles.receiptWrap}>
+          <AssistantActionReceipt
+            operations={message.operations}
+            undoing={undoing}
+            undoError={undoError}
+            onNavigate={onNavigate}
+            onUndo={() => onUndo(message.requestId)}
+          />
+        </View>
+      ) : null}
       {isUser && message.status === 'sending' ? (
         <View style={styles.statusRow}>
           <ActivityIndicator size="small" color={theme.colors.textDim} />
@@ -64,4 +88,5 @@ const styles = StyleSheet.create({
   retry: { minHeight: 32, justifyContent: 'center', marginTop: 2, paddingHorizontal: 4 },
   retryPressed: { opacity: 0.6 },
   retryText: { color: theme.colors.red, fontSize: 12 },
+  receiptWrap: { width: '86%' },
 });

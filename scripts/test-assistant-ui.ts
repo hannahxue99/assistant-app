@@ -5,9 +5,12 @@ import {
   hasPendingAssistantReply,
   isAssistantComposerDisabled,
   mergeAssistantMessages,
+  assistantReceiptState,
+  assistantReceiptTarget,
 } from '../src/assistant/ui-state';
 import { ASSISTANT_EMPTY_DESCRIPTION } from '../src/assistant/ui-copy';
 import type { AssistantMessage } from '../src/assistant/types';
+import type { AssistantOperation } from '../src/assistant/action-types';
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -70,5 +73,32 @@ check(canLoadOlderAssistantMessages('idle', false), '空闲时允许自动加载
 check(!canLoadOlderAssistantMessages('error', false), '分页失败后必须停止自动重试');
 check(canLoadOlderAssistantMessages('error', true), '用户点击重试后允许再次分页');
 check(!canLoadOlderAssistantMessages('loading', true), '分页进行中必须阻止重复请求');
+
+function operation(overrides: Partial<AssistantOperation> = {}): AssistantOperation {
+  return {
+    id: 'operation-1', requestId: 'request-1', operationKey: 'one',
+    operationType: 'create_todo', objectType: 'todo', objectId: 'todo-1',
+    beforeSnapshot: null, afterSnapshot: '{}', receiptSummary: '建立待办：整理照片',
+    status: 'committed', sequence: 0, createdAt: 1, undoneAt: null,
+    ...overrides,
+  };
+}
+
+check(assistantReceiptState([]).visible === false, '零操作不应显示空回执');
+const combinedReceipt = assistantReceiptState([
+  operation(),
+  operation({
+    id: 'operation-2', operationKey: 'event', operationType: 'create_event',
+    objectType: 'event', objectId: 'event-1', receiptSummary: '建立事件：照片整理', sequence: 1,
+  }),
+]);
+check(combinedReceipt.visible && combinedReceipt.canUndo, '多个操作应合成一张可撤销回执');
+check(combinedReceipt.operations.map(item => item.sequence).join(',') === '0,1', '回执按操作顺序稳定展示');
+check(assistantReceiptTarget(operation()) === '/entry/todo-1', '待办回执应进入待办详情');
+check(assistantReceiptTarget(operation({
+  operationType: 'create_event', objectType: 'event', objectId: 'event-1',
+})) === '/event/event-1', '事件回执应进入事件详情');
+check(!assistantReceiptState([operation({ status: 'undone', undoneAt: 2 })]).canUndo,
+  '已撤销操作不得再次显示可用撤销');
 
 console.log('assistant UI state tests passed');

@@ -1,3 +1,5 @@
+import type { AssistantOperation } from './action-types';
+
 export type AssistantRole = 'user' | 'assistant';
 export type AssistantMessageStatus = 'saved' | 'sending' | 'failed';
 export type AssistantMessageSource = 'text' | 'voice' | 'legacy' | 'contextual' | 'assistant';
@@ -18,6 +20,7 @@ export interface AssistantMessage {
   updatedAt: number;
   legacyEntryId: string | null;
   errorCode: string | null;
+  operations?: AssistantOperation[];
 }
 
 export interface AssistantMessageCursor {
