@@ -125,6 +125,7 @@ async function applyActions(database: SQLiteDatabase, input: {
         id: todoId,
         text: operation.text,
         dueAt: operation.dueAt,
+        timePrecision: operation.storedTimePrecision ?? (operation.dueAt === null ? null : 'date'),
         source: input.userSource === 'voice' ? 'voice' : 'text',
         createdAt: input.createdAt,
       });
@@ -162,6 +163,7 @@ async function applyActions(database: SQLiteDatabase, input: {
           expectedRevisionAt,
           text: operation.text,
           dueAt: operation.dueAt,
+          timePrecision: operation.storedTimePrecision,
           updatedAt: input.createdAt,
         })
         : await completeAssistantTaskWithDatabase(database, {

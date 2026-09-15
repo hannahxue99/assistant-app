@@ -7,6 +7,7 @@ import {
   mergeAssistantMessages,
   assistantReceiptState,
   assistantReceiptTarget,
+  groupAssistantReceiptOperations,
 } from '../src/assistant/ui-state';
 import { ASSISTANT_EMPTY_DESCRIPTION } from '../src/assistant/ui-copy';
 import type { AssistantMessage } from '../src/assistant/types';
@@ -100,5 +101,25 @@ check(assistantReceiptTarget(operation({
 })) === '/event/event-1', '事件回执应进入事件详情');
 check(!assistantReceiptState([operation({ status: 'undone', undoneAt: 2 })]).canUndo,
   '已撤销操作不得再次显示可用撤销');
+
+const grouped = groupAssistantReceiptOperations([
+  operation({
+    id: 'event-state', operationKey: 'event-state', operationType: 'update_event',
+    objectType: 'event', objectId: 'event-1', receiptSummary: '更新事件：贷款还款', sequence: 0,
+  }),
+  operation({
+    id: 'event-progress', operationKey: 'event-progress', operationType: 'append_event_update',
+    objectType: 'event_update', objectId: 'update-1', receiptSummary: '追加进展：已还30万', sequence: 1,
+    afterSnapshot: JSON.stringify({ event: { id: 'event-1' } }),
+  }),
+  operation({ id: 'todo', operationKey: 'todo', objectId: 'todo-2', receiptSummary: '建立待办：下个月10号还款', sequence: 2 }),
+  operation({
+    id: 'relation', operationKey: 'relation', operationType: 'link_todo_event',
+    objectType: 'relation', objectId: 'relation-1', receiptSummary: '关联待办：还款 → 贷款还款', sequence: 3,
+    afterSnapshot: JSON.stringify({ toType: 'event', toId: 'event-1' }),
+  }),
+]);
+check(grouped.length === 2, '事件、进展、待办和内部关联应压缩成两个对象组');
+check(grouped[0].summaries.length === 2, '同一事件的状态和进展应在同一紧凑组内展示');
 
 console.log('assistant UI state tests passed');

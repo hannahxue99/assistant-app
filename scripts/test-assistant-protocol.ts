@@ -1,6 +1,7 @@
 import { buildAssistantPromptMessages } from '../src/assistant/prompt';
 import { AssistantProtocolError, parseAssistantTurnOutput } from '../src/assistant/protocol';
 import { requestAssistantTurn } from '../src/assistant/provider';
+import { extractPartialJsonStringField } from '../src/assistant/streaming-json';
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -24,7 +25,8 @@ const withOperations = parseAssistantTurnOutput(JSON.stringify({
     },
     {
       key: 'todo-create', type: 'create_todo', todo_ref: 'todo_1',
-      text: '周六去看第二套房', date_text: '周六',
+      text: '周六去看第二套房', date_status: 'resolved', date_text: '周六',
+      due_date: '2026-09-19', time_precision: 'date',
     },
     {
       key: 'link', type: 'link_todo_event', todo_ref: 'todo_1', event_ref: 'event_1',
@@ -34,6 +36,8 @@ const withOperations = parseAssistantTurnOutput(JSON.stringify({
 check(withOperations.operations.length === 3, '应解析同轮事件、待办及关联动作');
 check(withOperations.operations[0].type === 'create_event', '应保留动作判别字段');
 check(withOperations.operations[2].type === 'link_todo_event', '应解析本地引用关系');
+const parsedTodo = withOperations.operations[1];
+check(parsedTodo.type === 'create_todo' && parsedTodo.dueDate === '2026-09-19', '日期必须由模型解析为本地日期');
 
 const existingOperations = parseAssistantTurnOutput(JSON.stringify({
   reply: '这条主线有了新进展。',
@@ -83,6 +87,9 @@ for (const [label, operations] of [
   }))],
   ['字段过长', [{ key: 'x', type: 'create_event', event_ref: 'event_1', title: '事'.repeat(121), current_state: '开始' }]],
   ['错误本地引用', [{ key: 'x', type: 'create_event', event_ref: 'event-x', title: '换房', current_state: '开始' }]],
+  ['新待办缺少日期判断', [{ key: 'x', type: 'create_todo', todo_ref: 'todo_1', text: '买牛奶' }]],
+  ['resolved 缺少日期', [{ key: 'x', type: 'create_todo', todo_ref: 'todo_1', text: '买牛奶', date_status: 'resolved', date_text: '明天', time_precision: 'date' }]],
+  ['date 状态却带时间', [{ key: 'x', type: 'create_todo', todo_ref: 'todo_1', text: '买牛奶', date_status: 'resolved', date_text: '明天', due_date: '2026-09-16', due_time: '09:00', time_precision: 'date' }]],
 ] as const) {
   let rejected = false;
   try {
@@ -106,7 +113,11 @@ const prompt = buildAssistantPromptMessages({
 check(prompt[0].role === 'system', '首条必须是系统约束');
 check(prompt[0].content.includes('不得在自然回复中声称操作已经成功'), '自然回复必须禁止虚假完成');
 check(prompt[0].content.includes('operations'), '提示词必须声明结构化候选动作');
+check(prompt[0].content.includes('事件与待办不是二选一'), '提示词必须允许同轮事件与待办');
+check(prompt[0].content.includes('due_date'), '提示词必须要求模型解析日期');
 check(prompt.at(-1)?.content === '那继续梳理。', '最近原话必须保持角色与顺序');
+check(extractPartialJsonStringField('{"reply":"第一行\\n第', 'reply') === '第一行\n第',
+  '流式 JSON 应解码完整转义并保留未闭合回复');
 
 async function main() {
   let capturedBody = '';
@@ -132,6 +143,46 @@ async function main() {
   check(providerResult.reply === '继续推进', 'Provider 应返回校验后的结果');
   check(!capturedBody.includes('secret'), 'API Key 不得进入请求 body');
   check(capturedBody.includes('fixture-model'), '请求应使用当前模型设置');
+  check(capturedBody.includes('"stream":true'), 'Provider 必须启用流式返回');
+
+  const modelJson = JSON.stringify({
+    reply: '下个月10号继续还款。',
+    segment: { action: 'continue' },
+    operations: [{
+      key: 'todo', type: 'create_todo', todo_ref: 'todo_1', text: '继续还款',
+      date_status: 'resolved', date_text: '下个月10号', due_date: '2026-10-10', time_precision: 'date',
+    }],
+  });
+  const deltas = [modelJson.slice(0, 15), modelJson.slice(15, 27), modelJson.slice(27)];
+  const sse = `${deltas.map((content, index) => `data: ${JSON.stringify({
+    choices: [{ delta: { content }, finish_reason: index === deltas.length - 1 ? 'stop' : null }],
+    usage: index === deltas.length - 1 ? { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 } : null,
+  })}\n\n`).join('')}data: [DONE]\n\n`;
+  const bytes = new TextEncoder().encode(sse);
+  const streamedText: string[] = [];
+  const streamed = await requestAssistantTurn({
+    settings: {
+      llmEnabled: true,
+      llmBaseUrl: 'https://example.test/v1',
+      llmKey: 'secret',
+      llmModel: 'fixture-model',
+    },
+    context: {
+      contextBlock: '上下文',
+      recentMessages: [{ id: 'u', role: 'user', content: '下个月10号还', createdAt: 1 }],
+    },
+    fetchImpl: async () => new Response(new ReadableStream({
+      start(controller) {
+        for (let offset = 0; offset < bytes.length; offset += 7) controller.enqueue(bytes.slice(offset, offset + 7));
+        controller.close();
+      },
+    }), { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+    onReplyText: text => streamedText.push(text),
+  });
+  check(streamed.reply === '下个月10号继续还款。', '流式 Provider 必须重组完整 JSON');
+  check(streamedText.length > 1 && streamedText.at(-1) === streamed.reply, '自然回复应分段呈现并以完整回复结束');
+  check(streamed.providerMetadata.totalTokens === 18 && streamed.providerMetadata.finishReason === 'stop',
+    '流式元数据应记录 token usage 与结束原因');
 
   console.log('assistant protocol tests passed');
 }

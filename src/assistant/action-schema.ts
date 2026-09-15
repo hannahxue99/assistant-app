@@ -96,4 +96,32 @@ export const assistantActionSchema = `
     ON assistant_operations(request_id, sequence);
   CREATE INDEX IF NOT EXISTS idx_assistant_operations_object
     ON assistant_operations(object_type, object_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS assistant_decision_logs (
+    request_id TEXT PRIMARY KEY,
+    user_message_id TEXT NOT NULL,
+    prompt_version TEXT NOT NULL,
+    model TEXT NOT NULL,
+    reference_at INTEGER NOT NULL,
+    time_zone TEXT NOT NULL,
+    context_refs_json TEXT NOT NULL DEFAULT '{}',
+    proposed_operations_json TEXT NOT NULL DEFAULT '[]',
+    validation_json TEXT NOT NULL DEFAULT '{}',
+    committed_operation_ids_json TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL CHECK (status IN ('started', 'model_received', 'validated', 'committed', 'failed')),
+    provider_started_at INTEGER,
+    provider_completed_at INTEGER,
+    commit_completed_at INTEGER,
+    finish_reason TEXT,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    total_tokens INTEGER,
+    error_code TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY(request_id) REFERENCES assistant_requests(id),
+    FOREIGN KEY(user_message_id) REFERENCES assistant_messages(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_assistant_decision_logs_created
+    ON assistant_decision_logs(created_at DESC, request_id DESC);
 `;

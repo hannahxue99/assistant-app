@@ -5,6 +5,14 @@ import { loadAssistantActionContext } from './action-context';
 import { completeAssistantTurnWithActions, listCommittedOperationsByRequest } from './action-store';
 import { validateAssistantActions } from './action-validator';
 import { requestAssistantTurn } from './provider';
+import { ASSISTANT_PROMPT_VERSION } from './prompt';
+import {
+  beginAssistantDecisionLog,
+  recordAssistantDecisionCommit,
+  recordAssistantDecisionFailure,
+  recordAssistantModelDecision,
+  recordAssistantValidation,
+} from './decision-log';
 import { rankRelevantEntries, rankRelevantSegments } from './retrieval';
 import {
   beginRetry,
@@ -36,18 +44,28 @@ type SendInput = {
   settings?: Settings;
   createdAt?: number;
   launchContext?: AssistantLaunchContext | null;
+  onReplyText?: (text: string) => void;
 };
 
 type RetryInput = {
   requestId: string;
   settings?: Settings;
   launchContext?: AssistantLaunchContext | null;
+  onReplyText?: (text: string) => void;
 };
 
 const runtime = globalThis as typeof globalThis & {
   __assistantTurnJobs?: Map<string, Promise<AssistantTurnResult>>;
 };
 const jobs = runtime.__assistantTurnJobs ??= new Map();
+
+async function safelyLog(work: () => Promise<void>): Promise<void> {
+  try {
+    await work();
+  } catch (error) {
+    console.warn('[assistant-decision] 日志写入失败', error);
+  }
+}
 
 async function findRelatedEntries(query: string) {
   const keyword = query.trim().slice(0, 80);
@@ -69,6 +87,7 @@ async function runSavedTurn(input: {
   requestId: string;
   settings?: Settings;
   launchContext?: AssistantLaunchContext | null;
+  onReplyText?: (text: string) => void;
 }): Promise<AssistantTurnResult> {
   const state = await getRequestState(input.requestId);
   if (!state) throw new Error('找不到待处理的用户消息');
@@ -115,13 +134,38 @@ async function runSavedTurn(input: {
     selectedEntries: context.selectedEntryIds.length,
     trimmed: context.stats,
   });
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+  await safelyLog(() => beginAssistantDecisionLog({
+    requestId: input.requestId,
+    userMessageId: state.userMessage.id,
+    promptVersion: ASSISTANT_PROMPT_VERSION,
+    model: settings.llmModel,
+    referenceAt: state.userMessage.createdAt,
+    timeZone,
+    contextRefs: {
+      recentMessageIds: context.recentMessages.map(message => message.id),
+      segmentIds: context.selectedSegmentIds,
+      entryIds: context.selectedEntryIds,
+      eventCandidateIds: actionContext.events.map(event => event.id),
+      todoCandidateIds: actionContext.todos.map(todo => todo.id),
+      launchContextId: input.launchContext?.id ?? null,
+    },
+    createdAt: state.userMessage.createdAt,
+  }));
 
   try {
     const output = await requestAssistantTurn({
       settings,
       context,
       referenceAt: state.userMessage.createdAt,
+      timeZone,
+      onReplyText: input.onReplyText,
     });
+    await safelyLog(() => recordAssistantModelDecision({
+      requestId: input.requestId,
+      operations: output.operations ?? [],
+      metadata: output.providerMetadata,
+    }));
     const validation = validateAssistantActions({
       operations: output.operations ?? [],
       actionContext,
@@ -132,6 +176,11 @@ async function runSavedTurn(input: {
         .map(message => message.content),
       referenceAt: state.userMessage.createdAt,
     });
+    await safelyLog(() => recordAssistantValidation({
+      requestId: input.requestId,
+      accepted: validation.accepted,
+      rejected: validation.rejected,
+    }));
     const completed = await completeAssistantTurnWithActions({
       requestId: input.requestId,
       userMessageId: state.userMessage.id,
@@ -141,6 +190,22 @@ async function runSavedTurn(input: {
       operations: validation.accepted,
       actionContext,
     });
+    await safelyLog(() => recordAssistantDecisionCommit({
+      requestId: input.requestId,
+      operations: completed.operations,
+    }));
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.log('[assistant-decision]', {
+        requestId: input.requestId,
+        proposed: (output.operations ?? []).map(operation => operation.type),
+        rejected: validation.rejected.map(item => `${item.type}:${item.reason}`),
+        committed: completed.operations.map(operation => operation.operationType),
+        modelMs: output.providerMetadata
+          ? output.providerMetadata.completedAt - output.providerMetadata.startedAt
+          : null,
+        tokens: output.providerMetadata?.totalTokens ?? null,
+      });
+    }
     return {
       userMessage: (await getRequestState(input.requestId))?.userMessage ?? state.userMessage,
       assistantMessage: completed.assistantMessage,
@@ -152,7 +217,9 @@ async function runSavedTurn(input: {
       },
     };
   } catch (error: any) {
-    await failTurn(input.requestId, typeof error?.code === 'string' ? error.code : 'unknown').catch(() => {});
+    const errorCode = typeof error?.code === 'string' ? error.code : 'unknown';
+    await safelyLog(() => recordAssistantDecisionFailure(input.requestId, errorCode));
+    await failTurn(input.requestId, errorCode).catch(() => {});
     throw error;
   }
 }

@@ -5,12 +5,28 @@ import {
 } from '../src/assistant/action-context';
 import { validateAssistantActions } from '../src/assistant/action-validator';
 import type { AssistantActionContext, AssistantEventCandidate } from '../src/assistant/action-types';
+import { projectModelDate } from '../src/assistant/model-date';
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
 const now = new Date('2026-09-15T10:00:00+08:00').getTime();
+
+const leapDate = projectModelDate({
+  dateStatus: 'resolved', dateText: '2028年2月29号', dueDate: '2028-02-29', timePrecision: 'date',
+});
+check(leapDate.ok && new Date(leapDate.value.dueAt!).getDate() === 29, '模型给出的闰日应通过日历校验');
+check(!projectModelDate({
+  dateStatus: 'resolved', dateText: '2027年2月29号', dueDate: '2027-02-29', timePrecision: 'date',
+}).ok, '非闰年2月29日必须拒绝');
+const explicitTime = projectModelDate({
+  dateStatus: 'resolved', dateText: '下个月10号下午3点', dueDate: '2026-10-10', dueTime: '15:00', timePrecision: 'dateTime',
+});
+check(explicitTime.ok && new Date(explicitTime.value.dueAt!).getHours() === 15, '明确时刻应机械投影为本地时间');
+check(projectModelDate({ dateStatus: 'absent' }).ok, '模型判断无日期时应允许隐藏待办');
+check(projectModelDate({ dateStatus: 'ambiguous', dateText: '下个月找一天' }).ok,
+  '模型判断日期含糊时应允许隐藏待办');
 
 check(!shouldAdmitNewEvent('明天买一瓶牛奶', []), '一次性行动不应进入事件');
 check(shouldAdmitNewEvent('接下来持续跟进房贷还款进度', []), '明确持续跟进应允许建立事件');
@@ -74,7 +90,7 @@ const context: AssistantActionContext = {
 
 const oneOff = validateAssistantActions({
   operations: [
-    { key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '明天买牛奶', dateText: '明天' },
+    { key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '明天买牛奶', dateStatus: 'resolved', dateText: '明天', dueDate: '2026-09-16', timePrecision: 'date' },
     { key: 'event', type: 'create_event', eventRef: 'event_1', title: '买牛奶', currentState: '准备购买' },
   ],
   actionContext: context,
@@ -88,7 +104,7 @@ check(!oneOff.accepted.some(operation => operation.type === 'create_event'), '�
 const explicitEvent = validateAssistantActions({
   operations: [
     { key: 'event', type: 'create_event', eventRef: 'event_1', title: '换房计划', currentState: '开始看房' },
-    { key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '周六看第二套房', dateText: '周六' },
+    { key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '周六看第二套房', dateStatus: 'resolved', dateText: '周六', dueDate: '2026-09-19', timePrecision: 'date' },
     {
       key: 'link', type: 'link_todo_event',
       todo: { kind: 'local', ref: 'todo_1' }, event: { kind: 'local', ref: 'event_1' },
@@ -127,7 +143,7 @@ const duplicateEventText = validateAssistantActions({
 check(duplicateEventText.accepted.length === 0, '与当前状态相同的更新和进展不应重复写入');
 
 const hiddenTodo = validateAssistantActions({
-  operations: [{ key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '整理照片' }],
+  operations: [{ key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '整理照片', dateStatus: 'absent' }],
   actionContext: context,
   currentMessage: '有空整理一下照片',
   recentEvidence: [],
@@ -137,7 +153,7 @@ check(hiddenTodo.accepted[0]?.type === 'create_todo' && hiddenTodo.accepted[0].d
   '无日期行动应保存为隐藏待办');
 
 const datedFollowUp = validateAssistantActions({
-  operations: [{ key: 'date', type: 'update_todo', todoId: 'todo-photo', dateText: '周六' }],
+  operations: [{ key: 'date', type: 'update_todo', todoId: 'todo-photo', dateStatus: 'resolved', dateText: '周六', dueDate: '2026-09-19', timePrecision: 'date' }],
   actionContext: context,
   currentMessage: '那就周六吧',
   recentEvidence: [],
@@ -145,6 +161,43 @@ const datedFollowUp = validateAssistantActions({
 });
 check(datedFollowUp.accepted[0]?.type === 'update_todo' && datedFollowUp.accepted[0].dueAt !== null,
   '补充日期应更新同一个候选待办');
+const ambiguousUpdate = validateAssistantActions({
+  operations: [{
+    key: 'date', type: 'update_todo', todoId: 'todo-photo',
+    dateStatus: 'ambiguous', dateText: '下个月找一天',
+  }],
+  actionContext: context,
+  currentMessage: '改到下个月找一天吧',
+  recentEvidence: [],
+  referenceAt: now,
+});
+check(ambiguousUpdate.rejected[0]?.reason === 'invalid_date_protocol', '含糊日期不得改写已有待办日期');
+
+const nextMonthDate = validateAssistantActions({
+  operations: [{
+    key: 'repay', type: 'create_todo', todoRef: 'todo_1', text: '还款',
+    dateStatus: 'resolved', dateText: '下个月10号', dueDate: '2026-10-10', timePrecision: 'date',
+  }],
+  actionContext: context,
+  currentMessage: '下个月10号还',
+  recentEvidence: [],
+  referenceAt: now,
+});
+check(nextMonthDate.accepted[0]?.type === 'create_todo'
+  && nextMonthDate.accepted[0].dueAt === new Date(2026, 9, 10, 9, 0, 0, 0).getTime(),
+'模型解析的下个月日期应机械投影，不再解析日期原文');
+
+const invalidCalendarDate = validateAssistantActions({
+  operations: [{
+    key: 'bad', type: 'create_todo', todoRef: 'todo_1', text: '无效日期',
+    dateStatus: 'resolved', dateText: '2月30号', dueDate: '2026-02-30', timePrecision: 'date',
+  }],
+  actionContext: context,
+  currentMessage: '2月30号处理',
+  recentEvidence: [],
+  referenceAt: now,
+});
+check(invalidCalendarDate.rejected[0]?.reason === 'invalid_calendar_date', '非法日历日期必须被本地格式校验拒绝');
 
 const launchContext: AssistantActionContext = {
   ...context,

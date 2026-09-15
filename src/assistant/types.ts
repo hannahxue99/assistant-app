@@ -1,7 +1,7 @@
 import type { AssistantOperation } from './action-types';
 
 export type AssistantRole = 'user' | 'assistant';
-export type AssistantMessageStatus = 'saved' | 'sending' | 'failed';
+export type AssistantMessageStatus = 'saved' | 'sending' | 'failed' | 'streaming';
 export type AssistantMessageSource = 'text' | 'voice' | 'legacy' | 'contextual' | 'assistant';
 export type AssistantRequestStatus = 'pending' | 'succeeded' | 'failed';
 export type AssistantEngineStatus = 'configured' | 'unconfigured' | 'unknown';

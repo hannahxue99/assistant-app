@@ -1,5 +1,9 @@
 import type { AssistantSegmentDecision } from './types';
-import type { AssistantObjectRef, AssistantOperationProposal } from './action-types';
+import type {
+  AssistantDateProposal,
+  AssistantObjectRef,
+  AssistantOperationProposal,
+} from './action-types';
 
 export interface AssistantTurnOutput {
   reply: string;
@@ -84,6 +88,39 @@ function objectRef(raw: any, kind: 'event' | 'todo'): AssistantObjectRef {
     };
 }
 
+function parseDateProposal(raw: any, required: boolean): AssistantDateProposal | undefined {
+  if (raw.date_status === undefined && !required) return undefined;
+  const status = requiredText(raw.date_status, 'todo.date_status', 16);
+  if (status === 'absent') {
+    if (raw.date_text || raw.due_date || raw.due_time || raw.time_precision) {
+      throw new AssistantProtocolError('date_status=absent 时不能提供日期字段');
+    }
+    return { dateStatus: status };
+  }
+  if (status === 'ambiguous') {
+    const dateText = requiredText(raw.date_text, 'todo.date_text', 80);
+    if (raw.due_date || raw.due_time || raw.time_precision) {
+      throw new AssistantProtocolError('date_status=ambiguous 时不能提供解析后日期');
+    }
+    return { dateStatus: status, dateText };
+  }
+  if (status !== 'resolved') throw new AssistantProtocolError('todo.date_status 非法');
+  const dateText = requiredText(raw.date_text, 'todo.date_text', 80);
+  const dueDate = requiredText(raw.due_date, 'todo.due_date', 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) throw new AssistantProtocolError('todo.due_date 格式非法');
+  const timePrecision = requiredText(raw.time_precision, 'todo.time_precision', 16);
+  if (timePrecision !== 'date' && timePrecision !== 'dateTime') {
+    throw new AssistantProtocolError('todo.time_precision 非法');
+  }
+  const dueTime = optionalText(raw.due_time, 'todo.due_time', 5);
+  if (timePrecision === 'dateTime') {
+    if (!dueTime || !/^\d{2}:\d{2}$/.test(dueTime)) throw new AssistantProtocolError('dateTime 必须提供 HH:mm');
+  } else if (dueTime) {
+    throw new AssistantProtocolError('仅日期待办不能提供 due_time');
+  }
+  return { dateStatus: status, dateText, dueDate, dueTime, timePrecision };
+}
+
 function parseOperation(value: unknown): AssistantOperationProposal {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new AssistantProtocolError('候选操作必须是对象');
@@ -99,18 +136,18 @@ function parseOperation(value: unknown): AssistantOperationProposal {
         type: raw.type,
         todoRef: localRef(raw.todo_ref, 'todo_ref', TODO_REF),
         text: requiredText(raw.text, 'todo.text', 240),
-        dateText: optionalText(raw.date_text, 'todo.date_text', 80),
+        ...parseDateProposal(raw, true)!,
       };
     case 'update_todo': {
       const text = optionalText(raw.text, 'todo.text', 240);
-      const dateText = optionalText(raw.date_text, 'todo.date_text', 80);
-      if (!text && !dateText) throw new AssistantProtocolError('更新待办至少需要内容或日期');
+      const date = parseDateProposal(raw, false);
+      if (!text && !date) throw new AssistantProtocolError('更新待办至少需要内容或日期');
       return {
         key,
         type: raw.type,
         todoId: identifier(raw.todo_id, 'todo_id'),
         text,
-        dateText,
+        ...date,
       };
     }
     case 'complete_todo':

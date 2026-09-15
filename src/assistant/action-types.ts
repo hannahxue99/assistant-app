@@ -62,6 +62,32 @@ export type AssistantOperationType =
   | 'pin_event'
   | 'link_todo_event';
 
+export type AssistantDateStatus = 'resolved' | 'ambiguous' | 'absent';
+export type AssistantTimePrecision = 'date' | 'dateTime';
+
+export type AssistantDateProposal =
+  | {
+    dateStatus: 'resolved';
+    dateText: string;
+    dueDate: string;
+    dueTime?: string;
+    timePrecision: AssistantTimePrecision;
+  }
+  | {
+    dateStatus: 'ambiguous';
+    dateText: string;
+    dueDate?: undefined;
+    dueTime?: undefined;
+    timePrecision?: undefined;
+  }
+  | {
+    dateStatus: 'absent';
+    dateText?: undefined;
+    dueDate?: undefined;
+    dueTime?: undefined;
+    timePrecision?: undefined;
+  };
+
 export interface AssistantOperation {
   id: string;
   requestId: string;
@@ -83,8 +109,8 @@ export type AssistantObjectRef =
   | { kind: 'local'; ref: string };
 
 export type AssistantOperationProposal =
-  | { key: string; type: 'create_todo'; todoRef: string; text: string; dateText?: string }
-  | { key: string; type: 'update_todo'; todoId: string; text?: string; dateText?: string }
+  | ({ key: string; type: 'create_todo'; todoRef: string; text: string } & AssistantDateProposal)
+  | ({ key: string; type: 'update_todo'; todoId: string; text?: string } & Partial<AssistantDateProposal>)
   | { key: string; type: 'complete_todo'; todoId: string }
   | { key: string; type: 'create_event'; eventRef: string; title: string; currentState: string }
   | { key: string; type: 'update_event'; eventId: string; currentState: string }
@@ -123,8 +149,14 @@ export interface AssistantActionContext {
 }
 
 export type ValidatedAssistantOperation =
-  | (Extract<AssistantOperationProposal, { type: 'create_todo' }> & { dueAt: number | null })
-  | (Extract<AssistantOperationProposal, { type: 'update_todo' }> & { dueAt?: number })
+  | (Extract<AssistantOperationProposal, { type: 'create_todo' }> & {
+    dueAt: number | null;
+    storedTimePrecision: AssistantTimePrecision | null;
+  })
+  | (Extract<AssistantOperationProposal, { type: 'update_todo' }> & {
+    dueAt?: number | null;
+    storedTimePrecision?: AssistantTimePrecision | null;
+  })
   | Exclude<AssistantOperationProposal, { type: 'create_todo' | 'update_todo' }>;
 
 export interface AssistantActionRejection {
@@ -135,6 +167,7 @@ export interface AssistantActionRejection {
     | 'ambiguous_candidate'
     | 'event_admission_failed'
     | 'duplicate_content'
-    | 'invalid_date'
+    | 'invalid_calendar_date'
+    | 'invalid_date_protocol'
     | 'invalid_local_reference';
 }

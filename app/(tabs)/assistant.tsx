@@ -73,6 +73,39 @@ export default function AssistantScreen() {
   const [engineStatus, setEngineStatus] = useState<AssistantEngineStatus>('unknown');
   const [undoingRequestId, setUndoingRequestId] = useState<string | null>(null);
   const [undoErrors, setUndoErrors] = useState<Record<string, string>>({});
+  const [streamingReplies, setStreamingReplies] = useState<Record<string, AssistantMessage>>({});
+
+  const displayMessages = useMemo(() => mergeAssistantMessages(messages, Object.values(streamingReplies)), [messages, streamingReplies]);
+
+  const updateStreamingReply = useCallback((requestId: string, createdAt: number, content: string) => {
+    if (!mountedRef.current || !content) return;
+    setStreamingReplies(current => ({
+      ...current,
+      [requestId]: {
+        id: `streaming-${requestId}`,
+        requestId,
+        role: 'assistant',
+        content,
+        source: 'assistant',
+        status: 'streaming',
+        segmentId: 'streaming',
+        createdAt: createdAt + 1,
+        updatedAt: Date.now(),
+        legacyEntryId: null,
+        errorCode: null,
+      },
+    }));
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: false }));
+  }, []);
+
+  const clearStreamingReply = useCallback((requestId: string) => {
+    setStreamingReplies((current) => {
+      if (!current[requestId]) return current;
+      const next = { ...current };
+      delete next[requestId];
+      return next;
+    });
+  }, []);
 
   const attachOperations = useCallback(async (page: AssistantMessage[]) => {
     const byRequest = await listOperationsByRequestIds(
@@ -149,13 +182,26 @@ export default function AssistantScreen() {
       setMessages(current => mergeAssistantMessages(current, [userMessage]));
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
     }
-    const job = sendAssistantTurn({ requestId, content, source, launchContext });
+    const job = sendAssistantTurn({
+      requestId,
+      content,
+      source,
+      launchContext,
+      onReplyText: text => updateStreamingReply(requestId, userMessage.createdAt, text),
+    });
     try {
-      await job;
+      const result = await job;
+      if (mountedRef.current) {
+        setMessages(current => mergeAssistantMessages(current, [{
+          ...result.assistantMessage,
+          operations: result.operations,
+        }]));
+      }
     } catch (error) {
       const saved = await getRequestState(requestId).catch(() => null);
       if (!saved) throw error;
     } finally {
+      clearStreamingReply(requestId);
       await loadLatest(true).catch(() => {});
     }
   }
@@ -168,13 +214,19 @@ export default function AssistantScreen() {
     )));
     void (async () => {
       try {
-        const job = retryAssistantTurn({ requestId, launchContext });
+        const userMessage = messages.find(item => item.requestId === requestId && item.role === 'user');
+        const job = retryAssistantTurn({
+          requestId,
+          launchContext,
+          onReplyText: text => updateStreamingReply(requestId, userMessage?.createdAt ?? Date.now(), text),
+        });
         await Promise.resolve();
         await loadLatest(false);
         await job;
       } catch {
         // 错误状态由对应消息承载，不再重复显示页面级错误。
       } finally {
+        clearStreamingReply(requestId);
         await loadLatest(true).catch(() => {});
       }
     })();
@@ -253,7 +305,7 @@ export default function AssistantScreen() {
         ) : (
           <FlatList
             ref={listRef}
-            data={messages}
+            data={displayMessages}
             keyExtractor={item => item.id}
             renderItem={({ item }) => (
               <AssistantMessageBubble

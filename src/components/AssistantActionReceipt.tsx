@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { AssistantOperation } from '../assistant/action-types';
-import { assistantReceiptState, assistantReceiptTarget } from '../assistant/ui-state';
+import { assistantReceiptState } from '../assistant/ui-state';
 import { theme } from '../theme';
 
 interface AssistantActionReceiptProps {
@@ -45,6 +45,7 @@ export function AssistantActionReceipt({
             accessibilityLabel="撤销本轮处理"
             disabled={undoing}
             onPress={onUndo}
+            hitSlop={7}
             style={({ pressed }) => [styles.undoButton, pressed && styles.pressed]}
           >
             {undoing ? <ActivityIndicator size="small" color={theme.colors.textDim} /> : (
@@ -54,13 +55,14 @@ export function AssistantActionReceipt({
         ) : null}
       </View>
 
-      {state.operations.map((operation) => {
-        const target = assistantReceiptTarget(operation);
+      {state.groups.map((group) => {
+        const operation = group.primaryOperation;
+        const target = group.target;
         return (
           <Pressable
-            key={operation.id}
+            key={group.key}
             accessibilityRole={target ? 'button' : undefined}
-            accessibilityLabel={operation.receiptSummary}
+            accessibilityLabel={group.summaries.join('，')}
             disabled={!target}
             onPress={() => { if (target) onNavigate(target); }}
             style={({ pressed }) => [styles.row, pressed && target && styles.pressed]}
@@ -70,9 +72,13 @@ export function AssistantActionReceipt({
               size={18}
               color={operation.status === 'undone' ? theme.colors.textDim : theme.colors.green}
             />
-            <Text style={[styles.summary, operation.status === 'undone' && styles.undone]} numberOfLines={2}>
-              {operation.receiptSummary}
-            </Text>
+            <View style={styles.summaryWrap}>
+              {group.summaries.map(summary => (
+                <Text key={summary} style={[styles.summary, group.undone && styles.undone]} numberOfLines={1}>
+                  {summary}
+                </Text>
+              ))}
+            </View>
             {target ? <Ionicons name="chevron-forward" size={16} color={theme.colors.textDim} /> : null}
           </Pressable>
         );
@@ -87,21 +93,22 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     marginTop: 7,
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 6,
-    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingTop: 5,
+    paddingBottom: 4,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#ECDCCF',
     backgroundColor: '#FFF9F4',
   },
-  header: { minHeight: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  header: { minHeight: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   headerLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
-  undoButton: { minHeight: theme.touchTarget, minWidth: 72, alignItems: 'flex-end', justifyContent: 'center' },
+  undoButton: { minHeight: 30, minWidth: 72, alignItems: 'flex-end', justifyContent: 'center' },
   undoText: { color: theme.colors.textDim, fontSize: 12 },
-  row: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  summary: { flex: 1, color: theme.colors.text, fontSize: theme.font.small, lineHeight: 19 },
+  row: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  summaryWrap: { flex: 1, paddingVertical: 3, gap: 1 },
+  summary: { color: theme.colors.text, fontSize: theme.font.small, lineHeight: 18 },
   undone: { color: theme.colors.textDim, textDecorationLine: 'line-through' },
   error: { color: theme.colors.red, fontSize: 12, lineHeight: 17, paddingBottom: 4 },
   pressed: { opacity: 0.65 },

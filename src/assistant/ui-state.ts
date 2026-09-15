@@ -66,13 +66,48 @@ export function assistantReceiptState(operations: AssistantOperation[]): {
   visible: boolean;
   canUndo: boolean;
   operations: AssistantOperation[];
+  groups: AssistantReceiptGroup[];
 } {
   const sorted = [...operations].sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id));
   return {
     visible: sorted.length > 0,
     canUndo: sorted.length > 0 && sorted.some(operation => operation.status === 'committed'),
     operations: sorted,
+    groups: groupAssistantReceiptOperations(sorted),
   };
+}
+
+export interface AssistantReceiptGroup {
+  key: string;
+  target: string | null;
+  primaryOperation: AssistantOperation;
+  summaries: string[];
+  undone: boolean;
+}
+
+export function groupAssistantReceiptOperations(operations: AssistantOperation[]): AssistantReceiptGroup[] {
+  const sorted = [...operations].sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id));
+  const substantive = sorted.filter(operation => operation.objectType !== 'relation');
+  const visible = substantive.length ? substantive : sorted;
+  const groups = new Map<string, AssistantReceiptGroup>();
+  for (const operation of visible) {
+    const target = assistantReceiptTarget(operation);
+    const key = target ?? `${operation.objectType}:${operation.objectId}`;
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, {
+        key,
+        target,
+        primaryOperation: operation,
+        summaries: [operation.receiptSummary],
+        undone: operation.status === 'undone',
+      });
+      continue;
+    }
+    if (!existing.summaries.includes(operation.receiptSummary)) existing.summaries.push(operation.receiptSummary);
+    existing.undone = existing.undone && operation.status === 'undone';
+  }
+  return [...groups.values()];
 }
 
 function snapshot(value: string): any | null {

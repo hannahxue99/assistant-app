@@ -116,7 +116,7 @@ async function main() {
     reply: '好，明天买牛奶。',
     segment: { action: 'continue' },
     operations: [
-      { key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '买牛奶', dateText: '明天' },
+      { key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '买牛奶', dateStatus: 'resolved', dateText: '明天', dueDate: '2026-09-16', timePrecision: 'date' },
       { key: 'event', type: 'create_event', eventRef: 'event_1', title: '买牛奶', currentState: '准备购买' },
     ],
   });
@@ -128,7 +128,14 @@ async function main() {
   assert.equal(oneOff.operations[0].operationType, 'create_todo');
   const milkTodo = sqlite.prepare("SELECT * FROM entries WHERE kind='task' AND summary='买牛奶'").get();
   assert.ok(milkTodo?.due_at, '有日期待办应写入现有 entries 并解析日期');
+  assert.equal(milkTodo.time_precision, 'date', '模型给出的日期精度必须随待办落库');
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM assistant_events WHERE title='买牛奶'").get().count, 0);
+  const oneOffLog = sqlite.prepare("SELECT * FROM assistant_decision_logs WHERE request_id='request-4'").get();
+  assert.equal(oneOffLog.status, 'committed', '决策日志应记录最终提交状态');
+  assert.ok(JSON.parse(oneOffLog.proposed_operations_json).some(item => item.type === 'create_todo'),
+    '决策日志应保留模型提出的待办');
+  assert.ok(JSON.parse(oneOffLog.validation_json).rejected.some(item => item.type === 'create_event'),
+    '决策日志应保留本地拒绝的事件及原因');
 
   provider = async () => ({
     reply: '我们继续沿着换房这条主线聊。',
@@ -136,7 +143,7 @@ async function main() {
     operations: [
       { key: 'event', type: 'create_event', eventRef: 'event_1', title: '换房计划', currentState: '开始看房' },
       { key: 'progress', type: 'append_event_update', event: { kind: 'local', ref: 'event_1' }, content: '开始看房' },
-      { key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '周六看第二套房', dateText: '周六' },
+      { key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '周六看第二套房', dateStatus: 'resolved', dateText: '周六', dueDate: '2026-09-19', timePrecision: 'date' },
       { key: 'link', type: 'link_todo_event', todo: { kind: 'local', ref: 'todo_1' }, event: { kind: 'local', ref: 'event_1' } },
     ],
   });
@@ -151,6 +158,20 @@ async function main() {
   assert.equal(sqlite.prepare(`SELECT COUNT(*) AS count FROM assistant_object_relations
     WHERE from_type='todo' AND relation_type='belongs_to' AND to_id=?`).get(houseEvent.id).count, 1);
 
+  provider = async () => ({
+    reply: '还款计划继续沿用这条主线。',
+    segment: { action: 'continue' },
+    operations: [{ key: 'state', type: 'update_event', eventId: houseEvent.id, currentState: '下个月10号继续还款' }],
+  });
+  const modelOnlyEvent = await orchestrator.sendAssistantTurn({
+    requestId: 'request-model-only-event', content: '下个月10号还', source: 'text', settings,
+    createdAt: new Date('2026-09-15T11:30:00+08:00').getTime(),
+  });
+  assert.equal(modelOnlyEvent.operations.length, 1, '模型只提出事件时本地不得自行补建待办');
+  const modelOnlyLog = sqlite.prepare("SELECT * FROM assistant_decision_logs WHERE request_id='request-model-only-event'").get();
+  assert.deepEqual(JSON.parse(modelOnlyLog.proposed_operations_json).map(item => item.type), ['update_event'],
+    '日志必须明确显示模型该轮没有提出待办');
+
   const retriedSucceeded = await orchestrator.retryAssistantTurn({ requestId: 'request-5', settings });
   assert.equal(retriedSucceeded.operations.length, 4, '成功请求重试应读取原操作回执');
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM assistant_events WHERE title='换房计划'").get().count, 1,
@@ -159,7 +180,7 @@ async function main() {
   provider = async () => ({
     reply: '先保留这件事，时间可以接着补。',
     segment: { action: 'continue' },
-    operations: [{ key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '整理照片' }],
+    operations: [{ key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '整理照片', dateStatus: 'absent' }],
   });
   await orchestrator.sendAssistantTurn({
     requestId: 'request-hidden-todo', content: '有空整理一下照片', source: 'text', settings, createdAt: 4800,
@@ -171,7 +192,7 @@ async function main() {
     return {
       reply: '时间按周六继续安排。',
       segment: { action: 'continue' },
-      operations: [{ key: 'date', type: 'update_todo', todoId: hiddenTodo.id, dateText: '周六' }],
+      operations: [{ key: 'date', type: 'update_todo', todoId: hiddenTodo.id, dateStatus: 'resolved', dateText: '周六', dueDate: '2026-09-19', timePrecision: 'date' }],
     };
   };
   await orchestrator.sendAssistantTurn({
@@ -188,7 +209,7 @@ async function main() {
   provider = async () => ({
     reply: '这只是自然回复，不能单独保存。',
     segment: { action: 'continue' },
-    operations: [{ key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '不应留下的待办' }],
+    operations: [{ key: 'todo', type: 'create_todo', todoRef: 'todo_1', text: '不应留下的待办', dateStatus: 'absent' }],
   });
   await assert.rejects(orchestrator.sendAssistantTurn({
     requestId: 'request-rollback', content: '记一个不应留下的待办', source: 'text', settings, createdAt: 5000,

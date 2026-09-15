@@ -25,11 +25,14 @@ export function AssistantMessageBubble({
   undoError = null,
 }: AssistantMessageBubbleProps) {
   const isUser = message.role === 'user';
+  const isStreaming = !isUser && message.status === 'streaming';
   return (
     <View style={[styles.row, isUser ? styles.userRow : styles.assistantRow]}>
       <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-        <Text style={[styles.content, isUser && styles.userContent]}>{message.content}</Text>
-        <Text style={[styles.time, isUser && styles.userTime]}>{formatMessageTime(message.createdAt)}</Text>
+        <Text style={[styles.content, isUser && styles.userContent]}>
+          {message.content}{isStreaming ? <Text style={styles.cursor}>▋</Text> : null}
+        </Text>
+        {!isStreaming ? <Text style={[styles.time, isUser && styles.userTime]}>{formatMessageTime(message.createdAt)}</Text> : null}
       </View>
       {!isUser && message.operations?.length ? (
         <View style={styles.receiptWrap}>
@@ -83,6 +86,7 @@ const styles = StyleSheet.create({
   userContent: { color: '#FFFFFF' },
   time: { color: theme.colors.textDim, fontSize: 11, marginTop: 4 },
   userTime: { color: 'rgba(255,255,255,0.72)', textAlign: 'right' },
+  cursor: { color: theme.colors.accent },
   statusRow: { minHeight: 24, flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3, paddingHorizontal: 3 },
   statusText: { color: theme.colors.textDim, fontSize: 12 },
   retry: { minHeight: 32, justifyContent: 'center', marginTop: 2, paddingHorizontal: 4 },

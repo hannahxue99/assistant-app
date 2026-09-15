@@ -81,6 +81,7 @@ async function main() {
     'assistant_event_updates',
     'assistant_object_relations',
     'assistant_operations',
+    'assistant_decision_logs',
   ];
   for (const table of expectedTables) {
     const row = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table);

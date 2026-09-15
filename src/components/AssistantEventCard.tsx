@@ -24,19 +24,20 @@ export function AssistantEventCard({
           {event.pinnedAt !== null ? <Ionicons name="pin" size={14} color={theme.colors.gold} /> : null}
           <Text style={styles.title} numberOfLines={1}>{event.title}</Text>
         </View>
-        <Ionicons name="chevron-forward" size={17} color={theme.colors.textDim} />
+        <Text style={styles.time}>{logTimestamp(event.updatedAt)}</Text>
+        <Ionicons name="chevron-forward" size={16} color={theme.colors.textDim} />
       </View>
-      {event.currentState ? <Text style={styles.state} numberOfLines={2}>{event.currentState}</Text> : null}
-      <Text style={styles.time}>更新于 {logTimestamp(event.updatedAt)}</Text>
+      {event.currentState ? <Text style={styles.state} numberOfLines={1}>{event.currentState}</Text> : null}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    minHeight: 86,
-    padding: 13,
-    gap: 7,
+    minHeight: 62,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 4,
     borderRadius: theme.radius.card,
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -46,7 +47,7 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   titleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { flex: 1, color: theme.colors.text, fontSize: theme.font.body, fontWeight: theme.fontWeight.semibold },
-  state: { color: theme.colors.text, fontSize: theme.font.small, lineHeight: 20 },
+  state: { color: theme.colors.text, fontSize: theme.font.small, lineHeight: 18 },
   time: { color: theme.colors.textDim, fontSize: 11 },
   pressed: { opacity: 0.68 },
 });

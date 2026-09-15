@@ -1,8 +1,9 @@
-import { parseChineseTime } from '../engine/time';
 import { classifyEventCandidates, shouldAdmitNewEvent } from './action-context';
+import { projectModelDate } from './model-date';
 import type {
   AssistantActionContext,
   AssistantActionRejection,
+  AssistantDateProposal,
   AssistantObjectRef,
   AssistantOperationProposal,
   ValidatedAssistantOperation,
@@ -59,15 +60,16 @@ export function validateAssistantActions(input: {
 
   for (const operation of input.operations) {
     if (operation.type === 'create_todo') {
-      let dueAt: number | null = null;
-      if (operation.dateText) {
-        dueAt = parseChineseTime(operation.dateText, input.referenceAt).dueAt;
-        if (dueAt === null) {
-          reject(operation, 'invalid_date');
-          continue;
-        }
+      const projected = projectModelDate(operation);
+      if (!projected.ok) {
+        reject(operation, projected.reason);
+        continue;
       }
-      accepted.push({ ...operation, dueAt });
+      accepted.push({
+        ...operation,
+        dueAt: projected.value.dueAt,
+        storedTimePrecision: projected.value.timePrecision,
+      });
       localTodoRefs.add(operation.todoRef);
       continue;
     }
@@ -77,13 +79,21 @@ export function validateAssistantActions(input: {
         reject(operation, 'candidate_not_allowed');
         continue;
       }
-      if (operation.dateText) {
-        const dueAt = parseChineseTime(operation.dateText, input.referenceAt).dueAt;
-        if (dueAt === null) {
-          reject(operation, 'invalid_date');
+      if (operation.dateStatus) {
+        if (operation.dateStatus === 'ambiguous') {
+          reject(operation, 'invalid_date_protocol');
           continue;
         }
-        accepted.push({ ...operation, dueAt });
+        const projected = projectModelDate(operation as AssistantDateProposal);
+        if (!projected.ok) {
+          reject(operation, projected.reason);
+          continue;
+        }
+        accepted.push({
+          ...operation,
+          dueAt: projected.value.dueAt,
+          storedTimePrecision: projected.value.timePrecision,
+        });
       } else {
         accepted.push(operation);
       }

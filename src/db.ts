@@ -358,6 +358,7 @@ export async function insertAssistantTaskWithDatabase(
     id: string;
     text: string;
     dueAt: number | null;
+    timePrecision: 'date' | 'dateTime' | null;
     source: 'text' | 'voice';
     createdAt: number;
   },
@@ -367,11 +368,12 @@ export async function insertAssistantTaskWithDatabase(
   await database.runAsync(
     `INSERT INTO entries (
        id, raw_text, kind, summary, due_at, remind_at, topic, tags, persons,
-       parse_status, parse_source, created_at, updated_at, revision_at, done, done_at, source
-     ) VALUES (?, ?, 'task', ?, ?, ?, NULL, '[]', '[]', 'ok', 'llm', ?, ?, ?, 0, NULL, ?)
+       parse_status, parse_source, created_at, updated_at, revision_at, done, done_at, source,
+       time_precision
+     ) VALUES (?, ?, 'task', ?, ?, ?, NULL, '[]', '[]', 'ok', 'llm', ?, ?, ?, 0, NULL, ?, ?)
      ON CONFLICT(id) DO NOTHING`,
     input.id, text, text, input.dueAt, input.dueAt,
-    input.createdAt, input.createdAt, input.createdAt, input.source,
+    input.createdAt, input.createdAt, input.createdAt, input.source, input.timePrecision,
   );
   await syncFtsWithDatabase(database, input.id);
   const row = await database.getFirstAsync<any>('SELECT * FROM entries WHERE id=?', input.id);
@@ -394,7 +396,8 @@ export async function updateAssistantTaskWithDatabase(
     id: string;
     expectedRevisionAt: number;
     text?: string;
-    dueAt?: number;
+    dueAt?: number | null;
+    timePrecision?: 'date' | 'dateTime' | null;
     updatedAt: number;
   },
 ): Promise<Entry | null> {
@@ -402,11 +405,12 @@ export async function updateAssistantTaskWithDatabase(
   if (!current || current.kind !== 'task' || current.revisionAt !== input.expectedRevisionAt) return null;
   const text = input.text?.trim() || current.summary;
   const dueAt = input.dueAt !== undefined ? input.dueAt : current.dueAt;
+  const timePrecision = input.timePrecision !== undefined ? input.timePrecision : (current.timePrecision ?? 'date');
   const result = await database.runAsync(
-    `UPDATE entries SET summary=?, due_at=?, remind_at=?, parse_status='ok', parse_source='llm',
+    `UPDATE entries SET summary=?, due_at=?, remind_at=?, time_precision=?, parse_status='ok', parse_source='llm',
        updated_at=?, revision_at=MAX(revision_at+1, ?)
      WHERE id=? AND kind='task' AND revision_at=?`,
-    text, dueAt, dueAt, input.updatedAt, input.updatedAt, input.id, input.expectedRevisionAt,
+    text, dueAt, dueAt, timePrecision, input.updatedAt, input.updatedAt, input.id, input.expectedRevisionAt,
   );
   if (result.changes === 0) return null;
   await syncFtsWithDatabase(database, input.id);
