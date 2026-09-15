@@ -106,4 +106,3 @@ const styles = StyleSheet.create({
   error: { color: theme.colors.red, fontSize: 12, lineHeight: 17, paddingBottom: 4 },
   pressed: { opacity: 0.65 },
 });
-

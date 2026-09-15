@@ -50,4 +50,3 @@ const styles = StyleSheet.create({
   time: { color: theme.colors.textDim, fontSize: 11 },
   pressed: { opacity: 0.68 },
 });
-

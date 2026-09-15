@@ -110,4 +110,3 @@ export async function migrateLegacyTopicsToEvents(limit = 25): Promise<number> {
   }
   return migrated;
 }
-
