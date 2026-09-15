@@ -26,7 +26,8 @@
 ## 真机验收
 
 - 设备与系统：
-- 构建类型：`Debug Dev Client / Release`
+- 构建类型：`私人助手 Dev / 私人助手 Release`
+- App 身份：`com.huanxue.assistantapp.dev / com.huanxue.assistantapp`
 - 更新方式：`Reload / 覆盖安装 / 正式分发`
 - 已验证场景：
 - 未验证场景：
@@ -34,7 +35,8 @@
 ## 数据与兼容性
 
 - 原生依赖或权限变化：
-- Bundle ID 变化：
+- 生产 Bundle ID 是否仍为 `com.huanxue.assistantapp`：
+- Dev/Release 数据隔离是否验证：
 - 数据库迁移：
 - 数据备份与丢失风险：
 
