@@ -88,7 +88,10 @@ async function main() {
     assert.equal(row?.name, table, `${table} 应在数据库初始化时创建`);
   }
   const decisionLogColumns = new Set(sqlite.prepare('PRAGMA table_info(assistant_decision_logs)').all().map(row => row.name));
-  for (const column of ['error_detail', 'repair_count', 'repair_status', 'protocol_warnings_json']) {
+  for (const column of [
+    'error_detail', 'repair_count', 'repair_status',
+    'provider_attempt_count', 'provider_attempts_json', 'protocol_warnings_json',
+  ]) {
     assert.ok(decisionLogColumns.has(column), `决策日志必须包含 ${column}`);
   }
 
@@ -179,6 +182,13 @@ async function main() {
   });
   await eventStore.setEventPinned({ eventId: firstEvent.id, pinned: true, updatedAt: 2500 });
   assert.equal((await eventStore.listEvents({ limit: 10 }))[0].id, firstEvent.id, '置顶事件应排在最前');
+  assert.equal((await eventStore.getEvent(firstEvent.id)).updatedAt, 2300, '置顶不得篡改事件最新内容时间');
+  await eventStore.setEventPinned({ eventId: 'event-photos', pinned: true, updatedAt: 2600 });
+  assert.deepEqual(
+    (await eventStore.listEvents({ limit: 10 })).slice(0, 2).map(event => event.id),
+    ['event-photos', firstEvent.id],
+    '多个置顶事件仍应按内容最新时间排序，而不是按置顶操作时间排序',
+  );
   assert.equal(await eventStore.getEvent('missing-event'), null);
 
   await db.insertEntry({ rawText: '第一次看房', source: 'text', createdAt: 3000 }, {

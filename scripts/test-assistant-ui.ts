@@ -14,6 +14,9 @@ import { ASSISTANT_EMPTY_DESCRIPTION } from '../src/assistant/ui-copy';
 import type { AssistantMessage } from '../src/assistant/types';
 import type { AssistantOperation } from '../src/assistant/action-types';
 
+const NOW = new Date(2026, 8, 15, 12, 0).getTime();
+const DAY = 24 * 3600 * 1000;
+
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
@@ -86,7 +89,7 @@ function operation(overrides: Partial<AssistantOperation> = {}): AssistantOperat
   return {
     id: 'operation-1', requestId: 'request-1', operationKey: 'one',
     operationType: 'create_todo', objectType: 'todo', objectId: 'todo-1',
-    beforeSnapshot: null, afterSnapshot: '{}', receiptSummary: '建立待办：整理照片',
+    beforeSnapshot: null, afterSnapshot: JSON.stringify({ dueAt: NOW + DAY }), receiptSummary: '建立待办：整理照片',
     status: 'committed', sequence: 0, createdAt: 1, undoneAt: null,
     ...overrides,
   };
@@ -102,7 +105,15 @@ const combinedReceipt = assistantReceiptState([
 ]);
 check(combinedReceipt.visible && combinedReceipt.canUndo, '多个操作应合成一张可撤销回执');
 check(combinedReceipt.operations.map(item => item.sequence).join(',') === '0,1', '回执按操作顺序稳定展示');
-check(assistantReceiptTarget(operation()) === '/entry/todo-1', '待办回执应进入待办详情');
+check(assistantReceiptTarget(operation(), NOW) === '/?todoView=week&focusTodoId=todo-1',
+  '7 天窗口内待办回执应进入首页本周待办并定位');
+check(assistantReceiptTarget(operation({
+  objectId: 'todo-long', afterSnapshot: JSON.stringify({ dueAt: NOW + 8 * DAY }),
+}), NOW) === '/?todoView=all&focusTodoId=todo-long',
+'7 天窗口后的待办回执应进入首页全部待办并定位');
+check(assistantReceiptTarget(operation({
+  objectId: 'todo-undated', afterSnapshot: JSON.stringify({ dueAt: null }),
+}), NOW) === null, '无日期隐藏待办没有首页列表目标');
 check(assistantReceiptTarget(operation({
   operationType: 'create_event', objectType: 'event', objectId: 'event-1',
 })) === '/event/event-1', '事件回执应进入事件详情');

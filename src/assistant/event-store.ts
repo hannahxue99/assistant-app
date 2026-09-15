@@ -120,12 +120,12 @@ export function listEvents(
     const rows = options.status
       ? await connection.getAllAsync<any>(
         `SELECT * FROM assistant_events WHERE status=?
-         ORDER BY pinned_at IS NULL, pinned_at DESC, updated_at DESC, id DESC LIMIT ?`,
+         ORDER BY pinned_at IS NULL, updated_at DESC, id DESC LIMIT ?`,
         options.status, limit,
       )
       : await connection.getAllAsync<any>(
         `SELECT * FROM assistant_events
-         ORDER BY pinned_at IS NULL, pinned_at DESC, updated_at DESC, id DESC LIMIT ?`,
+         ORDER BY pinned_at IS NULL, updated_at DESC, id DESC LIMIT ?`,
         limit,
       );
     return rows.map(rowToEvent);
@@ -259,8 +259,8 @@ export function setEventPinned(input: {
       return rowToEvent(current);
     }
     const result = await connection.runAsync(
-      'UPDATE assistant_events SET pinned_at=?, revision=revision+1, updated_at=? WHERE id=? AND revision=?',
-      pinnedAt, updatedAt, input.eventId, current.revision,
+      'UPDATE assistant_events SET pinned_at=?, revision=revision+1 WHERE id=? AND revision=?',
+      pinnedAt, input.eventId, current.revision,
     );
     if (result.changes === 0) return null;
     return rowToEvent(await connection.getFirstAsync<any>('SELECT * FROM assistant_events WHERE id=?', input.eventId));

@@ -3,11 +3,12 @@
  * 设计依据：DESIGN.md（布局/空态/交互均已对齐）
  */
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState, useRef } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { subscribeEntryChanges } from '../../src/engine/entry-events';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -27,6 +28,7 @@ import {
   listEntries,
   listByKeyword,
   listTopicGroups,
+  listLongTermTasks,
   listWeekTasks,
   setDone,
   setParseStatus,
@@ -45,17 +47,30 @@ import {
 } from '../../src/engine/schedule';
 import type { Entry, Settings, TopicGroup } from '../../src/types';
 import type { AssistantEvent } from '../../src/assistant/action-types';
-import { listEvents } from '../../src/assistant/event-store';
+import { listEvents, setEventPinned } from '../../src/assistant/event-store';
 import { theme } from '../../src/theme';
 
 type MemoTab = 'aggregate' | 'voice';
+type TodoView = 'week' | 'all';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ todoView?: string; focusTodoId?: string }>();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [weekGroups, setWeekGroups] = useState<DayGroup[]>([]);
+  const [longTermGroups, setLongTermGroups] = useState<DayGroup[]>([]);
+  const [todosState, setTodosState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [todoView, setTodoView] = useState<TodoView>('week');
+  const [highlightedTodoId, setHighlightedTodoId] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const todoSectionY = useRef<number | null>(null);
+  const todoRowY = useRef(new Map<string, number>());
+  const pendingFocusTodoId = useRef<string | null>(null);
+  const lastFocusIntent = useRef('');
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [events, setEvents] = useState<AssistantEvent[]>([]);
   const [eventsState, setEventsState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [pinningEventId, setPinningEventId] = useState<string | null>(null);
   const [memoTab, setMemoTab] = useState<MemoTab>('aggregate');
   const [query, setQuery] = useState('');
   const [voiceQuery, setVoiceQuery] = useState('');
@@ -84,9 +99,12 @@ export default function HomeScreen() {
     const version = ++loadVersion.current;
     const activeFilters = { ...filters.current };
     void loadEvents(version);
-    const [s, week, groups, all] = await Promise.all([
+    setTodosState(current => current === 'ready' ? current : 'loading');
+    const [s, todoLists, groups, all] = await Promise.all([
       getSettings(),
-      listWeekTasks(),
+      Promise.all([listWeekTasks(), listLongTermTasks()])
+        .then(([week, longTerm]) => ({ week, longTerm, failed: false as const }))
+        .catch(() => ({ week: [] as Entry[], longTerm: [] as Entry[], failed: true as const })),
       listTopicGroups(),
       listEntries({ query: '', kind: 'all', showDone: true }),
     ]);
@@ -101,12 +119,45 @@ export default function HomeScreen() {
     ]);
     if (version !== loadVersion.current) return;
     setSettings(s);
-    setWeekGroups(groupWeekTasks(week));
+    if (todoLists.failed) setTodosState('error');
+    else {
+      setWeekGroups(groupWeekTasks(todoLists.week));
+      setLongTermGroups(groupWeekTasks(todoLists.longTerm));
+      setTodosState('ready');
+    }
     setTopics(aggregateHits ? [] : groups);
     setStream(aggregateHits ?? all.filter((e) => !e.topic));
     setVoiceLog(all);
     setShownVoice(voiceHits ?? all);
   }, [loadEvents]);
+
+  const tryFocusTodo = useCallback(() => {
+    const todoId = pendingFocusTodoId.current;
+    const sectionY = todoSectionY.current;
+    const rowY = todoId ? todoRowY.current.get(`${todoView}:${todoId}`) : undefined;
+    if (!todoId || sectionY === null || rowY === undefined) return;
+    pendingFocusTodoId.current = null;
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, sectionY + rowY - 16), animated: true }));
+  }, [todoView]);
+
+  useEffect(() => {
+    const nextView = params.todoView === 'all' ? 'all' : params.todoView === 'week' ? 'week' : null;
+    if (nextView) setTodoView(nextView);
+    const focusTodoId = typeof params.focusTodoId === 'string' ? params.focusTodoId : null;
+    if (!nextView || !focusTodoId) return;
+    const intent = `${nextView}:${focusTodoId}`;
+    if (lastFocusIntent.current === intent) return;
+    lastFocusIntent.current = intent;
+    pendingFocusTodoId.current = focusTodoId;
+    setHighlightedTodoId(focusTodoId);
+    if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    highlightTimer.current = setTimeout(() => setHighlightedTodoId(null), 1800);
+    requestAnimationFrame(tryFocusTodo);
+  }, [params.focusTodoId, params.todoView, tryFocusTodo]);
+
+  useEffect(() => () => {
+    if (highlightTimer.current) clearTimeout(highlightTimer.current);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -134,6 +185,24 @@ export default function HomeScreen() {
   async function handleTopicPin(group: TopicGroup) {
     await setTopicPinned(group.topic, group.pinnedAt === null);
     await load();
+  }
+
+  async function handleEventPin(event: AssistantEvent) {
+    if (pinningEventId) return;
+    setPinningEventId(event.id);
+    try {
+      const updated = await setEventPinned({
+        eventId: event.id,
+        pinned: event.pinnedAt === null,
+        expectedRevision: event.revision,
+      });
+      if (!updated) Alert.alert('没有保存', '事件刚刚有了新变化，请刷新后再试。');
+      await loadEvents();
+    } catch {
+      Alert.alert('置顶没有保存', '请稍后再试。');
+    } finally {
+      setPinningEventId(null);
+    }
   }
 
   async function handleSearch(q: string) {
@@ -176,26 +245,76 @@ export default function HomeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={styles.dateLine}>{dateStr} · 今天</Text>
 
-          {/* 模块一：本周待办 */}
-          <Text style={styles.h1}>本周待办</Text>
-          {weekGroups.length === 0 ? (
-            <View style={styles.emptyWeek}>
-              <Ionicons name="calendar-outline" size={22} color={theme.colors.textDim} />
-              <Text style={styles.emptyWeekTitle}>这周没有安排，记点什么？</Text>
-              <Text style={styles.emptyWeekSub}>说一声「周五还书」，它就出现在这里</Text>
+          {/* 模块一：同一位置切换 7 天窗口和更远待办，两个列表互不重复。 */}
+          <View
+            style={styles.todoSection}
+            onLayout={event => {
+              todoSectionY.current = event.nativeEvent.layout.y;
+              tryFocusTodo();
+            }}
+          >
+            <View style={styles.todoTabs}>
+              <Pressable
+                accessibilityRole="tab"
+                accessibilityState={{ selected: todoView === 'week' }}
+                onPress={() => setTodoView('week')}
+                style={styles.todoTabButton}
+              >
+                <Text style={[styles.todoTabWeek, todoView === 'week' && styles.todoTabActiveText]}>本周待办</Text>
+                {todoView === 'week' ? <View style={styles.todoTabUnderline} /> : null}
+              </Pressable>
+              <Text style={styles.todoTabDivider}>｜</Text>
+              <Pressable
+                accessibilityRole="tab"
+                accessibilityState={{ selected: todoView === 'all' }}
+                onPress={() => setTodoView('all')}
+                style={styles.todoTabButton}
+              >
+                <Text style={[styles.todoTabAll, todoView === 'all' && styles.todoTabActiveText]}>全部待办</Text>
+                {todoView === 'all' ? <View style={styles.todoTabUnderline} /> : null}
+              </Pressable>
             </View>
-          ) : (
-            weekGroups.map((g) => (
-              <View key={g.dayKey} style={styles.dayGroup}>
-                {g.entries.map((e) => (
-                  <WeekTaskRow key={e.id} entry={e} isToday={g.isToday} onToggle={handleToggle} />
-                ))}
+            {todosState === 'loading' ? (
+              <ActivityIndicator color={theme.colors.accent} style={styles.eventsLoading} />
+            ) : todosState === 'error' ? (
+              <Pressable style={styles.eventsError} onPress={() => { void load(); }}>
+                <Text style={styles.eventsErrorText}>待办暂时加载不了</Text>
+                <Text style={styles.eventsRetry}>重试</Text>
+              </Pressable>
+            ) : (todoView === 'week' ? weekGroups : longTermGroups).length === 0 ? (
+              <View style={styles.emptyWeek}>
+                <Ionicons name="calendar-outline" size={22} color={theme.colors.textDim} />
+                <Text style={styles.emptyWeekTitle}>
+                  {todoView === 'week' ? '这周没有安排，记点什么？' : '本周之外没有待办'}
+                </Text>
+                <Text style={styles.emptyWeekSub}>
+                  {todoView === 'week' ? '说一声「周五还书」，它就出现在这里' : '有明确日期的远期待办会出现在这里'}
+                </Text>
               </View>
-            ))
-          )}
+            ) : (
+              (todoView === 'week' ? weekGroups : longTermGroups).flatMap(group => (
+                group.entries.map(entry => (
+                  <View
+                    key={entry.id}
+                    onLayout={event => {
+                      todoRowY.current.set(`${todoView}:${entry.id}`, event.nativeEvent.layout.y);
+                      tryFocusTodo();
+                    }}
+                  >
+                    <WeekTaskRow
+                      entry={entry}
+                      isToday={group.isToday}
+                      highlighted={highlightedTodoId === entry.id}
+                      onToggle={handleToggle}
+                    />
+                  </View>
+                ))
+              ))
+            )}
+          </View>
 
           {/* 模块二：持续事件。失败只影响本区，不阻断本周待办和原声。 */}
           <Text style={styles.h1}>事件</Text>
@@ -213,6 +332,8 @@ export default function HomeScreen() {
               key={event.id}
               event={event}
               onPress={() => router.push(`/event/${event.id}`)}
+              onTogglePin={() => { void handleEventPin(event); }}
+              pinning={pinningEventId === event.id}
             />
           ))}
 
@@ -360,16 +481,23 @@ export default function HomeScreen() {
 function WeekTaskRow({
   entry,
   isToday,
+  highlighted,
   onToggle,
 }: {
   entry: Entry;
   isToday: boolean;
+  highlighted: boolean;
   onToggle: (entry: Entry, done: boolean) => void;
 }) {
   const done = !!entry.done;
   const overdue = isOverdue(entry);
   return (
-    <View style={[styles.weekRow, isToday && !done && styles.weekRowToday, done && { opacity: 0.55 }]}>
+    <View style={[
+      styles.weekRow,
+      isToday && !done && styles.weekRowToday,
+      highlighted && styles.weekRowHighlighted,
+      done && { opacity: 0.55 },
+    ]}>
       <Pressable onPress={() => onToggle(entry, !done)} style={[styles.check, done && styles.checkOn]} hitSlop={8}>
         {done && <Ionicons name="checkmark" size={13} color="#fff" />}
       </Pressable>
@@ -389,6 +517,14 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 16, gap: 10 },
   dateLine: { fontSize: theme.font.small, color: theme.colors.textDim },
   h1: { fontSize: 18, fontWeight: '700', color: theme.colors.text, marginTop: 8 },
+  todoSection: { gap: 10 },
+  todoTabs: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'flex-end' },
+  todoTabButton: { minHeight: theme.touchTarget, justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 1 },
+  todoTabWeek: { fontSize: 18, lineHeight: 25, fontWeight: '700', color: theme.colors.textDim },
+  todoTabAll: { fontSize: 14, lineHeight: 22, fontWeight: '600', color: theme.colors.textDim },
+  todoTabActiveText: { color: theme.colors.text },
+  todoTabDivider: { color: theme.colors.textDim, fontSize: 15, lineHeight: 27, paddingHorizontal: 1 },
+  todoTabUnderline: { width: 22, height: 2, borderRadius: 1, marginTop: 3, backgroundColor: theme.colors.accent },
   emptyWeek: {
     borderWidth: 1,
     borderStyle: 'dashed',
@@ -413,6 +549,7 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
   },
   weekRowToday: { backgroundColor: theme.colors.goldSoft, borderColor: theme.colors.gold },
+  weekRowHighlighted: { borderColor: theme.colors.accent, backgroundColor: theme.colors.accentSoft },
   check: {
     width: 20,
     height: 20,

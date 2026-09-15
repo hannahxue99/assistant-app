@@ -5,6 +5,7 @@ import type {
   AssistantOlderLoadStatus,
 } from './types';
 import type { AssistantOperation } from './action-types';
+import { todoViewForDueAt } from '../engine/schedule';
 
 export interface AssistantScrollMetrics {
   contentHeight: number;
@@ -132,8 +133,14 @@ function snapshot(value: string): any | null {
   }
 }
 
-export function assistantReceiptTarget(operation: AssistantOperation): string | null {
-  if (operation.objectType === 'todo') return `/entry/${encodeURIComponent(operation.objectId)}`;
+export function assistantReceiptTarget(operation: AssistantOperation, now = Date.now()): string | null {
+  if (operation.objectType === 'todo') {
+    const after = snapshot(operation.afterSnapshot);
+    const dueAt = typeof after?.dueAt === 'number' ? after.dueAt : null;
+    const view = todoViewForDueAt(dueAt, now);
+    if (!view) return dueAt === null ? null : '/';
+    return `/?todoView=${view}&focusTodoId=${encodeURIComponent(operation.objectId)}`;
+  }
   if (operation.objectType === 'event') return `/event/${encodeURIComponent(operation.objectId)}`;
   const after = snapshot(operation.afterSnapshot);
   if (operation.objectType === 'event_update') {
