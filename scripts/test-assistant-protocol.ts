@@ -54,6 +54,34 @@ const existingOperations = parseAssistantTurnOutput(JSON.stringify({
 check(existingOperations.operations[0].type === 'update_event', '应解析候选事件更新');
 check(existingOperations.operations[1].type === 'complete_todo', '应解析候选待办完成');
 
+const withEventDelta = parseAssistantTurnOutput(JSON.stringify({
+  reply: '下一笔还款安排记住了。',
+  segment: { action: 'continue' },
+  event_deltas: [{
+    key: 'loan-plan',
+    target: { action: 'update_existing', event_id: 'event-loan' },
+    evidence: ['下个月11号再还10万'],
+    state: {
+      action: 'replace', change_type: 'plan',
+      value: '已提前还款30万；计划10月11日再还10万',
+    },
+    progress: [{ type: 'decision', content: '确定10月11日再还款10万' }],
+    todos: [{
+      action: 'create', todo_ref: 'todo_1', text: '还款10万',
+      date_status: 'resolved', date_text: '下个月11号',
+      due_date: '2026-10-11', time_precision: 'date',
+    }],
+  }],
+}));
+check(withEventDelta.eventDeltas.length === 1, '应解析完整事件增量');
+const parsedDelta = withEventDelta.eventDeltas[0];
+check(parsedDelta.target.action === 'update_existing' && parsedDelta.target.eventId === 'event-loan',
+  '应解析已有事件目标');
+check(parsedDelta.state.action === 'replace' && parsedDelta.progress.length === 1,
+  '状态与关键进展必须保留为同一增量');
+check(parsedDelta.todos[0]?.action === 'create' && parsedDelta.todos[0].dueDate === '2026-10-11',
+  '增量内待办必须沿用模型日期协议');
+
 const fenced = parseAssistantTurnOutput('```json\n{"reply":"好的","segment":{"action":"split_before_user","previous_summary":"旧话题结束","summary":"新话题开始"}}\n```');
 check(fenced.segment.action === 'split_before_user', '应容忍 JSON 代码块');
 check(fenced.segment.previousSummary === '旧话题结束', '应规范化 snake_case 字段');
@@ -111,6 +139,54 @@ for (const [label, operations] of [
   }
   check(rejected, `${label}必须被协议层拒绝`);
 }
+
+for (const [label, delta] of [
+  ['缺少证据', {
+    key: 'x', target: { action: 'update_existing', event_id: 'event-a' }, evidence: [],
+    state: { action: 'keep' }, progress: [], todos: [],
+  }],
+  ['keep 错带值', {
+    key: 'x', target: { action: 'update_existing', event_id: 'event-a' }, evidence: ['原话'],
+    state: { action: 'keep', value: '错误' }, progress: [], todos: [],
+  }],
+  ['replace 缺少值', {
+    key: 'x', target: { action: 'update_existing', event_id: 'event-a' }, evidence: ['原话'],
+    state: { action: 'replace', change_type: 'plan' }, progress: [], todos: [],
+  }],
+  ['未知目标动作', {
+    key: 'x', target: { action: 'delete', event_id: 'event-a' }, evidence: ['原话'],
+    state: { action: 'keep' }, progress: [], todos: [],
+  }],
+  ['取消待办未开放', {
+    key: 'x', target: { action: 'update_existing', event_id: 'event-a' }, evidence: ['不做了'],
+    state: { action: 'keep' }, progress: [{ type: 'decision', content: '计划取消' }],
+    todos: [{ action: 'cancel', todo_id: 'todo-a' }],
+  }],
+] as const) {
+  let rejected = false;
+  try {
+    parseAssistantTurnOutput(JSON.stringify({
+      reply: '收到', segment: { action: 'continue' }, event_deltas: [delta],
+    }));
+  } catch (error) {
+    rejected = error instanceof AssistantProtocolError;
+  }
+  check(rejected, `事件增量协议：${label}必须被拒绝`);
+}
+
+let tooManyDeltasRejected = false;
+try {
+  parseAssistantTurnOutput(JSON.stringify({
+    reply: '收到', segment: { action: 'continue' },
+    event_deltas: Array.from({ length: 3 }, (_, index) => ({
+      key: `delta-${index}`, target: { action: 'update_existing', event_id: `event-${index}` },
+      evidence: ['原话'], state: { action: 'keep' }, progress: [], todos: [],
+    })),
+  }));
+} catch (error) {
+  tooManyDeltasRejected = error instanceof AssistantProtocolError;
+}
+check(tooManyDeltasRejected, '单轮事件增量必须限制数量');
 
 const prompt = buildAssistantPromptMessages({
   contextBlock: '当前分段摘要：用户正在设计私人 AI。',

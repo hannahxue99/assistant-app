@@ -106,6 +106,7 @@ export const assistantActionSchema = `
     time_zone TEXT NOT NULL,
     context_refs_json TEXT NOT NULL DEFAULT '{}',
     proposed_operations_json TEXT NOT NULL DEFAULT '[]',
+    proposed_event_deltas_json TEXT NOT NULL DEFAULT '[]',
     validation_json TEXT NOT NULL DEFAULT '{}',
     committed_operation_ids_json TEXT NOT NULL DEFAULT '[]',
     status TEXT NOT NULL CHECK (status IN ('started', 'model_received', 'validated', 'committed', 'failed')),

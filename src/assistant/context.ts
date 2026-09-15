@@ -95,12 +95,33 @@ function renderContextBlock(input: {
     sections.push(`相关旧记录：\n${input.entries.map(item => `- ${item.text}`).join('\n')}`);
   }
   if (input.actionContext?.events.length) {
-    sections.push(`可更新的事件候选（只能使用这些 ID）：\n${input.actionContext.events.map(item => (
-      `- ${item.id}｜${item.title}｜当前：${item.currentState || '暂无状态'}`
-    )).join('\n')}`);
+    const focusedEventIds = new Set([
+      input.actionContext.explicitEventId,
+      input.actionContext.segmentEventId,
+    ].filter(Boolean));
+    sections.push(`可更新的事件候选（只能使用这些 ID）：\n${input.actionContext.events.map(item => {
+      const linkedTodos = item.linkedTodos ?? [];
+      const openLimit = focusedEventIds.has(item.id) ? 8 : 2;
+      const doneLimit = focusedEventIds.has(item.id) ? 3 : 1;
+      const shownTodos = [
+        ...linkedTodos.filter(todo => !todo.done).slice(0, openLimit),
+        ...linkedTodos.filter(todo => todo.done).slice(0, doneLimit),
+      ];
+      const todoLines = shownTodos.map(todo => (
+        `  - ${todo.id}｜${todo.text.slice(0, 120)}｜${todo.done ? '已完成' : '未完成'}${todo.dueAt ? `｜日期：${new Date(todo.dueAt).toLocaleString('zh-CN')}` : '｜暂无日期'}｜版本：${todo.revisionAt}`
+      ));
+      return [
+        `- ${item.id}｜${item.title}｜当前：${item.currentState || '暂无状态'}｜事件版本：${item.revision}`,
+        ...(todoLines.length ? ['  相关待办：', ...todoLines] : []),
+      ].join('\n');
+    }).join('\n')}`);
   }
-  if (input.actionContext?.todos.length) {
-    sections.push(`可更新的待办候选（只能使用这些 ID）：\n${input.actionContext.todos.map(item => (
+  const eventLinkedTodoIds = new Set(input.actionContext?.events.flatMap(event => (
+    event.linkedTodos ?? []
+  )).map(todo => todo.id) ?? []);
+  const standaloneTodos = input.actionContext?.todos.filter(todo => !eventLinkedTodoIds.has(todo.id)) ?? [];
+  if (standaloneTodos.length) {
+    sections.push(`其他可更新的待办候选（只能使用这些 ID）：\n${standaloneTodos.map(item => (
       `- ${item.id}｜${item.text}${item.dueAt ? `｜日期：${new Date(item.dueAt).toLocaleString('zh-CN')}` : '｜暂无日期'}`
     )).join('\n')}`);
   }

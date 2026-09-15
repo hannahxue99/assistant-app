@@ -4,11 +4,19 @@ import type {
   AssistantObjectRef,
   AssistantOperationProposal,
 } from './action-types';
+import type {
+  AssistantEventDelta,
+  AssistantEventDeltaChangeType,
+  AssistantEventDeltaState,
+  AssistantEventDeltaTarget,
+  AssistantEventDeltaTodoMutation,
+} from './event-delta-types';
 
 export interface AssistantTurnOutput {
   reply: string;
   segment: AssistantSegmentDecision;
   operations: AssistantOperationProposal[];
+  eventDeltas: AssistantEventDelta[];
 }
 
 export class AssistantProtocolError extends Error {
@@ -63,6 +71,9 @@ const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 const OPERATION_KEY = /^[a-z][a-z0-9_-]{0,63}$/;
 const EVENT_REF = /^event_[1-9][0-9]*$/;
 const TODO_REF = /^todo_[1-9][0-9]*$/;
+const CHANGE_TYPES = new Set<AssistantEventDeltaChangeType>([
+  'fact', 'decision', 'result', 'blocker', 'plan', 'correction',
+]);
 
 function identifier(value: unknown, field: string): string {
   const parsed = requiredText(value, field, 160);
@@ -222,6 +233,144 @@ function parseOperations(value: unknown): AssistantOperationProposal[] {
   return operations;
 }
 
+function parseChangeType(value: unknown, field: string): AssistantEventDeltaChangeType {
+  const parsed = requiredText(value, field, 20) as AssistantEventDeltaChangeType;
+  if (!CHANGE_TYPES.has(parsed)) throw new AssistantProtocolError(`${field} 非法`);
+  return parsed;
+}
+
+function parseEventDeltaTarget(value: unknown): AssistantEventDeltaTarget {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AssistantProtocolError('event_delta.target 必须是对象');
+  }
+  const raw = value as any;
+  const action = requiredText(raw.action, 'event_delta.target.action', 24);
+  if (action === 'update_existing') {
+    return { action, eventId: identifier(raw.event_id, 'event_delta.target.event_id') };
+  }
+  if (action === 'create_new') {
+    return {
+      action,
+      eventRef: localRef(raw.event_ref, 'event_delta.target.event_ref', EVENT_REF),
+      title: requiredText(raw.title, 'event_delta.target.title', 120),
+    };
+  }
+  if (action === 'none' || action === 'clarify') {
+    if (raw.event_id !== undefined || raw.event_ref !== undefined || raw.title !== undefined) {
+      throw new AssistantProtocolError(`${action} 目标不能提供事件字段`);
+    }
+    return { action };
+  }
+  throw new AssistantProtocolError('event_delta.target.action 非法');
+}
+
+function parseEventDeltaState(value: unknown): AssistantEventDeltaState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AssistantProtocolError('event_delta.state 必须是对象');
+  }
+  const raw = value as any;
+  const action = requiredText(raw.action, 'event_delta.state.action', 16);
+  if (action === 'keep') {
+    if (raw.value !== undefined || raw.change_type !== undefined) {
+      throw new AssistantProtocolError('state.action=keep 时不能提供变化字段');
+    }
+    return { action };
+  }
+  if (action === 'replace') {
+    return {
+      action,
+      changeType: parseChangeType(raw.change_type, 'event_delta.state.change_type'),
+      value: requiredText(raw.value, 'event_delta.state.value', 600),
+    };
+  }
+  throw new AssistantProtocolError('event_delta.state.action 非法');
+}
+
+function parseEventDeltaTodo(value: unknown): AssistantEventDeltaTodoMutation {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AssistantProtocolError('event_delta.todo 必须是对象');
+  }
+  const raw = value as any;
+  const action = requiredText(raw.action, 'event_delta.todo.action', 16);
+  if (action === 'create') {
+    return {
+      action,
+      todoRef: localRef(raw.todo_ref, 'event_delta.todo.todo_ref', TODO_REF),
+      text: requiredText(raw.text, 'event_delta.todo.text', 240),
+      ...parseDateProposal(raw, true)!,
+    };
+  }
+  if (action === 'update') {
+    const text = optionalText(raw.text, 'event_delta.todo.text', 240);
+    const date = parseDateProposal(raw, false);
+    if (!text && !date) throw new AssistantProtocolError('事件增量更新待办至少需要内容或日期');
+    return {
+      action,
+      todoId: identifier(raw.todo_id, 'event_delta.todo.todo_id'),
+      text,
+      ...date,
+    };
+  }
+  if (action === 'complete') {
+    return { action, todoId: identifier(raw.todo_id, 'event_delta.todo.todo_id') };
+  }
+  throw new AssistantProtocolError('event_delta.todo.action 非法');
+}
+
+function parseEventDeltas(value: unknown): AssistantEventDelta[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new AssistantProtocolError('event_deltas 必须是数组');
+  if (value.length > 2) throw new AssistantProtocolError('单轮事件增量不能超过 2 个');
+  const deltas = value.map((candidate, index) => {
+    try {
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+        throw new AssistantProtocolError('事件增量必须是对象');
+      }
+      const raw = candidate as any;
+      const key = requiredText(raw.key, 'event_delta.key', 64);
+      if (!OPERATION_KEY.test(key)) throw new AssistantProtocolError('event_delta.key 非法');
+      if (!Array.isArray(raw.evidence) || raw.evidence.length < 1 || raw.evidence.length > 3) {
+        throw new AssistantProtocolError('event_delta.evidence 必须包含 1–3 条本轮原话');
+      }
+      const evidence = raw.evidence.map((item: unknown) => requiredText(item, 'event_delta.evidence', 160));
+      const target = parseEventDeltaTarget(raw.target);
+      const state = parseEventDeltaState(raw.state);
+      if (!Array.isArray(raw.progress) || raw.progress.length > 2) {
+        throw new AssistantProtocolError('event_delta.progress 必须是最多 2 条的数组');
+      }
+      const progress = raw.progress.map((item: any) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) {
+          throw new AssistantProtocolError('event_delta.progress 项必须是对象');
+        }
+        return {
+          type: parseChangeType(item.type, 'event_delta.progress.type'),
+          content: requiredText(item.content, 'event_delta.progress.content', 800),
+        };
+      });
+      if (!Array.isArray(raw.todos) || raw.todos.length > 2) {
+        throw new AssistantProtocolError('event_delta.todos 必须是最多 2 条的数组');
+      }
+      const todos = raw.todos.map(parseEventDeltaTodo);
+      if ((target.action === 'none' || target.action === 'clarify')
+        && (state.action !== 'keep' || progress.length > 0 || todos.length > 0)) {
+        throw new AssistantProtocolError(`${target.action} 事件增量不能携带数据变化`);
+      }
+      if (target.action === 'create_new' && state.action !== 'replace') {
+        throw new AssistantProtocolError('新事件必须提供完整当前状态');
+      }
+      return { key, target, evidence, state, progress, todos };
+    } catch (error) {
+      if (error instanceof AssistantProtocolError) {
+        throw new AssistantProtocolError(`event_deltas[${index}]: ${error.message}`);
+      }
+      throw error;
+    }
+  });
+  const keys = new Set(deltas.map(delta => delta.key));
+  if (keys.size !== deltas.length) throw new AssistantProtocolError('单轮事件增量键不能重复');
+  return deltas;
+}
+
 export function parseAssistantTurnOutput(content: string): AssistantTurnOutput {
   const raw = parseJson(content);
   if (!raw || typeof raw !== 'object') throw new AssistantProtocolError('模型返回缺少对象');
@@ -239,5 +388,6 @@ export function parseAssistantTurnOutput(content: string): AssistantTurnOutput {
       previousSummary: compactSummary(raw.segment?.previous_summary ?? raw.segment?.previousSummary),
     },
     operations: parseOperations(raw.operations),
+    eventDeltas: parseEventDeltas(raw.event_deltas),
   };
 }

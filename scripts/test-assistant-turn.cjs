@@ -207,16 +207,32 @@ async function main() {
   provider = async () => ({
     reply: '还款计划继续沿用这条主线。',
     segment: { action: 'continue' },
-    operations: [{ key: 'state', type: 'update_event', eventId: houseEvent.id, currentState: '下个月10号继续还款' }],
+    operations: [],
+    eventDeltas: [{
+      key: 'repay-plan',
+      target: { action: 'update_existing', eventId: houseEvent.id },
+      evidence: ['下个月10号还'],
+      state: { action: 'replace', changeType: 'plan', value: '已开始看房；下个月10号继续还款' },
+      progress: [{ type: 'decision', content: '确定下个月10号继续还款' }],
+      todos: [{
+        action: 'create', todoRef: 'todo_1', text: '继续还款',
+        dateStatus: 'resolved', dateText: '下个月10号', dueDate: '2026-10-10', timePrecision: 'date',
+      }],
+    }],
   });
   const modelOnlyEvent = await orchestrator.sendAssistantTurn({
     requestId: 'request-model-only-event', content: '下个月10号还', source: 'text', settings,
     createdAt: new Date('2026-09-15T11:30:00+08:00').getTime(),
   });
-  assert.equal(modelOnlyEvent.operations.length, 1, '模型只提出事件时本地不得自行补建待办');
+  assert.equal(JSON.stringify(modelOnlyEvent.operations.map(item => item.operationType)), JSON.stringify([
+    'update_event', 'append_event_update', 'create_todo', 'link_todo_event',
+  ]), '完整事件增量必须原子提交状态、进展、待办和自动关联');
   const modelOnlyLog = sqlite.prepare("SELECT * FROM assistant_decision_logs WHERE request_id='request-model-only-event'").get();
-  assert.deepEqual(JSON.parse(modelOnlyLog.proposed_operations_json).map(item => item.type), ['update_event'],
-    '日志必须明确显示模型该轮没有提出待办');
+  assert.equal(JSON.parse(modelOnlyLog.proposed_event_deltas_json)[0].key, 'repay-plan',
+    '日志必须保留模型原始事件增量');
+  assert.equal(JSON.stringify(JSON.parse(modelOnlyLog.validation_json).compiled.map(item => item.type)), JSON.stringify([
+    'update_event', 'append_event_update', 'create_todo', 'link_todo_event',
+  ]), '日志必须记录事件增量编译出的原子操作');
 
   const retriedSucceeded = await orchestrator.retryAssistantTurn({ requestId: 'request-5', settings });
   assert.equal(retriedSucceeded.operations.length, 4, '成功请求重试应读取原操作回执');

@@ -3,7 +3,7 @@ import type { Settings } from '../types';
 import { buildAssistantContext, type AssistantLaunchContext } from './context';
 import { loadAssistantActionContext } from './action-context';
 import { completeAssistantTurnWithActions, listCommittedOperationsByRequest } from './action-store';
-import { validateAssistantActions } from './action-validator';
+import { prepareAssistantActions } from './event-delta';
 import { requestAssistantTurn } from './provider';
 import { ASSISTANT_PROMPT_VERSION } from './prompt';
 import {
@@ -161,25 +161,30 @@ async function runSavedTurn(input: {
       timeZone,
       onReplyText: input.onReplyText,
     });
+    const eventDeltas = output.eventDeltas ?? [];
     await safelyLog(() => recordAssistantModelDecision({
       requestId: input.requestId,
       operations: output.operations ?? [],
+      eventDeltas,
       metadata: output.providerMetadata,
     }));
-    const validation = validateAssistantActions({
+    const recentEvidence = messages
+      .filter(message => message.role === 'user' && message.id !== state.userMessage.id)
+      .slice(-6)
+      .map(message => message.content);
+    const validation = prepareAssistantActions({
       operations: output.operations ?? [],
+      eventDeltas,
       actionContext,
       currentMessage: state.userMessage.content,
-      recentEvidence: messages
-        .filter(message => message.role === 'user' && message.id !== state.userMessage.id)
-        .slice(-6)
-        .map(message => message.content),
+      recentEvidence,
       referenceAt: state.userMessage.createdAt,
     });
     await safelyLog(() => recordAssistantValidation({
       requestId: input.requestId,
       accepted: validation.accepted,
       rejected: validation.rejected,
+      compiled: validation.compiled,
     }));
     const replyForCommit = output.providerMetadata?.protocolWarnings.includes('reply_execution_claim')
       && validation.accepted.length === 0
@@ -202,6 +207,7 @@ async function runSavedTurn(input: {
       console.log('[assistant-decision]', {
         requestId: input.requestId,
         proposed: (output.operations ?? []).map(operation => operation.type),
+        eventDeltas: eventDeltas.map(delta => delta.key),
         rejected: validation.rejected.map(item => `${item.type}:${item.reason}`),
         committed: completed.operations.map(operation => operation.operationType),
         modelMs: output.providerMetadata

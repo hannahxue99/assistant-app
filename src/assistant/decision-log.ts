@@ -1,5 +1,6 @@
 import { withDatabaseConnection } from '../db';
 import type { AssistantOperation, AssistantOperationProposal } from './action-types';
+import type { AssistantEventDelta } from './event-delta-types';
 import type { AssistantProviderAttempt, AssistantProviderMetadata } from './provider';
 import type { AssistantProtocolWarning } from './protocol';
 
@@ -16,6 +17,7 @@ export interface AssistantDecisionLog {
   requestId: string;
   status: 'started' | 'model_received' | 'validated' | 'committed' | 'failed';
   proposedOperations: AssistantOperationProposal[];
+  proposedEventDeltas: AssistantEventDelta[];
   validation: unknown;
   committedOperationIds: string[];
   errorCode: string | null;
@@ -59,7 +61,8 @@ export async function beginAssistantDecisionLog(input: {
          prompt_version=excluded.prompt_version, model=excluded.model,
          reference_at=excluded.reference_at, time_zone=excluded.time_zone,
          context_refs_json=excluded.context_refs_json, status='started',
-         proposed_operations_json='[]', validation_json='{}', committed_operation_ids_json='[]',
+         proposed_operations_json='[]', proposed_event_deltas_json='[]',
+         validation_json='{}', committed_operation_ids_json='[]',
          provider_started_at=NULL, provider_completed_at=NULL, commit_completed_at=NULL,
          finish_reason=NULL, prompt_tokens=NULL, completion_tokens=NULL, total_tokens=NULL,
          error_code=NULL, error_detail=NULL, repair_count=0, repair_status='not_needed',
@@ -80,18 +83,20 @@ export async function beginAssistantDecisionLog(input: {
 export async function recordAssistantModelDecision(input: {
   requestId: string;
   operations: AssistantOperationProposal[];
+  eventDeltas?: AssistantEventDelta[];
   metadata?: AssistantProviderMetadata;
   updatedAt?: number;
 }): Promise<void> {
   const updatedAt = input.updatedAt ?? Date.now();
   await withDatabaseConnection(async database => database.runAsync(
     `UPDATE assistant_decision_logs SET
-       proposed_operations_json=?, status='model_received',
+       proposed_operations_json=?, proposed_event_deltas_json=?, status='model_received',
        provider_started_at=?, provider_completed_at=?, finish_reason=?,
        prompt_tokens=?, completion_tokens=?, total_tokens=?,
        provider_attempt_count=?, provider_attempts_json=?, protocol_warnings_json=?, updated_at=?
      WHERE request_id=?`,
-    JSON.stringify(input.operations), input.metadata?.startedAt ?? null,
+    JSON.stringify(input.operations), JSON.stringify(input.eventDeltas ?? []),
+    input.metadata?.startedAt ?? null,
     input.metadata?.completedAt ?? updatedAt, input.metadata?.finishReason ?? null,
     input.metadata?.promptTokens ?? null, input.metadata?.completionTokens ?? null,
     input.metadata?.totalTokens ?? null, input.metadata?.attemptCount ?? 0,
@@ -105,12 +110,14 @@ export async function recordAssistantValidation(input: {
   requestId: string;
   accepted: AssistantOperationProposal[];
   rejected: unknown[];
+  compiled?: AssistantOperationProposal[];
   updatedAt?: number;
 }): Promise<void> {
   const updatedAt = input.updatedAt ?? Date.now();
   await withDatabaseConnection(async database => database.runAsync(
     `UPDATE assistant_decision_logs SET validation_json=?, status='validated', updated_at=? WHERE request_id=?`,
     JSON.stringify({
+      compiled: (input.compiled ?? []).map(operation => ({ key: operation.key, type: operation.type })),
       accepted: input.accepted.map(operation => ({ key: operation.key, type: operation.type })),
       rejected: input.rejected,
     }),
@@ -165,6 +172,7 @@ export async function getAssistantDecisionLog(requestId: string): Promise<Assist
       requestId: row.request_id,
       status: row.status,
       proposedOperations: JSON.parse(row.proposed_operations_json || '[]'),
+      proposedEventDeltas: JSON.parse(row.proposed_event_deltas_json || '[]'),
       validation: JSON.parse(row.validation_json || '{}'),
       committedOperationIds: JSON.parse(row.committed_operation_ids_json || '[]'),
       errorCode: row.error_code ?? null,

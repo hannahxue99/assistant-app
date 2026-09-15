@@ -173,6 +173,9 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
   if (!decisionLogColumns.some(column => column.name === 'provider_attempts_json')) {
     await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN provider_attempts_json TEXT NOT NULL DEFAULT '[]';");
   }
+  if (!decisionLogColumns.some(column => column.name === 'proposed_event_deltas_json')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN proposed_event_deltas_json TEXT NOT NULL DEFAULT '[]';");
+  }
 
   // 旧版本只有 created_at。先探测列再迁移，避免重复 ALTER 导致启动失败。
   const columns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(entries)');

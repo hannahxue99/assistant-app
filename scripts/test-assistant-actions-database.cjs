@@ -74,6 +74,7 @@ async function main() {
   const legacyBackup = load('src/engine/legacy-backup.ts');
   const legacyImport = load('src/assistant/legacy-import.ts');
   const actionStore = load('src/assistant/action-store.ts');
+  const actionContext = load('src/assistant/action-context.ts');
   const actionUndo = load('src/assistant/action-undo.ts');
   await db.initDatabase();
 
@@ -93,6 +94,7 @@ async function main() {
   for (const column of [
     'error_detail', 'repair_count', 'repair_status',
     'provider_attempt_count', 'provider_attempts_json', 'protocol_warnings_json',
+    'proposed_event_deltas_json',
   ]) {
     assert.ok(decisionLogColumns.has(column), `决策日志必须包含 ${column}`);
   }
@@ -249,6 +251,25 @@ async function main() {
   assert.ok(mortgageDetail.todos.some(todo => todo.dueAt === 9000));
   assert.equal(mortgageDetail.updates[0].content, '已提前还款 30 万', '关键进展应按最新在前展示');
   assert.equal(await eventStore.getEventDetail('missing-event'), null, '不存在事件应返回局部空结果');
+  const completedRelatedTodo = await db.insertEntry({ rawText: '核对提前还款资格', source: 'text', createdAt: 3450 }, {
+    kind: 'task', summary: '核对提前还款资格', dueAt: 8800, tags: [], topic: null, persons: [],
+  });
+  await db.setDone(completedRelatedTodo.id, true);
+  await eventStore.linkObjects({
+    fromType: 'todo', fromId: completedRelatedTodo.id, relationType: 'belongs_to',
+    toType: 'event', toId: firstEvent.id, createdAt: 3451,
+  });
+  const loadedActionContext = await actionContext.loadAssistantActionContext({
+    query: '这个改到下周吧',
+    launchContext: { kind: 'event', id: firstEvent.id, label: '住房贷款', state: '预计仍剩30多万' },
+  });
+  const loadedMortgage = loadedActionContext.events.find(event => event.id === firstEvent.id);
+  assert.ok(loadedMortgage.linkedTodos.some(todo => todo.id === hiddenRelatedTodo.id && todo.done === false),
+    '显式事件上下文必须带入未完成相关待办身份与状态');
+  assert.ok(loadedMortgage.linkedTodos.some(todo => todo.id === completedRelatedTodo.id && todo.done === true),
+    '显式事件上下文必须带入最近完成的相关待办');
+  assert.ok(loadedActionContext.todos.some(todo => todo.id === hiddenRelatedTodo.id),
+    '事件关联的未完成待办必须进入可修改候选');
   const relink = await eventStore.linkObjects({
     fromType: 'todo', fromId: hiddenRelatedTodo.id, relationType: 'related',
     toType: 'event', toId: firstEvent.id, createdAt: 3500,

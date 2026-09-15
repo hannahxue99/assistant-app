@@ -19,6 +19,12 @@ function sameMeaningfulText(left: string, right: string): boolean {
   return Boolean(a && b && (a === b || a.includes(b) || b.includes(a)));
 }
 
+function sameEventState(left: string, right: string): boolean {
+  const a = normalized(left);
+  const b = normalized(right);
+  return Boolean(a && b && a === b);
+}
+
 function resolveCandidateId(ref: AssistantObjectRef): string | null {
   return ref.kind === 'candidate' ? ref.id : null;
 }
@@ -129,7 +135,7 @@ export function validateAssistantActions(input: {
         continue;
       }
       const candidate = input.actionContext.events.find(event => event.id === operation.eventId);
-      if (candidate && sameMeaningfulText(candidate.currentState, operation.currentState)) {
+      if (candidate && sameEventState(candidate.currentState, operation.currentState)) {
         reject(operation, 'duplicate_content');
         continue;
       }

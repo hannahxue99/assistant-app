@@ -1,6 +1,6 @@
 # Existing Event Delta Decision Design
 
-状态：协议已确认，等待实现确认
+状态：协议已确认，代码已实现，等待 Dev 端验收
 
 ## 1. 目标
 
@@ -199,4 +199,3 @@ todo.complete       -> complete_todo + 确保 link_todo_event
 9. 任何子操作失败时不产生半套事件结果。
 10. 决策日志可以还原模型判断、拒绝原因和最终提交结果。
 11. 新测试覆盖新计划、改期、完成、阻碍、可能性、重复、歧义、无日期、重试幂等和事务回滚，并加入 `npm test`；`npm run ci` 必须通过。
-

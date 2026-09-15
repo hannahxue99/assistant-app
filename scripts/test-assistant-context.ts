@@ -83,4 +83,54 @@ check(budgeted.stats.trimmedRecentMessages >= 0, '应输出可观测的裁剪统
 check(estimateAssistantTokens('这是六个汉字') >= 6, '中文 Token 估算必须保守');
 check(estimateAssistantTokens('abcdefghijkl') <= 4, '连续拉丁字符按近似 token 估算');
 
+const linkedTodoContext = buildAssistantContext({
+  recentMessages: [message(30)],
+  actionContext: {
+    events: [{
+      id: 'event-loan', title: '公积金贷款还款', currentState: '计划继续提前还款',
+      aliases: [], linkedTodoTexts: ['10月11日还款10万'], recentUpdateTexts: [],
+      linkedTodos: [
+        {
+          id: 'todo-open', text: '10月11日还款10万', dueAt: new Date(2026, 9, 11, 9).getTime(),
+          done: false, revisionAt: 7, updatedAt: 7,
+        },
+        {
+          id: 'todo-done', text: '9月15日提前还款30万', dueAt: new Date(2026, 8, 15, 9).getTime(),
+          done: true, revisionAt: 6, updatedAt: 6,
+        },
+      ],
+      revision: 2, updatedAt: 8, score: 10,
+    }],
+    todos: [], explicitEventId: 'event-loan', segmentEventId: null,
+  },
+});
+check(linkedTodoContext.contextBlock.includes('todo-open'), '事件上下文必须提供相关待办 ID');
+check(linkedTodoContext.contextBlock.includes('未完成'), '事件上下文必须提供相关待办状态');
+check(linkedTodoContext.contextBlock.includes('todo-done'), '最近完成的相关待办必须进入上下文');
+check(linkedTodoContext.contextBlock.includes('2026'), '事件上下文必须提供相关待办日期');
+
+const crowdedEventContext = buildAssistantContext({
+  recentMessages: Array.from({ length: 12 }, (_, index) => ({
+    ...message(100 + index), content: `最近事件原话${index}`.repeat(20),
+  })),
+  actionContext: {
+    events: Array.from({ length: 5 }, (_, eventIndex) => ({
+      id: `event-${eventIndex}`, title: `事件${eventIndex}`, currentState: '当前状态'.repeat(30),
+      aliases: [], linkedTodoTexts: [], recentUpdateTexts: [], revision: 1,
+      updatedAt: eventIndex, score: 10 - eventIndex,
+      linkedTodos: Array.from({ length: 11 }, (_, todoIndex) => ({
+        id: `event-${eventIndex}-todo-${todoIndex}`,
+        text: `需要处理的相关行动${todoIndex}`.repeat(15),
+        dueAt: null,
+        done: todoIndex >= 8,
+        revisionAt: todoIndex,
+        updatedAt: todoIndex,
+      })),
+    })),
+    todos: [], explicitEventId: 'event-0', segmentEventId: null,
+  },
+  inputBudget: 6000,
+});
+check(crowdedEventContext.estimatedTokens <= 6000, '丰富事件包仍不得突破上下文硬预算');
+
 console.log('assistant context tests passed');

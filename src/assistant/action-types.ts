@@ -125,10 +125,20 @@ export interface AssistantEventCandidate {
   currentState: string;
   aliases: string[];
   linkedTodoTexts: string[];
+  linkedTodos?: AssistantLinkedTodoCandidate[];
   recentUpdateTexts?: string[];
   revision: number;
   updatedAt: number;
   score: number;
+}
+
+export interface AssistantLinkedTodoCandidate {
+  id: string;
+  text: string;
+  dueAt: number | null;
+  done: boolean;
+  revisionAt: number;
+  updatedAt: number;
 }
 
 export interface AssistantTodoCandidate {
@@ -167,6 +177,7 @@ export interface AssistantActionRejection {
     | 'ambiguous_candidate'
     | 'event_admission_failed'
     | 'duplicate_content'
+    | 'mixed_event_operations'
     | 'invalid_calendar_date'
     | 'invalid_date_protocol'
     | 'invalid_local_reference';

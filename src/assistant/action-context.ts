@@ -2,6 +2,7 @@ import { scoreTextRelevance } from './retrieval';
 import type {
   AssistantActionContext,
   AssistantEventCandidate,
+  AssistantLinkedTodoCandidate,
   AssistantTodoCandidate,
 } from './action-types';
 import type { AssistantLaunchContext } from './context';
@@ -105,11 +106,13 @@ export async function loadAssistantActionContext(input: {
        WHERE undone_at IS NULL ORDER BY occurred_at DESC, id DESC`,
     );
     const linkedTodoRows = await database.getAllAsync<any>(
-      `SELECT r.to_id AS event_id, e.summary
+      `SELECT r.to_id AS event_id, e.id, e.summary, e.raw_text, e.due_at,
+              e.done, e.revision_at, e.updated_at
        FROM assistant_object_relations r
        JOIN entries e ON e.id=r.from_id
        WHERE r.from_type='todo' AND r.relation_type='belongs_to'
-         AND r.to_type='event' AND r.undone_at IS NULL`,
+         AND r.to_type='event' AND r.undone_at IS NULL
+       ORDER BY r.to_id, e.done ASC, e.updated_at DESC, e.id`,
     );
     const aliasesByEvent = new Map<string, string[]>();
     for (const row of aliasRows) {
@@ -121,8 +124,23 @@ export async function loadAssistantActionContext(input: {
       if (existing.length < 3) updatesByEvent.set(row.event_id, [...existing, row.content]);
     }
     const todosByEvent = new Map<string, string[]>();
+    const linkedTodosByEvent = new Map<string, AssistantLinkedTodoCandidate[]>();
     for (const row of linkedTodoRows) {
       todosByEvent.set(row.event_id, [...(todosByEvent.get(row.event_id) ?? []), row.summary]);
+      const existing = linkedTodosByEvent.get(row.event_id) ?? [];
+      const openCount = existing.filter(item => !item.done).length;
+      const doneCount = existing.length - openCount;
+      const done = Boolean(row.done);
+      if ((!done && openCount < 8) || (done && doneCount < 3)) {
+        linkedTodosByEvent.set(row.event_id, [...existing, {
+          id: row.id,
+          text: row.summary || row.raw_text,
+          dueAt: row.due_at ?? null,
+          done,
+          revisionAt: Number(row.revision_at ?? row.updated_at),
+          updatedAt: Number(row.updated_at),
+        }]);
+      }
     }
     const allEvents: AssistantEventCandidate[] = eventRows.map(row => ({
       id: row.id,
@@ -130,6 +148,7 @@ export async function loadAssistantActionContext(input: {
       currentState: row.current_state,
       aliases: aliasesByEvent.get(row.id) ?? [],
       linkedTodoTexts: todosByEvent.get(row.id) ?? [],
+      linkedTodos: linkedTodosByEvent.get(row.id) ?? [],
       recentUpdateTexts: updatesByEvent.get(row.id) ?? [],
       revision: Number(row.revision),
       updatedAt: Number(row.updated_at),
@@ -178,6 +197,14 @@ export async function loadAssistantActionContext(input: {
     const explicitTodoId = input.launchContext?.kind === 'todo' ? input.launchContext.id : null;
     todos = forceCandidate(todos, allTodos, segmentTodoBinding?.todo_id ?? null);
     todos = forceCandidate(todos, allTodos, explicitTodoId);
+    const selectedLinkedTodoIds = new Set(events.flatMap(event => (
+      event.linkedTodos ?? []
+    )).filter(todo => !todo.done).map(todo => todo.id));
+    const selectedLinkedTodos = allTodos.filter(todo => selectedLinkedTodoIds.has(todo.id));
+    todos = [
+      ...selectedLinkedTodos,
+      ...todos.filter(todo => !selectedLinkedTodoIds.has(todo.id)),
+    ].slice(0, 12);
 
     return {
       events,
