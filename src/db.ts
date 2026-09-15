@@ -25,6 +25,7 @@ import { calendarSchema } from './engine/calendar-schema';
 import { inferTimePrecision } from './engine/calendar-projection';
 import { runSingleFlight, type SingleFlightState } from './engine/single-flight';
 import { assistantSchema } from './assistant/schema';
+import { assistantActionSchema } from './assistant/action-schema';
 
 type DatabaseGlobal = typeof globalThis & {
   __assistantDatabaseRuntime?: SingleFlightState<SQLite.SQLiteDatabase>;
@@ -151,6 +152,7 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
 
   `);
   await database.execAsync(assistantSchema);
+  await database.execAsync(assistantActionSchema);
 
   // 旧版本只有 created_at。先探测列再迁移，避免重复 ALTER 导致启动失败。
   const columns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(entries)');
