@@ -264,7 +264,6 @@ export default function HomeScreen() {
                 style={styles.todoTabButton}
               >
                 <Text style={[styles.todoTabWeek, todoView === 'week' && styles.todoTabActiveText]}>本周待办</Text>
-                {todoView === 'week' ? <View style={styles.todoTabUnderline} /> : null}
               </Pressable>
               <Text style={styles.todoTabDivider}>｜</Text>
               <Pressable
@@ -274,7 +273,6 @@ export default function HomeScreen() {
                 style={styles.todoTabButton}
               >
                 <Text style={[styles.todoTabAll, todoView === 'all' && styles.todoTabActiveText]}>全部待办</Text>
-                {todoView === 'all' ? <View style={styles.todoTabUnderline} /> : null}
               </Pressable>
             </View>
             {todosState === 'loading' ? (
@@ -518,13 +516,12 @@ const styles = StyleSheet.create({
   dateLine: { fontSize: theme.font.small, color: theme.colors.textDim },
   h1: { fontSize: 18, fontWeight: '700', color: theme.colors.text, marginTop: 8 },
   todoSection: { gap: 10 },
-  todoTabs: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'flex-end' },
-  todoTabButton: { minHeight: theme.touchTarget, justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 1 },
-  todoTabWeek: { fontSize: 18, lineHeight: 25, fontWeight: '700', color: theme.colors.textDim },
-  todoTabAll: { fontSize: 14, lineHeight: 22, fontWeight: '600', color: theme.colors.textDim },
+  todoTabs: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center' },
+  todoTabButton: { minHeight: theme.touchTarget, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 1 },
+  todoTabWeek: { fontSize: 18, lineHeight: 25, fontWeight: '700', color: '#A9A29A' },
+  todoTabAll: { fontSize: 14, lineHeight: 22, fontWeight: '600', color: '#A9A29A' },
   todoTabActiveText: { color: theme.colors.text },
-  todoTabDivider: { color: theme.colors.textDim, fontSize: 15, lineHeight: 27, paddingHorizontal: 1 },
-  todoTabUnderline: { width: 22, height: 2, borderRadius: 1, marginTop: 3, backgroundColor: theme.colors.accent },
+  todoTabDivider: { color: '#A9A29A', fontSize: 15, lineHeight: 27, paddingHorizontal: 1 },
   emptyWeek: {
     borderWidth: 1,
     borderStyle: 'dashed',

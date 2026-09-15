@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000">
+  <rect width="1000" height="1000" fill="#F6F3EE"/>
+  <style>
+    .title { font: 700 30px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #2B2622; }
+    .section { font: 600 19px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #8A837B; }
+    .week { font: 700 22px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+    .all { font: 600 17px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+    .divider { font: 400 18px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #8A837B; }
+    .card-title { font: 600 20px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #2B2622; }
+    .card-body { font: 400 17px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #2B2622; }
+    .card-time { font: 400 14px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #8A837B; }
+    .note { font: 400 16px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #8A837B; }
+  </style>
+
+  <text x="54" y="58" class="title">待办 Tab 与事件卡密度调整</text>
+  <text x="54" y="90" class="note">只改视觉，不动待办分窗、回执跳转、置顶或事件数据。</text>
+
+  <text x="54" y="142" class="section">当前</text>
+  <rect x="54" y="162" width="892" height="270" rx="22" fill="#FFFFFF" stroke="#E8E2D9"/>
+  <text x="82" y="211" class="week" fill="#2B2622">本周待办</text>
+  <text x="184" y="211" class="divider">｜</text>
+  <text x="209" y="211" class="all" fill="#8A837B">全部待办</text>
+  <rect x="112" y="225" width="30" height="3" rx="1.5" fill="#E0733A"/>
+  <text x="380" y="211" class="note">点击后下划线换边，文字会重新排版</text>
+  <rect x="82" y="253" width="836" height="148" rx="16" fill="#FFFFFF" stroke="#E8E2D9"/>
+  <text x="102" y="288" class="card-title">住房贷款</text>
+  <text x="102" y="340" class="card-body">下个月继续还款10万</text>
+  <text x="102" y="383" class="card-time">今天 12:43:18</text>
+  <path d="M877 275 l12 12 m-4 -16 l9 9 m-15 12 l11 -11" stroke="#8A837B" stroke-width="2.2" fill="none"/>
+  <path d="M102 304 H894 M102 354 H894" stroke="#E0733A" stroke-dasharray="6 6" opacity="0.3"/>
+
+  <text x="54" y="486" class="section">调整后：点击前后坐标完全一致，只换颜色</text>
+  <rect x="54" y="506" width="428" height="112" rx="18" fill="#FFFFFF" stroke="#E8E2D9"/>
+  <text x="78" y="542" class="note">本周选中</text>
+  <text x="78" y="587" class="week" fill="#2B2622">本周待办</text>
+  <text x="180" y="587" class="divider">｜</text>
+  <text x="205" y="587" class="all" fill="#A9A29A">全部待办</text>
+
+  <rect x="518" y="506" width="428" height="112" rx="18" fill="#FFFFFF" stroke="#E8E2D9"/>
+  <text x="542" y="542" class="note">全部选中</text>
+  <text x="542" y="587" class="week" fill="#A9A29A">本周待办</text>
+  <text x="644" y="587" class="divider">｜</text>
+  <text x="669" y="587" class="all" fill="#2B2622">全部待办</text>
+
+  <text x="54" y="672" class="section">调整后：事件仍是三行，但连续排布</text>
+  <rect x="54" y="692" width="892" height="112" rx="16" fill="#FFFFFF" stroke="#E8E2D9"/>
+  <text x="76" y="727" class="card-title">住房贷款</text>
+  <text x="76" y="758" class="card-body">下个月继续还款10万</text>
+  <text x="76" y="786" class="card-time">今天 12:43:18</text>
+  <path d="M877 714 l12 12 m-4 -16 l9 9 m-15 12 l11 -11" stroke="#8A837B" stroke-width="2.2" fill="none"/>
+
+  <rect x="54" y="856" width="892" height="86" rx="16" fill="#F9E8DD"/>
+  <text x="78" y="891" class="card-body">推荐参数：Tab 仍保留 44px 点击区；选中 #2B2622，未选中 #A9A29A。</text>
+  <text x="78" y="921" class="card-body">事件卡高约 100–104px，内边距 12px，三行间距约 4–6px。</text>
+</svg>
