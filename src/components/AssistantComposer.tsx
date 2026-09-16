@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
@@ -18,13 +18,19 @@ import { theme } from '../theme';
 interface AssistantComposerProps {
   onSend: (content: string, source: 'text' | 'voice') => Promise<void>;
   disabled?: boolean;
+  processing?: boolean;
 }
 
-export function AssistantComposer({ onSend, disabled = false }: AssistantComposerProps) {
+export function AssistantComposer({
+  onSend,
+  disabled = false,
+  processing = false,
+}: AssistantComposerProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [listening, setListening] = useState(false);
   const [recognitionError, setRecognitionError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const baseTextRef = useRef('');
   const finalTextRef = useRef('');
   const pressingRef = useRef(false);
@@ -61,21 +67,28 @@ export function AssistantComposer({ onSend, disabled = false }: AssistantCompose
 
   async function submit() {
     const content = text.trim();
-    if (!content || sending || disabled) return;
+    if (!content || sending || disabled || processing) return;
+    const source = usedVoiceRef.current ? 'voice' : 'text';
     setSending(true);
+    setSubmitError(null);
+    setText('');
+    usedVoiceRef.current = false;
+    baseTextRef.current = '';
+    finalTextRef.current = '';
+    Keyboard.dismiss();
     try {
-      await onSend(content, usedVoiceRef.current ? 'voice' : 'text');
-      setText('');
-      usedVoiceRef.current = false;
-      baseTextRef.current = '';
-      finalTextRef.current = '';
+      await onSend(content, source);
+    } catch {
+      setText(current => current.trim() ? current : content);
+      usedVoiceRef.current = source === 'voice';
+      setSubmitError('消息没有发出，内容已为你保留');
     } finally {
       setSending(false);
     }
   }
 
   async function startListening() {
-    if (listening || sending || disabled) return;
+    if (listening || sending || disabled || processing) return;
     try {
       setRecognitionError(null);
       if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
@@ -110,9 +123,15 @@ export function AssistantComposer({ onSend, disabled = false }: AssistantCompose
     setListening(false);
   }
 
+  const unavailable = sending || disabled || processing;
+  const awaitingReply = sending || processing;
+
   return (
     <View style={styles.wrap}>
-      <View style={[styles.composer, disabled && styles.composerDisabled]}>
+      <View
+        style={[styles.composer, unavailable && styles.composerDisabled]}
+        accessibilityState={{ disabled: unavailable, busy: awaitingReply }}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={listening ? '松开结束语音输入' : '按住说话'}
@@ -121,7 +140,7 @@ export function AssistantComposer({ onSend, disabled = false }: AssistantCompose
             void startListening();
           }}
           onPressOut={stopListening}
-          disabled={sending || disabled}
+          disabled={unavailable}
           style={({ pressed }) => [
             styles.iconButton,
             listening && styles.micActive,
@@ -131,14 +150,17 @@ export function AssistantComposer({ onSend, disabled = false }: AssistantCompose
           <Ionicons
             name={listening ? 'mic' : 'mic-outline'}
             size={20}
-            color={listening ? '#FFFFFF' : theme.colors.accent}
+            color={listening ? '#FFFFFF' : unavailable ? theme.colors.textDim : theme.colors.accent}
           />
         </Pressable>
         <TextInput
           value={text}
-          onChangeText={setText}
-          editable={!sending && !disabled}
-          placeholder="告诉小知你在想什么…"
+          onChangeText={(value) => {
+            setText(value);
+            if (submitError) setSubmitError(null);
+          }}
+          editable={!unavailable}
+          placeholder={awaitingReply ? '小知回复后可继续输入' : '告诉小知你在想什么…'}
           placeholderTextColor={theme.colors.textDim}
           selectionColor={theme.colors.accent}
           multiline
@@ -146,28 +168,27 @@ export function AssistantComposer({ onSend, disabled = false }: AssistantCompose
           style={styles.input}
           accessibilityLabel="给小知发送消息"
         />
-        {sending ? (
-          <View style={styles.iconButton} accessibilityLabel="正在发送">
-            <ActivityIndicator color={theme.colors.accent} />
-          </View>
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="发送消息"
-            disabled={!text.trim() || disabled}
-            onPress={() => { void submit(); }}
-            style={({ pressed }) => [
-              styles.sendButton,
-              (!text.trim() || disabled) && styles.sendDisabled,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
-          </Pressable>
-        )}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="发送消息"
+          disabled={!text.trim() || unavailable}
+          onPress={() => { void submit(); }}
+          style={({ pressed }) => [
+            styles.sendButton,
+            (!text.trim() || unavailable) && styles.sendDisabled,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Ionicons
+            name="arrow-up"
+            size={20}
+            color={!text.trim() || unavailable ? theme.colors.textDim : '#FFFFFF'}
+          />
+        </Pressable>
       </View>
       {listening ? <Text style={styles.helper}>正在听，松开结束</Text> : null}
       {recognitionError ? <Text style={styles.error}>{recognitionError}</Text> : null}
+      {submitError ? <Text style={styles.error}>{submitError}</Text> : null}
     </View>
   );
 }
@@ -192,7 +213,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.card,
     padding: 5,
   },
-  composerDisabled: { opacity: 0.48 },
+  composerDisabled: {
+    borderColor: '#DED8D2',
+    backgroundColor: '#ECE8E4',
+  },
   input: {
     flex: 1,
     minHeight: 40,
@@ -219,7 +243,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: theme.colors.accent,
   },
-  sendDisabled: { opacity: 0.3 },
+  sendDisabled: { backgroundColor: '#D8D2CC' },
   pressed: { opacity: 0.72 },
   helper: { color: theme.colors.accent, fontSize: theme.font.small, paddingHorizontal: 4 },
   error: { color: theme.colors.red, fontSize: theme.font.small, paddingHorizontal: 4 },
