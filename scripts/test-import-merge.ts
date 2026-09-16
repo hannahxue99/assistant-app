@@ -1,9 +1,12 @@
 import {
   buildImportDecisions,
+  buildMemoryImportDecisions,
+  classifyMemoryImport,
   classifyEntryImport,
   summarizeImport,
 } from '../src/engine/import-merge';
 import type { BackupPayload, Entry, Profile } from '../src/types';
+import type { AssistantMemory } from '../src/assistant/memory-types';
 
 function entry(overrides: Partial<Entry> = {}): Entry {
   return {
@@ -23,6 +26,15 @@ function payload(entries: Entry[]): BackupPayload {
     entries,
     profile: { ...defaultProfile, name: '小雪' },
     topicPreferences: [],
+  };
+}
+
+function memory(overrides: Partial<AssistantMemory> = {}): AssistantMemory {
+  return {
+    id: 'memory-1', category: 'preference', content: '不喜欢早会', normalizedContent: '不喜欢早会',
+    status: 'active', sensitivity: 'ordinary', admissionBasis: 'explicit', supersededById: null,
+    revision: 1, createdAt: 100, updatedAt: 100, activatedAt: 100, supersededAt: null, forgottenAt: null,
+    ...overrides,
   };
 }
 
@@ -83,6 +95,13 @@ check('重复导入相同数据全部忽略', () => {
   const entries = [entry({ id: '1' }), entry({ id: '2' })];
   const decisions = buildImportDecisions(entries, entries);
   equal(decisions.every((decision) => decision.action === 'ignore'), true);
+});
+check('长期记忆按 revision、更新时间保守合并', () => {
+  equal(classifyMemoryImport(memory(), null).action, 'add');
+  equal(classifyMemoryImport(memory({ revision: 2 }), memory({ revision: 1 })).action, 'update');
+  equal(classifyMemoryImport(memory({ revision: 1 }), memory({ revision: 2 })).action, 'keep-local');
+  equal(classifyMemoryImport(memory({ content: '新内容', updatedAt: 200 }), memory()).action, 'update');
+  equal(buildMemoryImportDecisions([memory()], [memory()])[0].action, 'ignore');
 });
 
 console.log(`\n结果：${passed} 通过，0 失败`);

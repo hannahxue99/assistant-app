@@ -3,21 +3,53 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { assistantFailureLabel } from '../assistant/ui-state';
 import type { AssistantMessage } from '../assistant/types';
 import { theme } from '../theme';
+import { AssistantActionReceipt } from './AssistantActionReceipt';
 
 interface AssistantMessageBubbleProps {
   message: AssistantMessage;
   onRetry: (requestId: string) => void;
   canRetry?: boolean;
+  onNavigate?: (target: string) => void;
+  onUndo?: (requestId: string) => void;
+  undoing?: boolean;
+  undoError?: string | null;
 }
 
-export function AssistantMessageBubble({ message, onRetry, canRetry = false }: AssistantMessageBubbleProps) {
+export function AssistantMessageBubble({
+  message,
+  onRetry,
+  canRetry = false,
+  onNavigate = () => {},
+  onUndo = () => {},
+  undoing = false,
+  undoError = null,
+}: AssistantMessageBubbleProps) {
   const isUser = message.role === 'user';
+  const isStreaming = !isUser && message.status === 'streaming';
   return (
     <View style={[styles.row, isUser ? styles.userRow : styles.assistantRow]}>
       <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-        <Text style={[styles.content, isUser && styles.userContent]}>{message.content}</Text>
-        <Text style={[styles.time, isUser && styles.userTime]}>{formatMessageTime(message.createdAt)}</Text>
+        <Text style={[styles.content, isUser && styles.userContent]}>
+          {message.content}{isStreaming ? <Text style={styles.cursor}>▋</Text> : null}
+        </Text>
+        {!isStreaming ? <Text style={[styles.time, isUser && styles.userTime]}>{formatMessageTime(message.createdAt)}</Text> : null}
       </View>
+      {!isUser && message.operations?.length ? (
+        <View style={styles.receiptWrap}>
+          <AssistantActionReceipt
+            operations={message.operations}
+            undoing={undoing}
+            undoError={undoError}
+            onNavigate={onNavigate}
+            onUndo={() => onUndo(message.requestId)}
+          />
+        </View>
+      ) : null}
+      {!isUser && message.errorCode === 'cancelled' ? (
+        <View style={styles.statusRow}>
+          <Text style={styles.statusText}>已停止 · 未执行任何操作</Text>
+        </View>
+      ) : null}
       {isUser && message.status === 'sending' ? (
         <View style={styles.statusRow}>
           <ActivityIndicator size="small" color={theme.colors.textDim} />
@@ -59,9 +91,11 @@ const styles = StyleSheet.create({
   userContent: { color: '#FFFFFF' },
   time: { color: theme.colors.textDim, fontSize: 11, marginTop: 4 },
   userTime: { color: 'rgba(255,255,255,0.72)', textAlign: 'right' },
+  cursor: { color: theme.colors.accent },
   statusRow: { minHeight: 24, flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3, paddingHorizontal: 3 },
   statusText: { color: theme.colors.textDim, fontSize: 12 },
   retry: { minHeight: 32, justifyContent: 'center', marginTop: 2, paddingHorizontal: 4 },
   retryPressed: { opacity: 0.6 },
   retryText: { color: theme.colors.red, fontSize: 12 },
+  receiptWrap: { width: '86%' },
 });

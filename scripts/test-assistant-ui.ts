@@ -5,9 +5,21 @@ import {
   hasPendingAssistantReply,
   isAssistantComposerDisabled,
   mergeAssistantMessages,
+  pendingAssistantRequestId,
+  assistantReceiptState,
+  assistantReceiptTarget,
+  assistantTodoNavigationIntent,
+  groupAssistantReceiptOperations,
+  listStateWhileRefreshing,
+  shouldScrollAssistantOnFocus,
+  shouldFollowAssistantEnd,
 } from '../src/assistant/ui-state';
 import { ASSISTANT_EMPTY_DESCRIPTION } from '../src/assistant/ui-copy';
 import type { AssistantMessage } from '../src/assistant/types';
+import type { AssistantOperation } from '../src/assistant/action-types';
+
+const NOW = new Date(2026, 8, 15, 12, 0).getTime();
+const DAY = 24 * 3600 * 1000;
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -61,14 +73,109 @@ check(assistantFailureLabel(missingKey, false) === '尚未回复', '未配置时
 
 const sending = { ...message('sending', 24), status: 'sending' as const };
 check(hasPendingAssistantReply([sending]), '发送中的用户消息应标记为等待回复');
+check(pendingAssistantRequestId([message('older', 23), sending]) === sending.requestId,
+  '停止按钮必须绑定当前发送中的请求');
 check(!hasPendingAssistantReply([latestFailure]), '失败消息不应继续标记为等待回复');
 check(isAssistantComposerDisabled('loading', []), '首次加载期间输入应禁用');
 check(isAssistantComposerDisabled('error', []), '首次加载失败时输入应禁用');
-check(isAssistantComposerDisabled('ready', [sending]), '有回复处理中时输入应禁用');
+check(!isAssistantComposerDisabled('ready', [sending]), '有回复处理中时输入仍应允许编辑草稿');
 check(!isAssistantComposerDisabled('ready', [latestFailure]), '回复失败后输入应恢复');
+const cancelled = { ...message('cancelled', 25), status: 'failed' as const, errorCode: 'cancelled' };
+check(!canRetryAssistantMessage(cancelled, [cancelled], 'configured'), '用户主动停止后不应显示重试');
+check(assistantFailureLabel(cancelled, false) === '已停止', '主动停止应显示独立状态而不是失败');
 check(canLoadOlderAssistantMessages('idle', false), '空闲时允许自动加载更早记录');
 check(!canLoadOlderAssistantMessages('error', false), '分页失败后必须停止自动重试');
 check(canLoadOlderAssistantMessages('error', true), '用户点击重试后允许再次分页');
 check(!canLoadOlderAssistantMessages('loading', true), '分页进行中必须阻止重复请求');
+check(shouldFollowAssistantEnd({ contentHeight: 1200, viewportHeight: 600, offsetY: 540 }),
+  '距离末端很近时应跟随流式增长');
+check(!shouldFollowAssistantEnd({ contentHeight: 1200, viewportHeight: 600, offsetY: 300 }),
+  '用户上滑阅读历史时不得强制拉回末端');
+check(shouldFollowAssistantEnd({ contentHeight: 400, viewportHeight: 600, offsetY: 0 }),
+  '内容不足一屏时应视为位于末端');
+
+const firstTodoIntent = assistantTodoNavigationIntent('all', 'todo-long', '');
+check(firstTodoIntent?.isNew && firstTodoIntent.view === 'all', '新的全部待办跳链应被首次消费');
+const repeatedTodoIntent = assistantTodoNavigationIntent('all', 'todo-long', firstTodoIntent.key);
+check(repeatedTodoIntent?.isNew === false, '相同跳链重渲染时不得再次覆盖用户选择');
+const nextTodoIntent = assistantTodoNavigationIntent('week', 'todo-week', firstTodoIntent.key);
+check(nextTodoIntent?.isNew && nextTodoIntent.view === 'week', '新的小知回执仍应切换并定位正确列表');
+check(assistantTodoNavigationIntent('other', 'todo-1', '') === null, '无效待办视图参数必须忽略');
+
+check(listStateWhileRefreshing('ready') === 'ready',
+  '从详情返回刷新时必须保留已渲染列表，避免页面变短导致滚动归零');
+check(listStateWhileRefreshing('error') === 'loading'
+  && listStateWhileRefreshing('loading') === 'loading',
+  '首次加载或错误重试仍应显示加载状态');
+check(shouldScrollAssistantOnFocus({ loadedOnce: false, followingEnd: false, preserveReturn: false }),
+  '小知首次进入必须定位到最新消息');
+check(shouldScrollAssistantOnFocus({ loadedOnce: true, followingEnd: true, preserveReturn: false }),
+  '普通切回且原本在末端时应继续跟随最新消息');
+check(!shouldScrollAssistantOnFocus({ loadedOnce: true, followingEnd: true, preserveReturn: true }),
+  '从关联待办或事件返回时，即使离开前靠近末端也必须保留原位置');
+check(!shouldScrollAssistantOnFocus({ loadedOnce: true, followingEnd: false, preserveReturn: false }),
+  '用户正在阅读历史时，普通切回也不应抢走滚动位置');
+
+function operation(overrides: Partial<AssistantOperation> = {}): AssistantOperation {
+  return {
+    id: 'operation-1', requestId: 'request-1', operationKey: 'one',
+    operationType: 'create_todo', objectType: 'todo', objectId: 'todo-1',
+    beforeSnapshot: null, afterSnapshot: JSON.stringify({ dueAt: NOW + DAY }), receiptSummary: '建立待办：整理照片',
+    status: 'committed', sequence: 0, createdAt: 1, undoneAt: null,
+    ...overrides,
+  };
+}
+
+check(assistantReceiptState([]).visible === false, '零操作不应显示空回执');
+const combinedReceipt = assistantReceiptState([
+  operation(),
+  operation({
+    id: 'operation-2', operationKey: 'event', operationType: 'create_event',
+    objectType: 'event', objectId: 'event-1', receiptSummary: '建立事件：照片整理', sequence: 1,
+  }),
+]);
+check(combinedReceipt.visible && combinedReceipt.canUndo, '多个操作应合成一张可撤销回执');
+check(combinedReceipt.operations.map(item => item.sequence).join(',') === '0,1', '回执按操作顺序稳定展示');
+check(assistantReceiptTarget(operation(), NOW) === '/?todoView=week&focusTodoId=todo-1',
+  '7 天窗口内待办回执应进入首页本周待办并定位');
+check(assistantReceiptTarget(operation({
+  objectId: 'todo-long', afterSnapshot: JSON.stringify({ dueAt: NOW + 8 * DAY }),
+}), NOW) === '/?todoView=all&focusTodoId=todo-long',
+'7 天窗口后的待办回执应进入首页全部待办并定位');
+check(assistantReceiptTarget(operation({
+  objectId: 'todo-undated', afterSnapshot: JSON.stringify({ dueAt: null }),
+}), NOW) === null, '无日期隐藏待办没有首页列表目标');
+check(assistantReceiptTarget(operation({
+  operationType: 'create_event', objectType: 'event', objectId: 'event-1',
+})) === '/event/event-1', '事件回执应进入事件详情');
+check(assistantReceiptTarget(operation({
+  operationType: 'delete_todo', objectType: 'todo', objectId: 'todo-1',
+  afterSnapshot: JSON.stringify({ deleted: true, todoId: 'todo-1' }),
+})) === null, '已删除待办回执不得跳向不存在的对象');
+check(assistantReceiptTarget(operation({
+  operationType: 'delete_event', objectType: 'event', objectId: 'event-1',
+})) === null, '已删除事件回执不得跳向关闭的详情页');
+check(!assistantReceiptState([operation({ status: 'undone', undoneAt: 2 })]).canUndo,
+  '已撤销操作不得再次显示可用撤销');
+
+const grouped = groupAssistantReceiptOperations([
+  operation({
+    id: 'event-state', operationKey: 'event-state', operationType: 'update_event',
+    objectType: 'event', objectId: 'event-1', receiptSummary: '更新事件：贷款还款', sequence: 0,
+  }),
+  operation({
+    id: 'event-progress', operationKey: 'event-progress', operationType: 'append_event_update',
+    objectType: 'event_update', objectId: 'update-1', receiptSummary: '追加进展：已还30万', sequence: 1,
+    afterSnapshot: JSON.stringify({ event: { id: 'event-1' } }),
+  }),
+  operation({ id: 'todo', operationKey: 'todo', objectId: 'todo-2', receiptSummary: '建立待办：下个月10号还款', sequence: 2 }),
+  operation({
+    id: 'relation', operationKey: 'relation', operationType: 'link_todo_event',
+    objectType: 'relation', objectId: 'relation-1', receiptSummary: '关联待办：还款 → 贷款还款', sequence: 3,
+    afterSnapshot: JSON.stringify({ toType: 'event', toId: 'event-1' }),
+  }),
+]);
+check(grouped.length === 2, '事件、进展、待办和内部关联应压缩成两个对象组');
+check(grouped[0].summaries.length === 2, '同一事件的状态和进展应在同一紧凑组内展示');
 
 console.log('assistant UI state tests passed');

@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1200" viewBox="0 0 1000 1200">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#2B2622" flood-opacity="0.08"/>
+    </filter>
+    <style>
+      .bg { fill:#F6F3EE; }
+      .card { fill:#FFFFFF; stroke:#E8E2D9; stroke-width:1; }
+      .ink { fill:#2B2622; font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif; }
+      .dim { fill:#8A837B; font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif; }
+      .accent { fill:#E0733A; font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif; }
+      .line { stroke:#E8E2D9; stroke-width:1; }
+    </style>
+  </defs>
+
+  <rect width="1000" height="1200" class="bg"/>
+  <text x="55" y="64" class="ink" font-size="30" font-weight="700">设置分组 + 小知「眼睛」动效</text>
+  <text x="55" y="96" class="dim" font-size="15">把同类设置放进同一张卡；底部 Tab 从机器人变成有生命感的双眼。</text>
+
+  <!-- Profile settings -->
+  <g transform="translate(55 130)">
+    <rect width="420" height="720" rx="32" class="card" filter="url(#shadow)"/>
+    <rect x="1" y="1" width="418" height="718" rx="31" class="bg"/>
+    <text x="28" y="56" class="ink" font-size="22" font-weight="700">长期记忆</text>
+    <rect x="28" y="78" width="364" height="150" rx="16" class="card"/>
+    <text x="47" y="112" class="dim" font-size="13">重要的长期信息继续显示在这里</text>
+    <text x="47" y="146" class="ink" font-size="16">你习惯先理清再行动</text>
+    <text x="47" y="181" class="ink" font-size="16">你希望提醒克制、有效</text>
+
+    <text x="28" y="274" class="ink" font-size="20" font-weight="700">设置</text>
+    <text x="32" y="307" class="dim" font-size="13">助手与同步</text>
+    <rect x="28" y="323" width="364" height="112" rx="13" class="card"/>
+    <text x="45" y="358" class="ink" font-size="15">理解引擎</text>
+    <text x="374" y="358" class="dim" font-size="13" text-anchor="end">已开启 ›</text>
+    <line x1="45" y1="379" x2="375" y2="379" class="line"/>
+    <text x="45" y="413" class="ink" font-size="15">同步到苹果日历</text>
+    <rect x="340" y="395" width="38" height="22" rx="11" fill="#E0733A"/>
+    <circle cx="367" cy="406" r="9" fill="#FFFFFF"/>
+
+    <text x="32" y="472" class="dim" font-size="13">待办通知</text>
+    <rect x="28" y="488" width="364" height="112" rx="13" class="card"/>
+    <text x="45" y="523" class="ink" font-size="15">早 8:00 晨间待办</text>
+    <rect x="340" y="506" width="38" height="22" rx="11" fill="#E0733A"/>
+    <circle cx="367" cy="517" r="9" fill="#FFFFFF"/>
+    <line x1="45" y1="544" x2="375" y2="544" class="line"/>
+    <text x="45" y="578" class="ink" font-size="15">晚 21:00 夜间待办</text>
+    <rect x="340" y="561" width="38" height="22" rx="11" fill="#E8E2D9"/>
+    <circle cx="351" cy="572" r="9" fill="#FFFFFF"/>
+
+    <text x="32" y="637" class="dim" font-size="13">数据管理</text>
+    <rect x="28" y="653" width="364" height="44" rx="13" class="card"/>
+    <text x="45" y="681" class="ink" font-size="15">导出 / 导入仍沿用相同分组规则</text>
+  </g>
+
+  <!-- Eye motion storyboard -->
+  <g transform="translate(525 130)">
+    <text x="0" y="30" class="ink" font-size="22" font-weight="700">底部“小知”图标</text>
+    <text x="0" y="62" class="dim" font-size="15">只留眼睛，不再画机器人外壳。</text>
+
+    <rect x="0" y="92" width="420" height="238" rx="20" class="card"/>
+    <text x="24" y="126" class="dim" font-size="13">默认 · 轻微注视</text>
+    <g transform="translate(44 156)">
+      <rect x="6" y="0" width="60" height="60" rx="29" fill="#F9E8DD"/>
+      <ellipse cx="25" cy="25" rx="6.2" ry="8.5" fill="#E0733A"/>
+      <ellipse cx="47" cy="25" rx="6.2" ry="8.5" fill="#E0733A"/>
+    </g>
+    <path d="M142 183 C173 166 203 166 234 183" fill="none" stroke="#C9C1B7" stroke-width="2" stroke-dasharray="5 5"/>
+    <text x="255" y="178" class="ink" font-size="15">瞳孔成对移动</text>
+    <text x="255" y="203" class="dim" font-size="13">明显扫视：水平 ±3.5 px · 垂直 ±2 px</text>
+    <text x="24" y="257" class="ink" font-size="15">每 0.9–1.5 秒换一次注视方向</text>
+    <text x="24" y="286" class="dim" font-size="13">不是持续抖动；停顿更像“活着”。</text>
+
+    <rect x="0" y="350" width="420" height="238" rx="20" class="card"/>
+    <text x="24" y="384" class="dim" font-size="13">眨眼 · 偶发状态</text>
+    <g transform="translate(44 420)">
+      <rect x="6" y="0" width="60" height="60" rx="29" fill="#F9E8DD"/>
+      <rect x="19" y="23" width="12" height="3" rx="1.5" fill="#E0733A"/>
+      <rect x="41" y="23" width="12" height="3" rx="1.5" fill="#E0733A"/>
+    </g>
+    <text x="160" y="441" class="ink" font-size="15">约每 5–8 秒眨一次</text>
+    <text x="160" y="466" class="dim" font-size="13">160ms 完成，不打断导航。</text>
+    <text x="24" y="524" class="ink" font-size="15">图标始终暖橙，不随选中状态变灰</text>
+    <text x="24" y="553" class="dim" font-size="13">仅“小知”文字深浅提示当前 Tab。</text>
+
+    <rect x="0" y="608" width="420" height="242" rx="20" class="card"/>
+    <text x="24" y="642" class="dim" font-size="13">Tab 实际比例</text>
+    <line x1="24" y1="752" x2="396" y2="752" class="line"/>
+    <g transform="translate(38 675)">
+      <path d="M0 19 L18 4 L36 19 V42 H24 V29 H12 V42 H0Z" fill="#8A837B"/>
+      <text x="18" y="66" class="dim" font-size="11" text-anchor="middle">首页</text>
+    </g>
+    <g transform="translate(184 674)">
+      <rect x="6" y="1" width="40" height="40" rx="20" fill="#F9E8DD"/>
+      <ellipse cx="19" cy="17" rx="3.7" ry="5.5" fill="#E0733A"/>
+      <ellipse cx="33" cy="17" rx="3.7" ry="5.5" fill="#E0733A"/>
+      <text x="26" y="67" class="accent" font-size="11" font-weight="700" text-anchor="middle">小知</text>
+    </g>
+    <g transform="translate(344 675)">
+      <circle cx="18" cy="13" r="10" fill="none" stroke="#8A837B" stroke-width="3"/>
+      <path d="M2 42 C4 28 32 28 34 42" fill="none" stroke="#8A837B" stroke-width="3"/>
+      <text x="18" y="66" class="dim" font-size="11" text-anchor="middle">我的</text>
+    </g>
+    <text x="24" y="815" class="dim" font-size="13">进入后台 / 减少动态效果时停止动画。</text>
+  </g>
+
+  <g transform="translate(55 900)">
+    <rect width="890" height="238" rx="20" fill="#FFFFFF" stroke="#E8E2D9"/>
+    <text x="25" y="42" class="ink" font-size="18" font-weight="700">交互边界</text>
+    <circle cx="31" cy="79" r="4" fill="#E0733A"/><text x="47" y="84" class="ink" font-size="15">三组设置复用数据管理的同一分隔线样式，点击与开关逻辑不变。</text>
+    <circle cx="31" cy="116" r="4" fill="#E0733A"/><text x="47" y="121" class="ink" font-size="15">日历出现错误说明时，说明和“重试 / 去设置”在同一行下方展开。</text>
+    <circle cx="31" cy="153" r="4" fill="#E0733A"/><text x="47" y="158" class="ink" font-size="15">眼睛只在 App 前台运行；切后台、减少动态效果时使用静态图标。</text>
+    <circle cx="31" cy="190" r="4" fill="#E0733A"/><text x="47" y="195" class="ink" font-size="15">动效不表达“正在回答”，避免和小知执行状态混淆。</text>
+  </g>
+</svg>

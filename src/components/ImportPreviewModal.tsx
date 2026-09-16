@@ -9,13 +9,18 @@ import {
 } from 'react-native';
 
 import type { ImportPreview } from '../engine/import-merge';
+import type { LegacyImportPreview } from '../assistant/legacy-import';
 import { theme } from '../theme';
+
+export type ImportPreviewData =
+  | { kind: 'v2'; value: ImportPreview }
+  | { kind: 'legacy'; value: LegacyImportPreview };
 
 interface Props {
   visible: boolean;
   fileName: string;
   exportedAt: number | null;
-  preview: ImportPreview | null;
+  preview: ImportPreviewData | null;
   importing: boolean;
   onCancel: () => void;
   onConfirm: () => void;
@@ -35,6 +40,21 @@ export function ImportPreviewModal({
   onCancel,
   onConfirm,
 }: Props) {
+  const legacy = preview?.kind === 'legacy' ? preview.value : null;
+  const current = preview?.kind === 'v2' ? preview.value : null;
+  const metrics = legacy
+    ? [
+      { value: legacy.conversations, label: '对话' },
+      { value: legacy.todos, label: '待办' },
+      { value: legacy.events, label: '事件' },
+      { value: legacy.duplicates, label: '重复' },
+    ]
+    : [
+      { value: current?.added ?? 0, label: '新增' },
+      { value: current?.updated ?? 0, label: '更新' },
+      { value: current?.ignored ?? 0, label: '忽略' },
+      { value: current?.conflicts ?? 0, label: '冲突' },
+    ];
   return (
     <Modal
       animationType="slide"
@@ -50,8 +70,10 @@ export function ImportPreviewModal({
               <Ionicons name="document-text-outline" size={21} color={theme.colors.accent} />
             </View>
             <View style={styles.headerCopy}>
-              <Text style={styles.title}>导入预览</Text>
-              <Text style={styles.subtitle}>备份于 {formatBackupTime(exportedAt)}</Text>
+              <Text style={styles.title}>{legacy ? '识别到旧版导出日志' : '导入预览'}</Text>
+              <Text style={styles.subtitle}>
+                {legacy ? '记录截至' : '备份于'} {formatBackupTime(exportedAt)}
+              </Text>
             </View>
           </View>
 
@@ -60,17 +82,26 @@ export function ImportPreviewModal({
           </View>
 
           <View style={styles.metrics}>
-            <View style={styles.metric}><Text style={styles.metricValue}>{preview?.added ?? 0}</Text><Text style={styles.metricLabel}>新增</Text></View>
-            <View style={styles.metric}><Text style={styles.metricValue}>{preview?.updated ?? 0}</Text><Text style={styles.metricLabel}>更新</Text></View>
-            <View style={styles.metric}><Text style={styles.metricValue}>{preview?.ignored ?? 0}</Text><Text style={styles.metricLabel}>忽略</Text></View>
-            <View style={styles.metric}><Text style={styles.metricValue}>{preview?.conflicts ?? 0}</Text><Text style={styles.metricLabel}>冲突</Text></View>
+            {metrics.map(metric => (
+              <View key={metric.label} style={styles.metric}>
+                <Text style={styles.metricValue}>{metric.value}</Text>
+                <Text style={styles.metricLabel}>{metric.label}</Text>
+              </View>
+            ))}
           </View>
+
+          {!!current && (current.memoryAdded + current.memoryUpdated + current.memoryIgnored + current.memoryConflicts > 0) && (
+            <Text style={styles.memorySummary}>
+              长期记忆　新增 {current.memoryAdded} · 更新 {current.memoryUpdated} · 保留 {current.memoryIgnored + current.memoryConflicts}
+            </Text>
+          )}
 
           <View style={styles.noteRow}>
             <Ionicons name="shield-checkmark-outline" size={17} color={theme.colors.green} />
             <Text style={styles.note}>
-              本地已有内容不会因备份缺失而删除；冲突记录将保留历史版本。
-              {preview?.profileWillImport ? ' 默认画像将从备份恢复。' : ''}
+              {legacy
+                ? '旧原文按原时间进入小知；待办和事件直接恢复。不会调用模型，也不会生成助手回复。'
+                : `本地已有内容不会因备份缺失而删除；冲突记录将保留历史版本。${current?.profileWillImport ? ' 默认画像将从备份恢复。' : ''}`}
             </Text>
           </View>
 
@@ -133,6 +164,7 @@ const styles = StyleSheet.create({
   metric: { flex: 1, alignItems: 'center', backgroundColor: theme.colors.bg, borderRadius: 10, paddingVertical: 9 },
   metricValue: { color: theme.colors.text, fontSize: 18, fontWeight: '700' },
   metricLabel: { color: theme.colors.textDim, fontSize: 11, marginTop: 2 },
+  memorySummary: { color: theme.colors.textDim, fontSize: 12, lineHeight: 18, textAlign: 'center' },
   noteRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
   note: { flex: 1, color: theme.colors.textDim, fontSize: 12, lineHeight: 18 },
   actions: { flexDirection: 'row', gap: 8 },

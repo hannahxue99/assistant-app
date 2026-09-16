@@ -1,4 +1,5 @@
 import { buildAssistantContext, type ContextMessage } from '../src/assistant/context';
+import { buildAssistantPromptMessages } from '../src/assistant/prompt';
 import { rankRelevantSegments } from '../src/assistant/retrieval';
 import type { ConversationSegment } from '../src/assistant/types';
 
@@ -56,5 +57,34 @@ const launched = buildAssistantContext({
 });
 check(launched.contextBlock.includes('正在处理的事件：照片整理'), '事件入口必须携带明确主线');
 check(launched.contextBlock.includes('周四先筛废片'), '事件当前状态必须进入上下文');
+
+// 6. 已有主线中的未来行动承诺：模型必须被明确要求同时建立关联待办。
+const repaymentContext = buildAssistantContext({
+  recentMessages: [message(20, '下个月11号还款10万')],
+  launchContext: {
+    kind: 'event',
+    id: 'loan',
+    label: '公积金贷款还款',
+    state: '已还30万，剩余约30多万',
+  },
+});
+const repaymentPrompt = buildAssistantPromptMessages({
+  contextBlock: repaymentContext.contextBlock,
+  recentMessages: repaymentContext.recentMessages,
+  referenceAt: new Date('2026-09-15T16:15:00+08:00').getTime(),
+  timeZone: 'Asia/Shanghai',
+})[0].content;
+check(repaymentPrompt.includes('event_deltas'),
+  '已有事件中的明确未来行动必须通过完整事件增量判断');
+check(repaymentPrompt.includes('合并旧状态后的完整新快照'),
+  '当前状态必须保留仍有效的旧事实，而不是只抄本轮消息');
+check(repaymentPrompt.includes('本轮用户原话'),
+  '事件变化必须提供来自本轮用户消息的证据');
+check(repaymentPrompt.includes('自动关联'),
+  '增量待办必须由本地自动关联事件');
+check(repaymentPrompt.includes('"due_date":"2026-10-11"'),
+  '真实还款正例必须给出模型解析后的日期');
+check(repaymentPrompt.includes('银行说下个月可能调整利率'),
+  '质量约束必须排除外部可能性，避免泛化为待办');
 
 console.log('assistant multi-turn quality tests passed');

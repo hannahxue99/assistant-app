@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000">
+  <defs>
+    <filter id="s" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#2B2622" flood-opacity=".06"/></filter>
+    <style>.bg{fill:#F6F3EE}.r{fill:#FFF9F4;stroke:#ECDCCF}.i{fill:#2B2622;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}.d{fill:#8A837B;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}.a{fill:#E0733A}.g{fill:#4F8A63}.x{stroke:#ECDCCF}.red{fill:#C65D4B;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}</style>
+  </defs>
+  <rect width="1000" height="1000" class="bg"/>
+  <text x="50" y="60" class="i" font-size="30" font-weight="700">“已处理 / 撤销本轮”内容样式</text>
+  <text x="50" y="94" class="d" font-size="15">同一对象合并；不同对象紧凑分行；删除不跳转；撤销后变灰。</text>
+
+  <!-- single -->
+  <g transform="translate(50 135)"><text class="i" font-size="17" font-weight="700">1. 单条待办</text><g transform="translate(0 25)" filter="url(#s)"><rect width="430" height="128" rx="14" class="r"/><circle cx="18" cy="22" r="6" class="a"/><text x="31" y="27" class="i" font-size="13" font-weight="700">已处理</text><text x="408" y="27" text-anchor="end" class="d" font-size="11">撤销本轮</text><line x1="12" y1="42" x2="418" y2="42" class="x"/><circle cx="20" cy="78" r="7" class="g"/><text x="38" y="83" class="i" font-size="13">建立待办：11号还款10万</text><text x="410" y="84" class="d" font-size="18">›</text></g></g>
+
+  <!-- event grouped -->
+  <g transform="translate(520 135)"><text class="i" font-size="17" font-weight="700">2. 同一事件两行</text><g transform="translate(0 25)" filter="url(#s)"><rect width="430" height="128" rx="14" class="r"/><circle cx="18" cy="22" r="6" class="a"/><text x="31" y="27" class="i" font-size="13" font-weight="700">已处理</text><text x="408" y="27" text-anchor="end" class="d" font-size="11">撤销本轮</text><line x1="12" y1="42" x2="418" y2="42" class="x"/><circle cx="20" cy="76" r="7" class="g"/><text x="38" y="72" class="i" font-size="13">更新事件：公积金贷款还款</text><text x="38" y="94" class="d" font-size="12">追加进展：计划11号还款10万</text><text x="410" y="85" class="d" font-size="18">›</text></g></g>
+
+  <!-- mixed -->
+  <g transform="translate(50 360)"><text class="i" font-size="17" font-weight="700">3. 事件＋待办</text><g transform="translate(0 25)" filter="url(#s)"><rect width="430" height="154" rx="14" class="r"/><circle cx="18" cy="22" r="6" class="a"/><text x="31" y="27" class="i" font-size="13" font-weight="700">已处理</text><text x="408" y="27" text-anchor="end" class="d" font-size="11">撤销本轮</text><line x1="12" y1="42" x2="418" y2="42" class="x"/><circle cx="20" cy="75" r="7" class="g"/><text x="38" y="80" class="i" font-size="13">更新事件：贷款还款</text><text x="410" y="81" class="d" font-size="18">›</text><circle cx="20" cy="118" r="7" class="g"/><text x="38" y="123" class="i" font-size="13">建立待办：11号还款10万</text><text x="410" y="124" class="d" font-size="18">›</text></g></g>
+
+  <!-- memory -->
+  <g transform="translate(520 360)"><text class="i" font-size="17" font-weight="700">4. 长期记忆</text><g transform="translate(0 25)" filter="url(#s)"><rect width="430" height="154" rx="14" class="r"/><circle cx="18" cy="22" r="6" class="a"/><text x="31" y="27" class="i" font-size="13" font-weight="700">已处理</text><text x="408" y="27" text-anchor="end" class="d" font-size="11">撤销本轮</text><line x1="12" y1="42" x2="418" y2="42" class="x"/><circle cx="20" cy="78" r="7" class="g"/><text x="38" y="83" class="i" font-size="13">记住：重要财务安排提前提醒</text><text x="410" y="84" class="d" font-size="18">›</text><text x="38" y="119" class="d" font-size="11">点击进入“我的－长期记忆”</text></g></g>
+
+  <!-- delete -->
+  <g transform="translate(50 610)"><text class="i" font-size="17" font-weight="700">5. 删除事件＋关联待办</text><g transform="translate(0 25)" filter="url(#s)"><rect width="430" height="154" rx="14" class="r"/><circle cx="18" cy="22" r="6" class="a"/><text x="31" y="27" class="i" font-size="13" font-weight="700">已处理</text><text x="408" y="27" text-anchor="end" class="d" font-size="11">撤销本轮</text><line x1="12" y1="42" x2="418" y2="42" class="x"/><path d="M14 70h12M17 70v18h7V70M18 66h5" fill="none" stroke="#4F8A63" stroke-width="2"/><text x="38" y="77" class="i" font-size="13">删除事件：搬家计划</text><text x="38" y="101" class="d" font-size="12">同时删除 2 条关联待办</text><text x="38" y="130" class="d" font-size="11">对象已不可见，因此不带跳转箭头</text></g></g>
+
+  <!-- undone -->
+  <g transform="translate(520 610)"><text class="i" font-size="17" font-weight="700">6. 已撤销 / 撤销冲突</text><g transform="translate(0 25)" filter="url(#s)"><rect width="430" height="154" rx="14" class="r"/><circle cx="18" cy="22" r="6" fill="#A7A09A"/><text x="31" y="27" class="d" font-size="13" font-weight="700">已撤销</text><line x1="12" y1="42" x2="418" y2="42" class="x"/><circle cx="20" cy="75" r="7" fill="#A7A09A"/><text x="38" y="80" class="d" font-size="13">建立待办：整理照片</text><line x1="38" y1="75" x2="202" y2="75" stroke="#8A837B"/><text x="38" y="118" class="red" font-size="11">若内容已有新变化：无法撤销，并在此处说明</text></g></g>
+
+  <g transform="translate(50 860)"><rect width="900" height="90" rx="16" fill="#FFF" stroke="#E8E2D9"/><circle cx="28" cy="45" r="6" class="a"/><text x="48" y="39" class="i" font-size="14" font-weight="700">统一间距</text><text x="48" y="65" class="d" font-size="13">上下边距 6pt · 同组文字 0–1pt · 不同操作 2pt · 不再强制每行 44pt 可见高度</text></g>
+</svg>

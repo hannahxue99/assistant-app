@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <defs>
+    <style>
+      .bg { fill: #f6f3ee; }
+      .panel { fill: #ffffff; stroke: #e8e2d9; stroke-width: 2; }
+      .card { fill: #ffffff; stroke: #e8e2d9; stroke-width: 1.5; }
+      .ink { fill: #2b2622; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+      .dim { fill: #8a837b; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+      .accent { fill: #e0733a; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+      .label { fill: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; font-weight: 700; }
+      .line { stroke: #e8e2d9; stroke-width: 1.5; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1200" height="900"/>
+  <text x="70" y="70" class="ink" font-size="30" font-weight="700">“我的”层级 + 小知输入与语音状态</text>
+  <text x="70" y="105" class="dim" font-size="17">目标：标题更清楚，输入框更紧凑，录音状态能被立即感知</text>
+
+  <rect x="70" y="145" width="480" height="318" rx="26" class="panel"/>
+  <rect x="650" y="145" width="480" height="318" rx="26" class="panel"/>
+  <rect x="92" y="165" width="66" height="28" rx="14" fill="#ece8e4"/>
+  <text x="125" y="185" class="dim" font-size="13" text-anchor="middle">当前</text>
+  <rect x="672" y="165" width="66" height="28" rx="14" fill="#e0733a"/>
+  <text x="705" y="185" class="label" font-size="13" text-anchor="middle">调整后</text>
+
+  <text x="105" y="235" class="ink" font-size="17" font-weight="700">长期记忆</text>
+  <text x="515" y="235" class="dim" font-size="12" text-anchor="end">陪伴 16 天 · 2 条</text>
+  <rect x="105" y="253" width="410" height="76" rx="14" class="card"/>
+  <text x="123" y="280" class="accent" font-size="12">偏好</text>
+  <text x="123" y="310" class="ink" font-size="15">不喜欢临时开会</text>
+  <text x="105" y="378" class="ink" font-size="17" font-weight="700">设置</text>
+  <text x="107" y="409" class="dim" font-size="13">助手与同步</text>
+  <line x1="105" y1="425" x2="515" y2="425" class="line"/>
+
+  <text x="685" y="235" class="ink" font-size="19" font-weight="700">长期记忆</text>
+  <text x="1095" y="235" class="dim" font-size="12" text-anchor="end">陪伴 16 天 · 2 条</text>
+  <rect x="685" y="253" width="410" height="76" rx="14" class="card"/>
+  <text x="703" y="280" class="accent" font-size="12">偏好</text>
+  <text x="703" y="310" class="ink" font-size="15">不喜欢临时开会</text>
+  <text x="685" y="378" class="ink" font-size="19" font-weight="700">设置</text>
+  <text x="687" y="409" class="dim" font-size="13">助手与同步</text>
+  <line x1="685" y1="425" x2="1095" y2="425" class="line"/>
+  <text x="1095" y="444" class="accent" font-size="13" text-anchor="end">一级标题 17 → 19</text>
+
+  <text x="70" y="525" class="ink" font-size="22" font-weight="700">小知输入框</text>
+  <text x="70" y="553" class="dim" font-size="15">空闲态减高，但点击区域保持易用；语音态读取真实音量</text>
+
+  <text x="90" y="610" class="dim" font-size="13">当前空闲 · 58 高</text>
+  <rect x="90" y="628" width="470" height="72" rx="34" class="card"/>
+  <circle cx="126" cy="664" r="22" fill="#f9e8dd"/>
+  <path d="M126 653 v14 M120 660 a6 6 0 0 0 12 0 M126 667 v5 M120 672 h12" fill="none" stroke="#e0733a" stroke-width="2" stroke-linecap="round"/>
+  <text x="164" y="670" class="dim" font-size="16">发消息给小知</text>
+  <circle cx="524" cy="664" r="22" fill="#d8d2cc"/>
+  <path d="M524 671 v-14 M518 663 l6-6 6 6" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="640" y="610" class="accent" font-size="13">调整后空闲 · 50 高</text>
+  <rect x="640" y="632" width="470" height="60" rx="30" class="card"/>
+  <circle cx="671" cy="662" r="19" fill="#f9e8dd"/>
+  <path d="M671 652 v12 M666 658 a5 5 0 0 0 10 0 M671 664 v4 M666 668 h10" fill="none" stroke="#e0733a" stroke-width="1.8" stroke-linecap="round"/>
+  <text x="703" y="668" class="dim" font-size="16">发消息给小知</text>
+  <circle cx="1079" cy="662" r="19" fill="#d8d2cc"/>
+  <path d="M1079 668 v-12 M1074 661 l5-5 5 5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="90" y="756" class="dim" font-size="13">当前语音 · 只有边框与文字提示</text>
+  <rect x="90" y="774" width="470" height="72" rx="34" fill="#fffcfa" stroke="#e0733a" stroke-width="2"/>
+  <circle cx="126" cy="810" r="22" fill="#e0733a"/>
+  <rect x="120" y="804" width="12" height="12" rx="2" fill="#ffffff"/>
+  <text x="164" y="816" class="dim" font-size="16">正在听，再点一下结束</text>
+
+  <text x="640" y="756" class="accent" font-size="13">调整后语音 · 真实音量波动 + 实时文字</text>
+  <rect x="640" y="778" width="470" height="60" rx="30" fill="#fffcfa" stroke="#e0733a" stroke-width="2"/>
+  <circle cx="671" cy="808" r="19" fill="#e0733a"/>
+  <rect x="666" y="803" width="10" height="10" rx="2" fill="#ffffff"/>
+  <g fill="#e0733a">
+    <rect x="702" y="802" width="4" height="12" rx="2"/>
+    <rect x="710" y="797" width="4" height="22" rx="2"/>
+    <rect x="718" y="800" width="4" height="16" rx="2"/>
+    <rect x="726" y="793" width="4" height="30" rx="2"/>
+    <rect x="734" y="799" width="4" height="18" rx="2"/>
+  </g>
+  <text x="752" y="814" class="ink" font-size="15">明天下午把方案发给小王…</text>
+  <text x="1079" y="814" class="dim" font-size="13" text-anchor="end">正在听</text>
+</svg>

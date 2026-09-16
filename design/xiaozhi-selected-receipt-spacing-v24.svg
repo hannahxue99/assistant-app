@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#2B2622" flood-opacity="0.07"/></filter>
+    <style>
+      .bg{fill:#F6F3EE}.card{fill:#FFF;stroke:#E8E2D9;stroke-width:1}.receipt{fill:#FFF9F4;stroke:#ECDCCF;stroke-width:1}.ink{fill:#2B2622;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}.dim{fill:#8A837B;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}.accentText{fill:#E0733A;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}.green{fill:#4F8A63}.orange{fill:#E0733A}.eye{fill:#FFF7F2}.line{stroke:#ECDCCF;stroke-width:1}
+    </style>
+  </defs>
+  <rect width="800" height="800" class="bg"/>
+  <text x="48" y="58" class="ink" font-size="28" font-weight="700">小知图标 + 已处理卡片</text>
+  <text x="48" y="90" class="dim" font-size="14">选中态继续放大；多行卡片压紧行距，并统一上下边距。</text>
+
+  <g transform="translate(48 126)">
+    <rect width="704" height="220" rx="22" class="card" filter="url(#shadow)"/>
+    <text x="24" y="36" class="ink" font-size="17" font-weight="700">底部 Tab 图标</text>
+    <g transform="translate(190 72)">
+      <rect x="10" y="10" width="60" height="60" rx="30" class="orange"/>
+      <ellipse cx="33" cy="36" rx="5.2" ry="7.5" class="eye"/>
+      <ellipse cx="57" cy="36" rx="5.2" ry="7.5" class="eye"/>
+      <text x="40" y="100" class="accentText" font-size="14" font-weight="600" text-anchor="middle">小知</text>
+      <text x="40" y="130" class="dim" font-size="12" text-anchor="middle">未选中 30pt</text>
+    </g>
+    <g transform="translate(450 60)">
+      <rect x="2" y="2" width="76" height="76" rx="38" class="orange"/>
+      <ellipse cx="31" cy="35" rx="6.5" ry="9.5" class="eye"/>
+      <ellipse cx="55" cy="35" rx="6.5" ry="9.5" class="eye"/>
+      <text x="40" y="106" class="accentText" font-size="14" font-weight="700" text-anchor="middle">小知</text>
+      <text x="40" y="136" class="dim" font-size="12" text-anchor="middle">选中 38pt · 上移 3pt</text>
+    </g>
+  </g>
+
+  <g transform="translate(48 380)">
+    <rect width="704" height="348" rx="22" class="card" filter="url(#shadow)"/>
+    <text x="24" y="38" class="ink" font-size="17" font-weight="700">小知“已处理”卡片</text>
+    <text x="24" y="64" class="dim" font-size="13">以下按回复下方带“撤销本轮”的操作回执卡片设计。</text>
+
+    <g transform="translate(44 91)">
+      <rect width="616" height="195" rx="14" class="receipt"/>
+      <g transform="translate(14 12)">
+        <circle cx="8" cy="10" r="6" class="orange"/>
+        <text x="22" y="15" class="ink" font-size="14" font-weight="700">已处理</text>
+        <text x="574" y="15" class="dim" font-size="12" text-anchor="end">撤销本轮</text>
+      </g>
+      <line x1="14" y1="46" x2="602" y2="46" class="line"/>
+      <g transform="translate(14 58)">
+        <circle cx="8" cy="13" r="7" class="green"/>
+        <text x="25" y="18" class="ink" font-size="14">更新事件：公积金贷款还款</text>
+        <text x="25" y="38" class="dim" font-size="13">计划下个月 11 号还款 10 万</text>
+      </g>
+      <g transform="translate(14 112)">
+        <circle cx="8" cy="13" r="7" class="green"/>
+        <text x="25" y="18" class="ink" font-size="14">建立待办：下个月 11 号还款 10 万</text>
+      </g>
+      <g transform="translate(14 156)">
+        <circle cx="8" cy="13" r="7" class="green"/>
+        <text x="25" y="18" class="ink" font-size="14">记住：重要财务安排优先提醒</text>
+      </g>
+    </g>
+    <text x="352" y="320" class="dim" font-size="13" text-anchor="middle">上下内边距均为 6pt · 同组文字 0–1pt · 不同行 2pt</text>
+  </g>
+</svg>

@@ -8,6 +8,7 @@ import {
   isOverdue,
   logTimestamp,
   longTermLabel,
+  todoViewForDueAt,
   weekTaskLabel,
 } from '../src/engine/schedule';
 import type { Entry } from '../src/types';
@@ -63,6 +64,13 @@ check('本周行（明天）显 明天 M/D 周X', weekTaskLabel(NOW + DAY, NOW) 
 check('本周行（后天）显 M/D 周X', weekTaskLabel(NOW + 2 * DAY, NOW) === '9/2 周三');
 check('长期行格式 9/2 周三（无小时）', longTermLabel(wedTask.dueAt!) === '9/2 周三');
 check('无时刻显 全天', weekTaskLabel(null) === '全天');
+
+console.log('— 首页待办分窗 —');
+check('今天进入本周待办', todoViewForDueAt(NOW, NOW) === 'week');
+check('第 7 天窗口内进入本周待办', todoViewForDueAt(NOW + 6 * DAY, NOW) === 'week');
+check('第 8 天边界进入全部待办', todoViewForDueAt(NOW + 7 * DAY, NOW) === 'all');
+check('无日期不进入首页列表', todoViewForDueAt(null, NOW) === null);
+check('逾期不进入首页列表', todoViewForDueAt(NOW - DAY, NOW) === null);
 
 console.log('— 用户原声时间戳（相对日期，2026-09-01 改版）—');
 // NOW = 2026-08-31 12:00（周一）

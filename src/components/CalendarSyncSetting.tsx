@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Linking, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, StyleSheet, Switch, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { calendarAccounts, calendarStatus, setCalendarEnabled, syncCalendar } from '../engine/calendar-sync';
 import { theme } from '../theme';
 
-export function CalendarSyncSetting() {
+type CalendarSyncSettingProps = {
+  embedded?: boolean;
+  topDividerStyle?: StyleProp<ViewStyle>;
+};
+
+export function CalendarSyncSetting({ embedded = false, topDividerStyle }: CalendarSyncSettingProps) {
   const [status, setStatus] = useState<Awaited<ReturnType<typeof calendarStatus>> | null>(null);
   const [busy, setBusy] = useState(false);
   const refresh = useCallback(() => { void calendarStatus().then(setStatus).catch(() => {}); }, []);
@@ -43,7 +48,7 @@ export function CalendarSyncSetting() {
       void setCalendarEnabled(false).catch(() => Alert.alert('关闭失败', '请重试')).finally(() => { setBusy(false); refresh(); });
     }
   }
-  return <View style={styles.card}>
+  return <View style={[styles.card, embedded && styles.embeddedCard, topDividerStyle]}>
     <View style={styles.row}><Text style={styles.title}>同步到苹果日历</Text>
       <Switch accessibilityLabel="同步到苹果日历" disabled={busy || !status} value={!!status?.enabled} onValueChange={toggle} />
     </View>
@@ -58,8 +63,9 @@ export function CalendarSyncSetting() {
   </View>;
 }
 const styles = StyleSheet.create({
-  card: { backgroundColor: theme.colors.card, padding: 16, borderRadius: 16, gap: 8 },
+  card: { backgroundColor: theme.colors.card, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12, gap: 4 },
+  embeddedCard: { borderRadius: 0, minHeight: theme.touchTarget },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontSize: 16, color: theme.colors.text }, detail: { fontSize: 13, lineHeight: 20, color: theme.colors.textDim },
+  title: { fontSize: theme.font.body, color: theme.colors.text }, detail: { fontSize: 12, lineHeight: 18, color: theme.colors.textDim },
   action: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }, link: { color: theme.colors.accent, fontSize: 15 },
 });

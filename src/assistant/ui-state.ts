@@ -4,6 +4,72 @@ import type {
   AssistantMessage,
   AssistantOlderLoadStatus,
 } from './types';
+import type { AssistantOperation } from './action-types';
+import { todoViewForDueAt } from '../engine/schedule';
+
+export interface AssistantScrollMetrics {
+  contentHeight: number;
+  viewportHeight: number;
+  offsetY: number;
+}
+
+export interface AssistantTodoNavigationIntent {
+  view: 'week' | 'all';
+  focusTodoId: string | null;
+  key: string;
+  isNew: boolean;
+}
+
+export type AssistantListLoadState = 'loading' | 'ready' | 'error';
+
+/**
+ * A focused screen refresh must keep already-rendered content mounted. Replacing
+ * a ready list with a spinner temporarily shortens its ScrollView and forces the
+ * native scroll offset back to the top before navigation returns control.
+ */
+export function listStateWhileRefreshing(
+  current: AssistantListLoadState,
+): AssistantListLoadState {
+  return current === 'ready' ? 'ready' : 'loading';
+}
+
+/** 跳链只负责一次性进入定位；相同参数不得在重渲染时覆盖用户的手动 Tab 选择。 */
+export function assistantTodoNavigationIntent(
+  todoView: string | undefined,
+  focusTodoId: string | undefined,
+  consumedKey: string,
+): AssistantTodoNavigationIntent | null {
+  const view = todoView === 'week' || todoView === 'all' ? todoView : null;
+  if (!view) return null;
+  const normalizedFocusTodoId = typeof focusTodoId === 'string' && focusTodoId.length > 0
+    ? focusTodoId
+    : null;
+  const key = `${view}:${normalizedFocusTodoId ?? ''}`;
+  return {
+    view,
+    focusTodoId: normalizedFocusTodoId,
+    key,
+    isNew: key !== consumedKey,
+  };
+}
+
+export function shouldFollowAssistantEnd(
+  metrics: AssistantScrollMetrics,
+  threshold = 96,
+): boolean {
+  const distance = metrics.contentHeight - metrics.viewportHeight - metrics.offsetY;
+  return distance <= threshold;
+}
+
+export function shouldScrollAssistantOnFocus(input: {
+  loadedOnce: boolean;
+  followingEnd: boolean;
+  preserveReturn: boolean;
+}): boolean {
+  if (!input.loadedOnce) return true;
+  if (input.preserveReturn) return false;
+  return input.followingEnd;
+}
 
 /** 合并刷新页和历史页；以 id 去重，以更新时间较新的状态覆盖旧状态。 */
 export function mergeAssistantMessages(
@@ -26,6 +92,7 @@ export function canRetryAssistantMessage(
   engineStatus: AssistantEngineStatus,
 ): boolean {
   if (message.role !== 'user' || message.status !== 'failed') return false;
+  if (message.errorCode === 'cancelled') return false;
   const latestUser = [...messages].reverse().find(item => item.role === 'user');
   if (latestUser?.id !== message.id) return false;
   if (message.errorCode === 'missing-key') return engineStatus === 'configured';
@@ -33,6 +100,7 @@ export function canRetryAssistantMessage(
 }
 
 export function assistantFailureLabel(message: AssistantMessage, canRetry: boolean): string {
+  if (message.errorCode === 'cancelled') return '已停止';
   if (!canRetry) return message.errorCode === 'missing-key' ? '尚未回复' : '这条未回复';
   if (message.errorCode === 'interrupted') return '上次回复被中断 · 重试';
   if (message.errorCode === 'provider' || message.errorCode === 'invalid-response') {
@@ -44,13 +112,18 @@ export function assistantFailureLabel(message: AssistantMessage, canRetry: boole
 
 export function isAssistantComposerDisabled(
   initialLoad: AssistantInitialLoadStatus,
-  messages: AssistantMessage[],
+  _messages: AssistantMessage[],
 ): boolean {
-  return initialLoad !== 'ready' || hasPendingAssistantReply(messages);
+  return initialLoad !== 'ready';
 }
 
 export function hasPendingAssistantReply(messages: AssistantMessage[]): boolean {
   return messages.some(item => item.role === 'user' && item.status === 'sending');
+}
+
+export function pendingAssistantRequestId(messages: AssistantMessage[]): string | null {
+  const pending = [...messages].reverse().find(item => item.role === 'user' && item.status === 'sending');
+  return pending?.requestId ?? null;
 }
 
 export function canLoadOlderAssistantMessages(
@@ -59,4 +132,93 @@ export function canLoadOlderAssistantMessages(
 ): boolean {
   if (status === 'loading') return false;
   return status === 'idle' || (status === 'error' && force);
+}
+
+export function assistantReceiptState(operations: AssistantOperation[]): {
+  visible: boolean;
+  canUndo: boolean;
+  operations: AssistantOperation[];
+  groups: AssistantReceiptGroup[];
+} {
+  const sorted = operations
+    .filter(operation => !isHiddenMemoryCandidateOperation(operation))
+    .sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id));
+  return {
+    visible: sorted.length > 0,
+    canUndo: sorted.length > 0 && sorted.some(operation => operation.status === 'committed'),
+    operations: sorted,
+    groups: groupAssistantReceiptOperations(sorted),
+  };
+}
+
+function isHiddenMemoryCandidateOperation(operation: AssistantOperation): boolean {
+  if (operation.objectType !== 'memory' || operation.operationType !== 'create_memory') return false;
+  const after = snapshot(operation.afterSnapshot);
+  return after?.status === 'candidate';
+}
+
+export interface AssistantReceiptGroup {
+  key: string;
+  target: string | null;
+  primaryOperation: AssistantOperation;
+  summaries: string[];
+  undone: boolean;
+}
+
+export function groupAssistantReceiptOperations(operations: AssistantOperation[]): AssistantReceiptGroup[] {
+  const sorted = [...operations].sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id));
+  const substantive = sorted.filter(operation => operation.objectType !== 'relation');
+  const visible = substantive.length ? substantive : sorted;
+  const groups = new Map<string, AssistantReceiptGroup>();
+  for (const operation of visible) {
+    const target = assistantReceiptTarget(operation);
+    const key = target ?? `${operation.objectType}:${operation.objectId}`;
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, {
+        key,
+        target,
+        primaryOperation: operation,
+        summaries: [operation.receiptSummary],
+        undone: operation.status === 'undone',
+      });
+      continue;
+    }
+    if (!existing.summaries.includes(operation.receiptSummary)) existing.summaries.push(operation.receiptSummary);
+    existing.undone = existing.undone && operation.status === 'undone';
+  }
+  return [...groups.values()];
+}
+
+function snapshot(value: string): any | null {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+export function assistantReceiptTarget(operation: AssistantOperation, now = Date.now()): string | null {
+  if (operation.operationType === 'delete_todo' || operation.operationType === 'delete_event') return null;
+  if (operation.objectType === 'todo') {
+    const after = snapshot(operation.afterSnapshot);
+    const dueAt = typeof after?.dueAt === 'number' ? after.dueAt : null;
+    const view = todoViewForDueAt(dueAt, now);
+    if (!view) return dueAt === null ? null : '/';
+    return `/?todoView=${view}&focusTodoId=${encodeURIComponent(operation.objectId)}`;
+  }
+  if (operation.objectType === 'event') return `/event/${encodeURIComponent(operation.objectId)}`;
+  if (operation.objectType === 'memory') return '/profile';
+  const after = snapshot(operation.afterSnapshot);
+  if (operation.objectType === 'event_update') {
+    const eventId = after?.event?.id ?? after?.eventId ?? after?.event_id;
+    return typeof eventId === 'string' ? `/event/${encodeURIComponent(eventId)}` : null;
+  }
+  if (operation.objectType === 'relation') {
+    const eventId = after?.toType === 'event'
+      ? after.toId
+      : after?.fromType === 'event' ? after.fromId : null;
+    return typeof eventId === 'string' ? `/event/${encodeURIComponent(eventId)}` : null;
+  }
+  return null;
 }

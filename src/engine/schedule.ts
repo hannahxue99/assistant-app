@@ -18,11 +18,20 @@ export interface DayGroup {
 }
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+export const TODO_WINDOW_DAYS = 7;
 
 export function startOfDay(ts: number): number {
   const d = new Date(ts);
   d.setHours(0, 0, 0, 0);
   return d.getTime();
+}
+
+/** 首页两个待办页签共用的唯一分窗规则；无日期和已过期项不在首页定位。 */
+export function todoViewForDueAt(dueAt: number | null, now = Date.now()): 'week' | 'all' | null {
+  if (dueAt === null) return null;
+  const windowStart = startOfDay(now);
+  if (dueAt < windowStart) return null;
+  return dueAt < windowStart + TODO_WINDOW_DAYS * 24 * 3600 * 1000 ? 'week' : 'all';
 }
 
 export function dayKeyOf(ts: number): string {

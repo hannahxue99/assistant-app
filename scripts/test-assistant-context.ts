@@ -3,6 +3,8 @@ import {
   estimateAssistantTokens,
   type ContextMessage,
 } from '../src/assistant/context';
+import { selectMemoryContext } from '../src/assistant/memory-context';
+import type { AssistantMemory } from '../src/assistant/memory-types';
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -14,6 +16,25 @@ function message(index: number): ContextMessage {
     role: index % 2 ? 'assistant' : 'user',
     content: `第${index}条最近原话`,
     createdAt: index,
+  };
+}
+
+function memory(index: number, status: 'active' | 'candidate' = 'active'): AssistantMemory {
+  return {
+    id: `memory-${status}-${index}`,
+    category: index % 2 ? 'preference' : 'principle',
+    content: index === 0 ? '重要决策先理清关键问题' : `长期记忆内容${index}`,
+    normalizedContent: `memory${index}`,
+    status,
+    sensitivity: 'ordinary',
+    admissionBasis: status === 'active' ? 'explicit' : 'inferred',
+    supersededById: null,
+    revision: 1,
+    createdAt: index,
+    updatedAt: index,
+    activatedAt: status === 'active' ? index : null,
+    supersededAt: null,
+    forgottenAt: null,
   };
 }
 
@@ -82,5 +103,78 @@ check(budgeted.stats.trimmedRecentMessages >= 0, '应输出可观测的裁剪统
 
 check(estimateAssistantTokens('这是六个汉字') >= 6, '中文 Token 估算必须保守');
 check(estimateAssistantTokens('abcdefghijkl') <= 4, '连续拉丁字符按近似 token 估算');
+
+const linkedTodoContext = buildAssistantContext({
+  recentMessages: [message(30)],
+  actionContext: {
+    events: [{
+      id: 'event-loan', title: '公积金贷款还款', currentState: '计划继续提前还款',
+      aliases: [], linkedTodoTexts: ['10月11日还款10万'], recentUpdateTexts: [],
+      linkedTodoCount: 4, openLinkedTodoCount: 3,
+      linkedTodos: [
+        {
+          id: 'todo-open', text: '10月11日还款10万', dueAt: new Date(2026, 9, 11, 9).getTime(),
+          done: false, revisionAt: 7, updatedAt: 7,
+        },
+        {
+          id: 'todo-done', text: '9月15日提前还款30万', dueAt: new Date(2026, 8, 15, 9).getTime(),
+          done: true, revisionAt: 6, updatedAt: 6,
+        },
+      ],
+      revision: 2, updatedAt: 8, score: 10,
+    }],
+    todos: [], explicitEventId: 'event-loan', segmentEventId: null,
+  },
+});
+check(linkedTodoContext.contextBlock.includes('todo-open'), '事件上下文必须提供相关待办 ID');
+check(linkedTodoContext.contextBlock.includes('未完成'), '事件上下文必须提供相关待办状态');
+check(linkedTodoContext.contextBlock.includes('todo-done'), '最近完成的相关待办必须进入上下文');
+check(linkedTodoContext.contextBlock.includes('2026'), '事件上下文必须提供相关待办日期');
+check(linkedTodoContext.contextBlock.includes('共4条（未完成3条）'), '事件上下文必须提供完整关联待办数量');
+
+const crowdedEventContext = buildAssistantContext({
+  recentMessages: Array.from({ length: 12 }, (_, index) => ({
+    ...message(100 + index), content: `最近事件原话${index}`.repeat(20),
+  })),
+  actionContext: {
+    events: Array.from({ length: 5 }, (_, eventIndex) => ({
+      id: `event-${eventIndex}`, title: `事件${eventIndex}`, currentState: '当前状态'.repeat(30),
+      aliases: [], linkedTodoTexts: [], recentUpdateTexts: [], revision: 1,
+      updatedAt: eventIndex, score: 10 - eventIndex,
+      linkedTodos: Array.from({ length: 11 }, (_, todoIndex) => ({
+        id: `event-${eventIndex}-todo-${todoIndex}`,
+        text: `需要处理的相关行动${todoIndex}`.repeat(15),
+        dueAt: null,
+        done: todoIndex >= 8,
+        revisionAt: todoIndex,
+        updatedAt: todoIndex,
+      })),
+    })),
+    todos: [], explicitEventId: 'event-0', segmentEventId: null,
+  },
+  inputBudget: 6000,
+});
+check(crowdedEventContext.estimatedTokens <= 6000, '丰富事件包仍不得突破上下文硬预算');
+
+const selectedMemoryContext = selectMemoryContext(
+  '这个重要决策先理清什么？',
+  Array.from({ length: 20 }, (_, index) => memory(index)),
+  [
+    { ...memory(30, 'candidate'), content: '重要决策前先列关键问题' },
+    { ...memory(31, 'candidate'), content: '完全不相关的早餐口味' },
+  ],
+);
+check(selectedMemoryContext.active.length <= 12, '生效记忆最多进入 12 条');
+check(selectedMemoryContext.candidates.length === 1, '只带入与当前消息相关的候选');
+const renderedMemoryContext = buildAssistantContext({
+  recentMessages: [message(200)],
+  memoryContext: selectedMemoryContext,
+  inputBudget: 1600,
+});
+check(renderedMemoryContext.contextBlock.includes('可作为用户事实'), 'active 必须明确为可用事实');
+check(renderedMemoryContext.contextBlock.includes('不得作为事实或影响建议'), 'candidate 必须带未确认隔离规则');
+check(renderedMemoryContext.selectedMemoryIds.length
+  === selectedMemoryContext.active.length + selectedMemoryContext.candidates.length,
+'上下文必须记录实际发送的记忆引用');
 
 console.log('assistant context tests passed');

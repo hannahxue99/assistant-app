@@ -91,6 +91,9 @@ export interface BackupPayload {
   entries: Entry[];
   profile: Profile;
   topicPreferences: TopicPreference[];
+  /** 旧版 V2 备份没有这两个字段；解析时视为空数组。 */
+  memories?: import('./assistant/memory-types').AssistantMemory[];
+  memorySources?: import('./assistant/memory-types').AssistantMemorySource[];
 }
 
 export interface BackupEnvelope {

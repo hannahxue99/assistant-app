@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="900" viewBox="0 0 1040 900">
+  <rect width="1040" height="900" fill="#F2EFEA"/>
+  <style>
+    .panel{fill:#F6F3EE;stroke:#D9D2C8;stroke-width:2}.card{fill:#FFF;stroke:#E8E2D9;stroke-width:1.5}
+    .title{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;fill:#2B2622;font-weight:650}
+    .copy{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;fill:#2B2622}
+    .dim{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;fill:#8A837B}
+    .accent{fill:#E0733A}.remove{fill:#C05A4E}.guide{stroke:#E0733A;stroke-width:1.5;stroke-dasharray:5 5}
+  </style>
+  <text x="40" y="46" class="title" font-size="22">“我的”页面文字层级调整 · 前后对比</text>
+  <text x="40" y="73" class="dim" font-size="14">只调整信息层级与文案显隐，不改卡片、开关、导入导出和长期记忆交互。</text>
+
+  <text x="70" y="118" class="title" font-size="17">当前</text>
+  <rect x="40" y="135" width="445" height="720" rx="28" class="panel"/>
+  <text x="66" y="180" class="title" font-size="18">我的</text>
+  <text x="66" y="204" class="dim" font-size="12">已陪伴 16 天 · 2 条长期记忆</text>
+  <text x="66" y="248" class="title" font-size="17">长期记忆</text>
+  <text x="438" y="248" class="dim" font-size="12" text-anchor="end">2 条</text>
+  <rect x="64" y="264" width="397" height="88" rx="16" class="card"/>
+  <text x="82" y="292" class="accent" font-size="12">偏好</text>
+  <text x="82" y="326" class="copy" font-size="15">不喜欢临时开会</text>
+  <text x="68" y="397" class="dim" font-size="12">助手与同步</text>
+  <rect x="64" y="411" width="397" height="96" rx="14" class="card"/>
+  <text x="82" y="446" class="copy" font-size="15">理解引擎</text><text x="438" y="446" class="dim" font-size="13" text-anchor="end">已开启 ›</text>
+  <text x="82" y="484" class="copy" font-size="15">同步到苹果日历</text>
+  <text x="68" y="542" class="dim" font-size="12">待办通知</text>
+  <rect x="64" y="556" width="397" height="94" rx="14" class="card"/>
+  <text x="82" y="591" class="copy" font-size="15">早 8:00 晨间待办</text><text x="82" y="629" class="copy" font-size="15">晚 21:00 夜间待办</text>
+  <rect x="64" y="662" width="397" height="38" rx="9" fill="#F8E4E0"/>
+  <text x="78" y="687" class="remove" font-size="12">仅控制现有待办汇总，不包含首页的教练提醒。</text>
+  <text x="68" y="735" class="dim" font-size="12">数据管理</text>
+  <rect x="64" y="749" width="397" height="66" rx="14" class="card"/>
+  <text x="82" y="789" class="copy" font-size="15">导出数据　　导入数据</text>
+  <text x="399" y="838" class="remove" font-size="12" text-anchor="end">统计行（删除）</text>
+
+  <text x="555" y="118" class="title" font-size="17">调整后（推荐）</text>
+  <rect x="525" y="135" width="475" height="720" rx="28" class="panel"/>
+  <text x="551" y="185" class="title" font-size="17">长期记忆</text>
+  <text x="972" y="185" class="dim" font-size="12" text-anchor="end">陪伴 16 天 · 2 条</text>
+  <rect x="549" y="199" width="427" height="74" rx="14" class="card"/>
+  <text x="567" y="224" class="accent" font-size="12">偏好</text>
+  <text x="567" y="253" class="copy" font-size="15">不喜欢临时开会</text>
+
+  <text x="551" y="317" class="title" font-size="17">设置</text>
+  <text x="553" y="347" class="dim" font-size="13">助手与同步</text>
+  <rect x="549" y="359" width="427" height="84" rx="12" class="card"/>
+  <text x="567" y="391" class="copy" font-size="15">理解引擎</text><text x="952" y="391" class="dim" font-size="13" text-anchor="end">已开启 ›</text>
+  <text x="567" y="426" class="copy" font-size="15">同步到苹果日历</text>
+
+  <text x="553" y="480" class="dim" font-size="13">待办通知</text>
+  <rect x="549" y="492" width="427" height="82" rx="12" class="card"/>
+  <text x="567" y="524" class="copy" font-size="15">早 8:00 晨间待办</text><text x="567" y="557" class="copy" font-size="15">晚 21:00 夜间待办</text>
+
+  <text x="553" y="611" class="dim" font-size="13">数据管理</text>
+  <rect x="549" y="623" width="427" height="84" rx="12" class="card"/>
+  <text x="567" y="656" class="copy" font-size="15">导出数据</text>
+  <text x="567" y="690" class="copy" font-size="15">导入数据</text>
+
+  <rect x="732" y="94" width="254" height="34" rx="17" fill="#F9E8DD"/>
+  <text x="859" y="116" class="accent" font-size="12" text-anchor="middle">去掉重复页头 · 内容前置</text>
+</svg>

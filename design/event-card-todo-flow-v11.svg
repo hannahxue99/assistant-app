@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="#392B22" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      .bg{fill:#F6F2EC}.panel{fill:#FFFCF8;stroke:#DDD4CA;stroke-width:1.5}.card{fill:#FFFFFF;stroke:#E6DED5;stroke-width:1.4}.pin{fill:#FFF4E8;stroke:#E87532;stroke-width:1.5}.label{font:600 14px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;fill:#9B6E51}.title{font:700 22px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;fill:#2D251F}.h2{font:700 17px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;fill:#2D251F}.body{font:400 15px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;fill:#4D433C}.muted{font:400 12px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;fill:#9A9189}.note{font:500 13px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;fill:#6D625A}.accent{fill:#E87532}.line{stroke:#D6CCC2;stroke-width:1.4;fill:none}.arrow{stroke:#E87532;stroke-width:2;fill:none;marker-end:url(#m)}
+    </style>
+    <marker id="m" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#E87532"/></marker>
+  </defs>
+  <rect width="1200" height="780" class="bg"/>
+  <text x="40" y="48" class="title">事件卡与待办交互调整 · Before / After</text>
+
+  <rect x="35" y="80" width="330" height="475" rx="24" class="panel" filter="url(#shadow)"/>
+  <text x="60" y="116" class="label">BEFORE · 当前首页</text>
+  <text x="60" y="158" class="h2">事件</text>
+  <rect x="58" y="178" width="284" height="70" rx="13" class="card"/>
+  <text x="74" y="205" class="h2">公积金贷款还款</text>
+  <text x="258" y="204" class="muted">今天 16:15  ›</text>
+  <text x="74" y="231" class="body">下个月11号还款10万</text>
+  <text x="60" y="284" class="note">问题</text>
+  <text x="60" y="311" class="body">• 卡片约 62px，信息挤在两行</text>
+  <text x="60" y="339" class="body">• 时间和标题争抢横向空间</text>
+  <text x="60" y="367" class="body">• 置顶入口藏在详情页</text>
+  <text x="60" y="395" class="body">• 待办会进入通用记录详情</text>
+
+  <rect x="400" y="80" width="360" height="475" rx="24" class="panel" filter="url(#shadow)"/>
+  <text x="425" y="116" class="label">AFTER · 首页事件区</text>
+  <text x="425" y="158" class="h2">事件</text>
+  <rect x="423" y="178" width="314" height="126" rx="15" class="card"/>
+  <text x="442" y="211" class="h2">公积金贷款还款</text>
+  <path d="M698 196 l12 12 m-8-15 l11 11 m-7-15 l11 11 m-14 3 l-7 7" stroke="#C99A2E" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <text x="442" y="248" class="body">已还30万，剩余约30多万</text>
+  <text x="442" y="282" class="muted">更新于 今天 16:15</text>
+
+  <rect x="423" y="320" width="314" height="126" rx="15" class="card"/>
+  <text x="442" y="353" class="h2">换房计划</text>
+  <path d="M698 330 l12 12 m-8-15 l11 11 m-7-15 l11 11 m-14 3 l-7 7" stroke="#9A9189" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <text x="442" y="390" class="body">刚看完第二套，还没决定</text>
+  <text x="442" y="424" class="muted">更新于 昨天 19:40</text>
+  <text x="425" y="486" class="note">排序：置顶优先；置顶区与普通区内部</text>
+  <text x="425" y="509" class="note">均按最新时间戳由近及远</text>
+
+  <rect x="795" y="80" width="370" height="475" rx="24" class="panel" filter="url(#shadow)"/>
+  <text x="820" y="116" class="label">AFTER · 事件详情</text>
+  <text x="822" y="158" class="h2">‹</text>
+  <text x="850" y="158" class="muted">右上角留空：删除置顶和 …</text>
+  <text x="822" y="204" class="muted">更新于 今天 16:15</text>
+  <text x="822" y="239" class="title">公积金贷款还款</text>
+  <text x="822" y="282" class="label">当前状态</text>
+  <rect x="820" y="298" width="320" height="64" rx="13" class="card"/>
+  <text x="838" y="325" class="body">已还30万，剩余约30多万；</text>
+  <text x="838" y="348" class="body">计划下个月11号再还10万</text>
+  <text x="822" y="399" class="label">相关待办</text>
+  <rect x="820" y="414" width="320" height="68" rx="13" class="card"/>
+  <circle cx="846" cy="448" r="10" fill="#FFFFFF" stroke="#9A9189" stroke-width="2"/>
+  <text x="870" y="445" class="body">还款10万</text>
+  <text x="870" y="466" class="muted">10月11日 · 仅勾选，不进入详情</text>
+  <rect x="820" y="505" width="320" height="42" rx="13" fill="#E87532"/>
+  <text x="910" y="531" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="15" font-weight="600" fill="#FFFFFF">和小知聊这件事</text>
+
+  <rect x="35" y="590" width="1130" height="260" rx="20" fill="#FFF9F2" stroke="#E8D4C2" stroke-width="1.4"/>
+  <text x="60" y="624" class="label">点击流</text>
+  <rect x="62" y="651" width="165" height="54" rx="13" class="card"/><text x="92" y="683" class="body">点击卡片正文</text>
+  <path d="M228 678 H300" class="arrow"/><rect x="305" y="651" width="165" height="54" rx="13" class="card"/><text x="334" y="683" class="body">进入事件详情</text>
+  <rect x="520" y="651" width="165" height="54" rx="13" class="card"/><text x="553" y="683" class="body">点击置顶图标</text>
+  <path d="M687 678 H758" class="arrow"/><rect x="763" y="651" width="165" height="54" rx="13" class="card"/><text x="785" y="675" class="body">原地置顶/取消</text><text x="797" y="694" class="muted">并按规则重排</text>
+  <rect x="62" y="735" width="195" height="54" rx="13" class="card"/><text x="83" y="767" class="body">点击小知待办回执</text>
+  <path d="M258 762 H328" class="arrow"/><rect x="333" y="735" width="165" height="54" rx="13" class="card"/><text x="382" y="767" class="body">回到首页</text>
+  <rect x="555" y="735" width="195" height="54" rx="13" class="card"/><text x="576" y="767" class="body">点击小知事件回执</text>
+  <path d="M751 762 H821" class="arrow"/><rect x="826" y="735" width="180" height="54" rx="13" class="card"/><text x="856" y="767" class="body">进入事件详情</text>
+</svg>

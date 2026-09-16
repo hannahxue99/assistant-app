@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1500" viewBox="0 0 1500 1500">
+  <defs>
+    <style>
+      .bg { fill: #F5F1E9; }
+      .panel { fill: #FFFFFF; stroke: #E3DCD2; stroke-width: 2; }
+      .screen { fill: #F8F5EF; stroke: #D7CFC4; stroke-width: 2; }
+      .card { fill: #FFFFFF; stroke: #E6DFD6; stroke-width: 2; }
+      .accent-card { fill: #FFF7EF; stroke: #E8B17E; stroke-width: 2; }
+      .success { fill: #EAF5EC; stroke: #86B78E; stroke-width: 2; }
+      .muted { fill: #ECE8E3; stroke: #DAD3CC; stroke-width: 2; }
+      .title { fill: #28231F; font: 700 36px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+      .h2 { fill: #28231F; font: 650 24px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+      .h3 { fill: #28231F; font: 650 19px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+      .body { fill: #4B453F; font: 400 17px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+      .small { fill: #837B72; font: 400 14px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+      .micro { fill: #978F86; font: 400 12px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+      .label { fill: #746B62; font: 650 14px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; letter-spacing: 1px; }
+      .orange { fill: #E0733A; }
+      .orangeText { fill: #D7662F; font: 650 15px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+      .whiteIcon { fill: #FFFFFF; font: 700 19px -apple-system, BlinkMacSystemFont, sans-serif; }
+      .arrow { stroke: #A79D92; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .dash { stroke: #CFBCA8; stroke-width: 2; stroke-dasharray: 7 7; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#A79D92"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1500" height="1500" rx="30"/>
+  <text x="54" y="62" class="title">首页减法、旧日志迁移与 Codex 式小知输入框</text>
+  <text x="54" y="98" class="small">v1.6 · 首页只保留行动与事件；旧数据进入新的事实模型；语音先转成可编辑文字再发送</text>
+
+  <!-- Home -->
+  <rect x="54" y="132" width="430" height="610" rx="24" class="panel"/>
+  <text x="82" y="174" class="label">1 · 首页做减法</text>
+  <rect x="82" y="198" width="374" height="510" rx="30" class="screen"/>
+  <text x="108" y="238" class="small">9月15日 星期二 · 今天</text>
+  <text x="108" y="280" class="h3">本周待办</text>
+  <text x="218" y="280" class="small">｜ 全部待办</text>
+  <rect x="108" y="303" width="322" height="62" rx="14" class="card"/>
+  <circle cx="131" cy="334" r="10" fill="none" stroke="#B7AFA6" stroke-width="2"/>
+  <text x="154" y="331" class="body">周五提交方案</text>
+  <text x="154" y="350" class="micro">9/18 全天</text>
+  <rect x="108" y="375" width="322" height="62" rx="14" class="card"/>
+  <circle cx="131" cy="406" r="10" fill="none" stroke="#B7AFA6" stroke-width="2"/>
+  <text x="154" y="403" class="body">明天还信用卡</text>
+  <text x="154" y="422" class="micro">明天 10:00</text>
+  <text x="108" y="486" class="h3">事件</text>
+  <rect x="108" y="508" width="322" height="92" rx="14" class="card"/>
+  <text x="128" y="538" class="h3">房贷还款安排</text>
+  <text x="128" y="565" class="body">已提前还款 30 万</text>
+  <text x="128" y="586" class="micro">今天 12:43</text>
+  <rect x="108" y="610" width="322" height="72" rx="14" class="card"/>
+  <text x="128" y="640" class="h3">产品 V0.3</text>
+  <text x="128" y="665" class="small">正在收敛交互方案 · 昨天</text>
+  <line x1="95" y1="690" x2="443" y2="690" class="dash"/>
+  <text x="269" y="722" text-anchor="middle" class="orangeText">“主人的备忘录”和首页输入框全部移除</text>
+
+  <!-- Import -->
+  <rect x="510" y="132" width="480" height="610" rx="24" class="panel"/>
+  <text x="538" y="174" class="label">2 · 我的 / 数据管理</text>
+  <rect x="538" y="198" width="424" height="510" rx="30" class="screen"/>
+  <text x="566" y="241" class="h2">我的</text>
+  <text x="566" y="276" class="small">数据管理</text>
+  <rect x="566" y="296" width="368" height="112" rx="14" class="card"/>
+  <text x="586" y="330" class="body">导出数据</text>
+  <text x="844" y="330" class="small">Markdown  ↗</text>
+  <line x1="586" y1="350" x2="914" y2="350" stroke="#E8E2D9"/>
+  <text x="586" y="383" class="body">导入数据</text>
+  <text x="810" y="383" class="small">选择备份文件  ›</text>
+  <rect x="578" y="428" width="344" height="244" rx="22" class="panel"/>
+  <text x="602" y="462" class="h3">识别到旧版导出日志</text>
+  <text x="602" y="492" class="small">先预览，不调用模型，不改写原文</text>
+  <rect x="602" y="514" width="296" height="76" rx="14" class="accent-card"/>
+  <text x="620" y="545" class="body">对话 128 条 · 待办 16 条</text>
+  <text x="620" y="571" class="body">事件 7 个 · 重复 3 条</text>
+  <rect x="602" y="608" width="137" height="42" rx="21" fill="#F0EBE5"/>
+  <text x="670" y="634" text-anchor="middle" class="small">取消</text>
+  <rect x="761" y="608" width="137" height="42" rx="21" class="orange"/>
+  <text x="829" y="634" text-anchor="middle" class="whiteIcon">确认导入</text>
+
+  <!-- Conversation target -->
+  <rect x="1016" y="132" width="430" height="610" rx="24" class="panel"/>
+  <text x="1044" y="174" class="label">3 · 导入后的落点</text>
+  <rect x="1044" y="198" width="374" height="510" rx="30" class="screen"/>
+  <text x="1070" y="239" class="h2">小知</text>
+  <text x="1070" y="264" class="small">连续对话 · 自动保存</text>
+  <text x="1070" y="306" class="micro">2025年8月21日</text>
+  <rect x="1110" y="321" width="278" height="72" rx="20" fill="#E77A3D"/>
+  <text x="1130" y="352" fill="#FFFFFF" class="body">下周五之前把材料交了</text>
+  <text x="1350" y="377" fill="#FFE2D1" class="micro">旧记录 09:20</text>
+  <text x="1070" y="429" class="micro">2026年9月15日</text>
+  <rect x="1080" y="445" width="288" height="84" rx="18" class="card"/>
+  <text x="1100" y="477" class="body">上次的材料已经提交了吗？</text>
+  <text x="1100" y="504" class="small">这是现在的小知对话</text>
+  <rect x="1116" y="546" width="272" height="76" rx="20" fill="#E77A3D"/>
+  <text x="1136" y="579" fill="#FFFFFF" class="body">提交了，继续准备复盘</text>
+  <text x="1350" y="606" fill="#FFE2D1" class="micro">今天 12:40</text>
+  <rect x="1070" y="642" width="322" height="44" rx="22" class="success"/>
+  <text x="1231" y="669" text-anchor="middle" class="small">旧原声按原时间插入，不生成虚假 AI 回复</text>
+
+  <!-- Mapping -->
+  <rect x="54" y="780" width="1392" height="220" rx="24" class="panel"/>
+  <text x="82" y="824" class="label">旧 Markdown 的确定性映射</text>
+  <rect x="82" y="852" width="235" height="90" rx="16" class="accent-card"/>
+  <text x="200" y="886" text-anchor="middle" class="h3">每条原文 + 时间戳</text>
+  <text x="200" y="915" text-anchor="middle" class="small">旧标题中的导出时间</text>
+  <path d="M 317 897 L 381 897" class="arrow"/>
+  <rect x="383" y="852" width="235" height="90" rx="16" class="success"/>
+  <text x="501" y="886" text-anchor="middle" class="h3">小知用户消息</text>
+  <text x="501" y="915" text-anchor="middle" class="small">按原时间排序 · source=旧记录</text>
+  <rect x="682" y="852" width="235" height="90" rx="16" class="accent-card"/>
+  <text x="800" y="886" text-anchor="middle" class="h3">待办 + 时间 / 完成态</text>
+  <text x="800" y="915" text-anchor="middle" class="small">无日期仍作为隐藏待办</text>
+  <path d="M 917 897 L 981 897" class="arrow"/>
+  <rect x="983" y="852" width="235" height="90" rx="16" class="success"/>
+  <text x="1101" y="886" text-anchor="middle" class="h3">首页待办</text>
+  <text x="1101" y="915" text-anchor="middle" class="small">沿用本周 / 全部待办规则</text>
+  <rect x="1250" y="852" width="168" height="90" rx="16" class="success"/>
+  <text x="1334" y="886" text-anchor="middle" class="h3">主题 → 事件</text>
+  <text x="1334" y="915" text-anchor="middle" class="small">逐条保留进展</text>
+  <text x="82" y="974" class="small">稳定指纹去重；整文件先校验后写入；失败不产生半份数据。旧“想法 / 信息”无主题时只进入小知历史。</text>
+
+  <!-- Composer states -->
+  <rect x="54" y="1038" width="1392" height="410" rx="24" class="panel"/>
+  <text x="82" y="1082" class="label">Codex 式输入：同一个输入框完成键盘输入、语音转写、编辑和发送</text>
+
+  <text x="82" y="1130" class="small">A · 空闲</text>
+  <rect x="82" y="1148" width="305" height="126" rx="24" class="card"/>
+  <circle cx="116" cy="1234" r="21" fill="#F3EEE8"/>
+  <text x="116" y="1241" text-anchor="middle" class="h3">⌁</text>
+  <text x="148" y="1201" class="small">发消息给小知</text>
+  <circle cx="351" cy="1234" r="21" fill="#DAD4CE"/>
+  <text x="351" y="1241" text-anchor="middle" class="whiteIcon">↑</text>
+
+  <text x="421" y="1130" class="small">B · 键盘输入</text>
+  <rect x="421" y="1148" width="305" height="126" rx="24" class="card"/>
+  <text x="451" y="1190" class="body">下个月我准备再提前</text>
+  <text x="451" y="1217" class="body">还一部分房贷</text>
+  <circle cx="455" cy="1247" r="21" fill="#F3EEE8"/>
+  <text x="455" y="1254" text-anchor="middle" class="h3">⌁</text>
+  <circle cx="690" cy="1247" r="21" class="orange"/>
+  <text x="690" y="1254" text-anchor="middle" class="whiteIcon">↑</text>
+
+  <text x="760" y="1130" class="small">C · 语音转写中</text>
+  <rect x="760" y="1148" width="305" height="126" rx="24" class="accent-card"/>
+  <text x="790" y="1190" class="body">下个月我准备再提前</text>
+  <text x="790" y="1217" class="body">还一部分房贷｜</text>
+  <circle cx="794" cy="1247" r="21" class="orange"/>
+  <rect x="788" y="1241" width="12" height="12" rx="2" fill="#FFFFFF"/>
+  <text x="831" y="1253" class="orangeText">正在听…</text>
+  <circle cx="1029" cy="1247" r="21" fill="#E7D4C8"/>
+  <text x="1029" y="1254" text-anchor="middle" class="whiteIcon">↑</text>
+
+  <text x="1099" y="1130" class="small">D · 小知处理中</text>
+  <rect x="1099" y="1148" width="305" height="126" rx="24" class="muted"/>
+  <text x="1129" y="1201" class="small">小知回复后可继续输入</text>
+  <circle cx="1133" cy="1234" r="21" fill="#DDD7D1"/>
+  <text x="1133" y="1241" text-anchor="middle" class="h3">⌁</text>
+  <circle cx="1368" cy="1234" r="21" fill="#D5CFC9"/>
+  <text x="1368" y="1241" text-anchor="middle" class="whiteIcon">↑</text>
+
+  <text x="82" y="1324" class="body">交互规则</text>
+  <text x="178" y="1324" class="small">点麦克风开始 / 再点停止；转写实时进入同一输入框；停止后可编辑，不自动发送；输入框最多向上长 5 行。</text>
+  <text x="82" y="1361" class="body">沿用规则</text>
+  <text x="178" y="1361" class="small">发送后立即清空并置灰；上方回复完成后恢复；发送失败时原文回填；处理中输入框不显示第二个转圈。</text>
+  <text x="82" y="1398" class="body">不照搬</text>
+  <text x="178" y="1398" class="small">不增加没有功能的“附件 +”按钮，不做语音实时对话，只做可检查、可编辑的语音转文字。</text>
+</svg>

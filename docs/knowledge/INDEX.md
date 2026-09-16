@@ -4,8 +4,10 @@
 
 | 专题 | 内容 | 最近更新 |
 |---|---|---|
-| [小知发送状态：单一反馈与草稿安全](xiaozhi-sending-state.md) | 立即清空与置灰、消息区唯一进度、落库边界、失败恢复与PR #17回滚 | 2026-09-15 |
-| [Agent 开发实战手册](agent-dev-playbook.md) | 图标重设计全程复盘：环境铁律、真机验收方法论、设计协作与流程纪律 | 2026-09-09 |
+| [“秘书 + 导师”V0.3 发布基线](secretary-mentor-v03-release.md) | 三入口产品结构、数据边界、模型/代码职责、删除语义、验证与PR #17/#18/#19回滚 | 2026-09-16 |
+| [小知流式回复、模型日期与决策审计](xiaozhi-streaming-date-audit.md) | SSE流式预览、模型解析日期、候选/拒绝/提交日志、紧凑回执与PR #19回滚 | 2026-09-15 |
+| [小知发送状态：可中止运行与草稿安全](xiaozhi-sending-state.md) | 用户消息立即入列、运行中继续输入、停止按钮、落库边界与PR #19回滚 | 2026-09-16 |
+| [Agent 开发实战手册](agent-dev-playbook.md) | 环境铁律、Tunnel/USB/Metro Reload 端点契约、真机验收方法论与流程纪律 | 2026-09-15 |
 | [App 图标重设计](app-icon-redesign.md) | 一勾即安定稿、60px对比度诊断、iOS 26单尺寸限制与prebuild连环坑 | 2026-09-09 |
 | [苹果日历同步](calendar-sync.md) | 全天/定时、设备映射、删除墓碑、重试、跨日坑与PR #14发布 | 2026-09-08 |
 | [GitHub CI 与 Git 工具链](github-ci-and-git-toolchain.md) | PR自动门禁、Git版本抢占、workflow scope与凭据helper优先级 | 2026-09-08 |

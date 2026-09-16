@@ -14,17 +14,22 @@ import type {
 import { buildImportableMarkdown } from './engine/backup-format';
 import {
   buildImportDecisions,
+  buildMemoryImportDecisions,
   isDefaultProfile,
   summarizeImport,
   type ImportPreview,
   type ImportResult,
 } from './engine/import-merge';
+import type { AssistantMemory, AssistantMemorySource } from './assistant/memory-types';
 import { sortTopicGroups } from './engine/topic-order';
 import { deriveEditedEntry } from './engine/edit-derived';
 import { calendarSchema } from './engine/calendar-schema';
 import { inferTimePrecision } from './engine/calendar-projection';
 import { runSingleFlight, type SingleFlightState } from './engine/single-flight';
 import { assistantSchema } from './assistant/schema';
+import { assistantActionSchema } from './assistant/action-schema';
+import { ensureAssistantOperationSchema } from './assistant/action-schema';
+import { assistantMemorySchema } from './assistant/memory-schema';
 
 type DatabaseGlobal = typeof globalThis & {
   __assistantDatabaseRuntime?: SingleFlightState<SQLite.SQLiteDatabase>;
@@ -151,6 +156,35 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
 
   `);
   await database.execAsync(assistantSchema);
+  await database.execAsync(assistantActionSchema);
+  await ensureAssistantOperationSchema(database);
+  await database.execAsync(assistantMemorySchema);
+
+  const decisionLogColumns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(assistant_decision_logs)');
+  if (!decisionLogColumns.some(column => column.name === 'error_detail')) {
+    await database.execAsync('ALTER TABLE assistant_decision_logs ADD COLUMN error_detail TEXT;');
+  }
+  if (!decisionLogColumns.some(column => column.name === 'repair_count')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN repair_count INTEGER NOT NULL DEFAULT 0;");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'repair_status')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN repair_status TEXT NOT NULL DEFAULT 'not_needed';");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'protocol_warnings_json')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN protocol_warnings_json TEXT NOT NULL DEFAULT '[]';");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'provider_attempt_count')) {
+    await database.execAsync('ALTER TABLE assistant_decision_logs ADD COLUMN provider_attempt_count INTEGER NOT NULL DEFAULT 0;');
+  }
+  if (!decisionLogColumns.some(column => column.name === 'provider_attempts_json')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN provider_attempts_json TEXT NOT NULL DEFAULT '[]';");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'proposed_event_deltas_json')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN proposed_event_deltas_json TEXT NOT NULL DEFAULT '[]';");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'proposed_memory_deltas_json')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN proposed_memory_deltas_json TEXT NOT NULL DEFAULT '[]';");
+  }
 
   // 旧版本只有 created_at。先探测列再迁移，避免重复 ALTER 导致启动失败。
   const columns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(entries)');
@@ -276,6 +310,56 @@ function rowToProfile(r: any): Profile {
   };
 }
 
+function rowToAssistantMemory(r: any): AssistantMemory {
+  return {
+    id: r.id,
+    category: r.category,
+    content: r.content,
+    normalizedContent: r.normalized_content,
+    status: r.status,
+    sensitivity: r.sensitivity,
+    admissionBasis: r.admission_basis,
+    supersededById: r.superseded_by_id ?? null,
+    revision: Number(r.revision),
+    createdAt: Number(r.created_at),
+    updatedAt: Number(r.updated_at),
+    activatedAt: r.activated_at ?? null,
+    supersededAt: r.superseded_at ?? null,
+    forgottenAt: r.forgotten_at ?? null,
+  };
+}
+
+function rowToAssistantMemorySource(r: any): AssistantMemorySource {
+  return {
+    id: r.id,
+    memoryId: r.memory_id,
+    sourceMessageId: r.source_message_id ?? null,
+    evidence: r.evidence,
+    createdAt: Number(r.created_at),
+  };
+}
+
+async function insertOrReplaceImportedMemory(
+  d: SQLite.SQLiteDatabase,
+  memory: AssistantMemory,
+): Promise<void> {
+  await d.runAsync(
+    `INSERT INTO assistant_memories (
+       id, category, content, normalized_content, status, sensitivity, admission_basis,
+       superseded_by_id, revision, created_at, updated_at, activated_at, superseded_at, forgotten_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET category=excluded.category, content=excluded.content,
+       normalized_content=excluded.normalized_content, status=excluded.status,
+       sensitivity=excluded.sensitivity, admission_basis=excluded.admission_basis,
+       superseded_by_id=NULL, revision=excluded.revision, created_at=excluded.created_at,
+       updated_at=excluded.updated_at, activated_at=excluded.activated_at,
+       superseded_at=excluded.superseded_at, forgotten_at=excluded.forgotten_at`,
+    memory.id, memory.category, memory.content, memory.normalizedContent, memory.status,
+    memory.sensitivity, memory.admissionBasis, memory.revision, memory.createdAt,
+    memory.updatedAt, memory.activatedAt, memory.supersededAt, memory.forgottenAt,
+  );
+}
+
 async function insertImportedEntry(d: SQLite.SQLiteDatabase, entry: Entry): Promise<void> {
   await d.runAsync(
     `INSERT INTO entries (
@@ -347,6 +431,137 @@ export async function insertEntry(input: NewEntryInput, parsed?: {
   );
   await syncFts(id);
   return (await getEntry(id))!;
+}
+
+/** 小知事务内创建待办；调用方必须使用当前独占事务连接。 */
+export async function insertAssistantTaskWithDatabase(
+  database: SQLite.SQLiteDatabase,
+  input: {
+    id: string;
+    text: string;
+    dueAt: number | null;
+    timePrecision: 'date' | 'dateTime' | null;
+    source: 'text' | 'voice';
+    createdAt: number;
+  },
+): Promise<Entry> {
+  const text = input.text.trim();
+  if (!text) throw new Error('待办内容不能为空');
+  await database.runAsync(
+    `INSERT INTO entries (
+       id, raw_text, kind, summary, due_at, remind_at, topic, tags, persons,
+       parse_status, parse_source, created_at, updated_at, revision_at, done, done_at, source,
+       time_precision
+     ) VALUES (?, ?, 'task', ?, ?, ?, NULL, '[]', '[]', 'ok', 'llm', ?, ?, ?, 0, NULL, ?, ?)
+     ON CONFLICT(id) DO NOTHING`,
+    input.id, text, text, input.dueAt, input.dueAt,
+    input.createdAt, input.createdAt, input.createdAt, input.source, input.timePrecision,
+  );
+  await syncFtsWithDatabase(database, input.id);
+  const row = await database.getFirstAsync<any>('SELECT * FROM entries WHERE id=?', input.id);
+  if (!row) throw new Error('待办创建失败');
+  return rowToEntry(row);
+}
+
+export async function getEntryWithDatabase(
+  database: SQLite.SQLiteDatabase,
+  id: string,
+): Promise<Entry | null> {
+  const row = await database.getFirstAsync<any>('SELECT * FROM entries WHERE id=?', id);
+  return row ? rowToEntry(row) : null;
+}
+
+/** 小知事务内修改待办；revision 不一致时返回 null，避免覆盖用户较新的修改。 */
+export async function updateAssistantTaskWithDatabase(
+  database: SQLite.SQLiteDatabase,
+  input: {
+    id: string;
+    expectedRevisionAt: number;
+    text?: string;
+    dueAt?: number | null;
+    timePrecision?: 'date' | 'dateTime' | null;
+    updatedAt: number;
+  },
+): Promise<Entry | null> {
+  const current = await getEntryWithDatabase(database, input.id);
+  if (!current || current.kind !== 'task' || current.revisionAt !== input.expectedRevisionAt) return null;
+  const text = input.text?.trim() || current.summary;
+  const dueAt = input.dueAt !== undefined ? input.dueAt : current.dueAt;
+  const timePrecision = input.timePrecision !== undefined ? input.timePrecision : (current.timePrecision ?? 'date');
+  const result = await database.runAsync(
+    `UPDATE entries SET summary=?, due_at=?, remind_at=?, time_precision=?, parse_status='ok', parse_source='llm',
+       updated_at=?, revision_at=MAX(revision_at+1, ?)
+     WHERE id=? AND kind='task' AND revision_at=?`,
+    text, dueAt, dueAt, timePrecision, input.updatedAt, input.updatedAt, input.id, input.expectedRevisionAt,
+  );
+  if (result.changes === 0) return null;
+  await syncFtsWithDatabase(database, input.id);
+  return getEntryWithDatabase(database, input.id);
+}
+
+export async function completeAssistantTaskWithDatabase(
+  database: SQLite.SQLiteDatabase,
+  input: { id: string; expectedRevisionAt: number; completedAt: number },
+): Promise<Entry | null> {
+  const result = await database.runAsync(
+    `UPDATE entries SET done=1, done_at=?, updated_at=?, revision_at=MAX(revision_at+1, ?)
+     WHERE id=? AND kind='task' AND done=0 AND revision_at=?`,
+    input.completedAt, input.completedAt, input.completedAt, input.id, input.expectedRevisionAt,
+  );
+  if (result.changes === 0) return null;
+  return getEntryWithDatabase(database, input.id);
+}
+
+export async function restoreAssistantTaskWithDatabase(
+  database: SQLite.SQLiteDatabase,
+  snapshot: Entry,
+  updatedAt: number,
+): Promise<Entry | null> {
+  const result = await database.runAsync(
+    `UPDATE entries SET raw_text=?, kind=?, summary=?, due_at=?, remind_at=?, topic=?, tags=?, persons=?,
+       parse_status=?, parse_source=?, corrected_from=?, updated_at=?, revision_at=MAX(revision_at+1, ?),
+       done=?, done_at=?, source=?
+     WHERE id=?`,
+    snapshot.rawText, snapshot.kind, snapshot.summary, snapshot.dueAt, snapshot.remindAt,
+    snapshot.topic, JSON.stringify(snapshot.tags), JSON.stringify(snapshot.persons),
+    snapshot.parseStatus, snapshot.parseSource, snapshot.correctedFrom, updatedAt, updatedAt,
+    snapshot.done, snapshot.doneAt, snapshot.source, snapshot.id,
+  );
+  if (result.changes === 0) return null;
+  await syncFtsWithDatabase(database, snapshot.id);
+  return getEntryWithDatabase(database, snapshot.id);
+}
+
+/** 撤销硬删除时按快照重新插入待办；仅供助手撤销事务使用。 */
+export async function reinsertAssistantTaskWithDatabase(
+  database: SQLite.SQLiteDatabase,
+  snapshot: Entry,
+): Promise<Entry> {
+  await database.runAsync(
+    `INSERT INTO entries (
+       id, raw_text, kind, summary, due_at, remind_at, topic, tags, persons,
+       parse_status, parse_source, corrected_from, created_at, updated_at, revision_at,
+       done, done_at, source, time_precision
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    snapshot.id, snapshot.rawText, snapshot.kind, snapshot.summary, snapshot.dueAt,
+    snapshot.remindAt, snapshot.topic, JSON.stringify(snapshot.tags), JSON.stringify(snapshot.persons),
+    snapshot.parseStatus, snapshot.parseSource, snapshot.correctedFrom, snapshot.createdAt,
+    snapshot.updatedAt, snapshot.revisionAt, snapshot.done, snapshot.doneAt, snapshot.source,
+    snapshot.timePrecision ?? null,
+  );
+  await syncFtsWithDatabase(database, snapshot.id);
+  const restored = await getEntryWithDatabase(database, snapshot.id);
+  if (!restored) throw new Error('待办恢复失败');
+  return restored;
+}
+
+export async function deleteAssistantTaskWithDatabase(
+  database: SQLite.SQLiteDatabase,
+  id: string,
+): Promise<void> {
+  await database.runAsync('DELETE FROM entries WHERE id=?', id);
+  await database.runAsync('DELETE FROM entries_fts WHERE entry_id=?', id);
+  // calendar_delete 已写入补偿队列；不可删除 calendar_jobs。
 }
 
 /** 批量插入（供测试/恢复） */
@@ -614,7 +829,12 @@ export async function listTopicGroups(): Promise<TopicGroup[]> {
   const rows = await d.getAllAsync<any>(`
     WITH counted AS (
       SELECT topic, COUNT(*) AS entry_count FROM entries
-      WHERE topic IS NOT NULL AND TRIM(topic) != '' GROUP BY topic
+      WHERE topic IS NOT NULL AND TRIM(topic) != ''
+        AND NOT EXISTS (
+          SELECT 1 FROM assistant_migrations m
+          WHERE m.migration_key=('legacy-topic-v1:' || entries.topic)
+        )
+      GROUP BY topic
     )
     SELECT e.*, counted.entry_count, p.pinned_at
     FROM counted JOIN entries e ON e.id = (
@@ -760,13 +980,18 @@ export async function saveSettings(s: Settings): Promise<void> {
 
 export async function previewBackupImport(payload: BackupPayload): Promise<ImportPreview> {
   const d = await getDb();
-  const [rows, profileRow] = await Promise.all([
+  const [rows, profileRow, memoryRows] = await Promise.all([
     d.getAllAsync<any>('SELECT * FROM entries'),
     d.getFirstAsync<any>('SELECT * FROM profile WHERE id=1'),
+    d.getAllAsync<any>('SELECT * FROM assistant_memories'),
   ]);
   const localEntries = rows.map(rowToEntry);
   const decisions = buildImportDecisions(payload.entries, localEntries);
-  return summarizeImport(decisions, rowToProfile(profileRow), payload);
+  const memoryDecisions = buildMemoryImportDecisions(
+    payload.memories ?? [],
+    memoryRows.map(rowToAssistantMemory),
+  );
+  return summarizeImport(decisions, rowToProfile(profileRow), payload, memoryDecisions);
 }
 
 /**
@@ -781,20 +1006,29 @@ export async function importBackup(envelope: BackupEnvelope): Promise<ImportResu
     ignored: 0,
     conflicts: 0,
     profileWillImport: false,
+    memoryAdded: 0,
+    memoryUpdated: 0,
+    memoryIgnored: 0,
+    memoryConflicts: 0,
   };
   let affectedIds: string[] = [];
   let affectedEntries: Entry[] = [];
   let profileImported = false;
 
   await d.withExclusiveTransactionAsync(async (txn) => {
-    const [rows, profileRow] = await Promise.all([
+    const [rows, profileRow, memoryRows] = await Promise.all([
       txn.getAllAsync<any>('SELECT * FROM entries'),
       txn.getFirstAsync<any>('SELECT * FROM profile WHERE id=1'),
+      txn.getAllAsync<any>('SELECT * FROM assistant_memories'),
     ]);
     const localEntries = rows.map(rowToEntry);
     const localProfile = rowToProfile(profileRow);
     const decisions = buildImportDecisions(envelope.payload.entries, localEntries);
-    preview = summarizeImport(decisions, localProfile, envelope.payload);
+    const memoryDecisions = buildMemoryImportDecisions(
+      envelope.payload.memories ?? [],
+      memoryRows.map(rowToAssistantMemory),
+    );
+    preview = summarizeImport(decisions, localProfile, envelope.payload, memoryDecisions);
     affectedIds = [];
     affectedEntries = [];
     const importedAt = Date.now();
@@ -851,6 +1085,31 @@ export async function importBackup(envelope: BackupEnvelope): Promise<ImportResu
       );
     }
 
+    for (const decision of memoryDecisions) {
+      if (decision.action === 'add' || decision.action === 'update') {
+        await insertOrReplaceImportedMemory(txn, decision.incoming);
+      }
+    }
+    for (const decision of memoryDecisions) {
+      if (decision.action !== 'add' && decision.action !== 'update') continue;
+      const successor = decision.incoming.supersededById;
+      if (!successor) continue;
+      const exists = await txn.getFirstAsync<{ id: string }>('SELECT id FROM assistant_memories WHERE id=?', successor);
+      if (exists) await txn.runAsync('UPDATE assistant_memories SET superseded_by_id=? WHERE id=?', successor, decision.incoming.id);
+    }
+    for (const source of envelope.payload.memorySources ?? []) {
+      const memory = await txn.getFirstAsync<{ id: string }>('SELECT id FROM assistant_memories WHERE id=?', source.memoryId);
+      if (!memory) continue;
+      const sourceMessage = source.sourceMessageId
+        ? await txn.getFirstAsync<{ id: string }>('SELECT id FROM assistant_messages WHERE id=?', source.sourceMessageId)
+        : null;
+      await txn.runAsync(
+        `INSERT OR IGNORE INTO assistant_memory_sources
+         (id, memory_id, source_message_id, evidence, created_at) VALUES (?, ?, ?, ?, ?)`,
+        source.id, source.memoryId, sourceMessage?.id ?? null, source.evidence, source.createdAt,
+      );
+    }
+
     for (const entryId of affectedIds) {
       await txn.runAsync(
         `INSERT INTO notification_sync_queue (entry_id, queued_at) VALUES (?, ?)
@@ -889,14 +1148,18 @@ export async function clearPendingNotificationSync(entryIds: string[]): Promise<
 
 export async function exportMarkdown(): Promise<string> {
   const d = await getDb();
-  const [rows, profile, preferenceRows] = await Promise.all([
+  const [rows, profile, preferenceRows, memoryRows, memorySourceRows] = await Promise.all([
     d.getAllAsync<any>('SELECT * FROM entries ORDER BY created_at ASC'),
     getProfile(),
     d.getAllAsync<{ topic: string; pinned_at: number | null }>(
       'SELECT topic, pinned_at FROM topic_preferences WHERE pinned_at IS NOT NULL ORDER BY topic ASC',
     ),
+    d.getAllAsync<any>('SELECT * FROM assistant_memories ORDER BY created_at ASC, id ASC'),
+    d.getAllAsync<any>('SELECT * FROM assistant_memory_sources ORDER BY created_at ASC, id ASC'),
   ]);
   const entries = rows.map(rowToEntry);
+  const memories = memoryRows.map(rowToAssistantMemory);
+  const memorySources = memorySourceRows.map(rowToAssistantMemorySource);
   let md = '# 我的个人助手记录\n\n';
   for (const e of entries) {
     const ts = new Date(e.createdAt).toLocaleString('zh-CN');
@@ -910,10 +1173,16 @@ export async function exportMarkdown(): Promise<string> {
     if (e.dueAt) md += `时间：${new Date(e.dueAt).toLocaleString('zh-CN')}\n\n`;
     md += '---\n\n';
   }
+  const activeMemories = memories.filter(memory => memory.status === 'active');
+  if (activeMemories.length > 0) {
+    md += '## 长期记忆\n\n';
+    for (const memory of activeMemories) md += `- ${memory.content}\n`;
+    md += '\n---\n\n';
+  }
   const topicPreferences: TopicPreference[] = preferenceRows.map((row) => ({
     topic: row.topic,
     pinnedAt: row.pinned_at!,
   }));
-  const payload: BackupPayload = { entries, profile, topicPreferences };
+  const payload: BackupPayload = { entries, profile, topicPreferences, memories, memorySources };
   return buildImportableMarkdown(md, payload);
 }
