@@ -35,28 +35,27 @@
 
   <text x="555" y="118" class="title" font-size="17">调整后（推荐）</text>
   <rect x="525" y="135" width="475" height="720" rx="28" class="panel"/>
-  <text x="551" y="181" class="title" font-size="22">我的</text>
-  <text x="551" y="231" class="title" font-size="17">长期记忆</text>
-  <text x="972" y="231" class="dim" font-size="12" text-anchor="end">陪伴 16 天 · 2 条</text>
-  <rect x="549" y="245" width="427" height="74" rx="14" class="card"/>
-  <text x="567" y="270" class="accent" font-size="12">偏好</text>
-  <text x="567" y="299" class="copy" font-size="15">不喜欢临时开会</text>
+  <text x="551" y="185" class="title" font-size="17">长期记忆</text>
+  <text x="972" y="185" class="dim" font-size="12" text-anchor="end">陪伴 16 天 · 2 条</text>
+  <rect x="549" y="199" width="427" height="74" rx="14" class="card"/>
+  <text x="567" y="224" class="accent" font-size="12">偏好</text>
+  <text x="567" y="253" class="copy" font-size="15">不喜欢临时开会</text>
 
-  <text x="551" y="363" class="title" font-size="17">设置</text>
-  <text x="553" y="393" class="dim" font-size="13">助手与同步</text>
-  <rect x="549" y="405" width="427" height="84" rx="12" class="card"/>
-  <text x="567" y="437" class="copy" font-size="15">理解引擎</text><text x="952" y="437" class="dim" font-size="13" text-anchor="end">已开启 ›</text>
-  <text x="567" y="472" class="copy" font-size="15">同步到苹果日历</text>
+  <text x="551" y="317" class="title" font-size="17">设置</text>
+  <text x="553" y="347" class="dim" font-size="13">助手与同步</text>
+  <rect x="549" y="359" width="427" height="84" rx="12" class="card"/>
+  <text x="567" y="391" class="copy" font-size="15">理解引擎</text><text x="952" y="391" class="dim" font-size="13" text-anchor="end">已开启 ›</text>
+  <text x="567" y="426" class="copy" font-size="15">同步到苹果日历</text>
 
-  <text x="553" y="526" class="dim" font-size="13">待办通知</text>
-  <rect x="549" y="538" width="427" height="82" rx="12" class="card"/>
-  <text x="567" y="570" class="copy" font-size="15">早 8:00 晨间待办</text><text x="567" y="603" class="copy" font-size="15">晚 21:00 夜间待办</text>
+  <text x="553" y="480" class="dim" font-size="13">待办通知</text>
+  <rect x="549" y="492" width="427" height="82" rx="12" class="card"/>
+  <text x="567" y="524" class="copy" font-size="15">早 8:00 晨间待办</text><text x="567" y="557" class="copy" font-size="15">晚 21:00 夜间待办</text>
 
-  <text x="553" y="657" class="dim" font-size="13">数据管理</text>
-  <rect x="549" y="669" width="427" height="84" rx="12" class="card"/>
-  <text x="567" y="702" class="copy" font-size="15">导出数据</text>
-  <text x="567" y="736" class="copy" font-size="15">导入数据</text>
+  <text x="553" y="611" class="dim" font-size="13">数据管理</text>
+  <rect x="549" y="623" width="427" height="84" rx="12" class="card"/>
+  <text x="567" y="656" class="copy" font-size="15">导出数据</text>
+  <text x="567" y="690" class="copy" font-size="15">导入数据</text>
 
   <rect x="732" y="94" width="254" height="34" rx="17" fill="#F9E8DD"/>
-  <text x="859" y="116" class="accent" font-size="12" text-anchor="middle">标题收敛 · 卡片紧凑</text>
+  <text x="859" y="116" class="accent" font-size="12" text-anchor="middle">去掉重复页头 · 内容前置</text>
 </svg>
