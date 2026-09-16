@@ -9,6 +9,7 @@ import { theme } from '../theme';
 interface Props {
   state: MemorySectionState;
   memories: AssistantMemory[];
+  summary: string;
   busyId: string | null;
   onRetry: () => void;
   onSave: (memory: AssistantMemory, content: string) => Promise<void>;
@@ -23,7 +24,7 @@ function SkeletonCard() {
   </View>;
 }
 
-export function MemorySection({ state, memories, busyId, onRetry, onSave, onForget }: Props) {
+export function MemorySection({ state, memories, summary, busyId, onRetry, onSave, onForget }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const cancelEdit = () => { setEditingId(null); setDraft(''); };
@@ -37,7 +38,7 @@ export function MemorySection({ state, memories, busyId, onRetry, onSave, onForg
   return <View style={styles.section}>
     <View style={styles.sectionHead}>
       <Text style={styles.sectionTitle}>长期记忆</Text>
-      {state === 'ready' && <Text style={styles.count}>{memories.length} 条</Text>}
+      <Text style={styles.summary}>{summary}</Text>
     </View>
     {state === 'loading' && <View style={styles.list}>{[0, 1, 2].map(item => <SkeletonCard key={item} />)}</View>}
     {state === 'error' && <View style={styles.stateCard}>
@@ -99,17 +100,17 @@ export function MemorySection({ state, memories, busyId, onRetry, onSave, onForg
 }
 
 const styles = StyleSheet.create({
-  section: { gap: 9, marginTop: 8 },
+  section: { gap: 7, marginTop: 2 },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 2 },
   sectionTitle: { color: theme.colors.text, fontSize: theme.font.heading, fontWeight: '700' },
-  count: { color: theme.colors.textDim, fontSize: theme.font.small },
-  list: { gap: 8 },
-  card: { backgroundColor: theme.colors.card, borderRadius: theme.radius.card, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 14, paddingVertical: 12, gap: 7 },
-  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 24 },
+  summary: { color: theme.colors.textDim, fontSize: 12 },
+  list: { gap: 6 },
+  card: { backgroundColor: theme.colors.card, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 12, paddingVertical: 9, gap: 4 },
+  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 22 },
   category: { color: theme.colors.accent, fontSize: 12, fontWeight: '600' },
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   iconAction: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
-  content: { color: theme.colors.text, fontSize: theme.font.body, lineHeight: 22 },
+  content: { color: theme.colors.text, fontSize: theme.font.body, lineHeight: 21 },
   input: { minHeight: 68, borderRadius: 10, borderWidth: 1.5, borderColor: theme.colors.accent, backgroundColor: theme.colors.bg, paddingHorizontal: 11, paddingVertical: 9, color: theme.colors.text, fontSize: theme.font.body, lineHeight: 21, textAlignVertical: 'top' },
   editActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8 },
   textButton: { minHeight: 38, justifyContent: 'center', paddingHorizontal: 11 },
@@ -117,13 +118,13 @@ const styles = StyleSheet.create({
   saveButton: { minWidth: 66, minHeight: 38, borderRadius: 10, backgroundColor: theme.colors.accent, alignItems: 'center', justifyContent: 'center' },
   saveText: { color: '#fff', fontSize: theme.font.small, fontWeight: '700' },
   disabled: { opacity: 0.4 },
-  stateCard: { minHeight: 142, borderRadius: theme.radius.card, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card, alignItems: 'center', justifyContent: 'center', padding: 18, gap: 6 },
+  stateCard: { minHeight: 124, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card, alignItems: 'center', justifyContent: 'center', padding: 14, gap: 5 },
   emptyIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: theme.colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
   stateTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600', marginTop: 2 },
   stateCopy: { color: theme.colors.textDim, fontSize: theme.font.small, lineHeight: 19, textAlign: 'center' },
   retryButton: { minHeight: 38, justifyContent: 'center', paddingHorizontal: 16, marginTop: 3 },
   retryText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '600' },
-  skeletonCard: { height: 92, justifyContent: 'center' },
+  skeletonCard: { height: 78, justifyContent: 'center' },
   skeletonLine: { height: 10, borderRadius: 5, backgroundColor: theme.colors.border },
   skeletonLabel: { width: 52 },
   skeletonContent: { width: '88%', marginTop: 4 },

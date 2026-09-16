@@ -326,9 +326,6 @@ export default function ProfileScreen() {
     <SafeAreaView edges={['top']} style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.h1}>我的</Text>
-        <Text style={styles.companion}>
-          {days > 0 ? `已陪伴 ${days} 天 · ${memories.length} 条长期记忆` : `${memories.length} 条长期记忆`}
-        </Text>
 
         <MemorySection
           state={memorySectionState({
@@ -338,12 +335,16 @@ export default function ProfileScreen() {
             memoryCount: memories.length,
           })}
           memories={memories}
+          summary={memoryLoadedOnce
+            ? `${days > 0 ? `陪伴 ${days} 天 · ` : ''}${memories.length} 条`
+            : '读取中'}
           busyId={memoryBusyId}
           onRetry={() => void loadMemories()}
           onSave={saveLongTermMemory}
           onForget={forgetLongTermMemory}
         />
 
+        <Text style={styles.sectionTitle}>设置</Text>
         <Text style={styles.sectionLabel}>助手与同步</Text>
         <Pressable style={styles.row} onPress={() => router.push('/settings/llm')}>
           <Text style={styles.rowLabel}>理解引擎</Text>
@@ -377,7 +378,6 @@ export default function ProfileScreen() {
             />
           </View>
         </View>
-        <Text style={styles.sectionHint}>仅控制现有待办汇总，不包含首页的教练提醒。</Text>
 
         <Text style={styles.sectionLabel}>数据管理</Text>
         <View style={styles.dataCard}>
@@ -393,11 +393,6 @@ export default function ProfileScreen() {
             <Text style={styles.rowLabel}>导入数据</Text>
             <Text style={styles.rowValue}>选择备份文件 ›</Text>
           </Pressable>
-        </View>
-
-        <View style={[styles.row, styles.rowStatic]}>
-          <Text style={[styles.rowLabel, { color: theme.colors.textDim }]}>统计</Text>
-          <Text style={styles.rowValue}>{total} 条内容 · {memories.length} 条长期记忆 · {days} 天</Text>
         </View>
 
       </ScrollView>
@@ -433,36 +428,9 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
-  content: { padding: 16, paddingBottom: 72, gap: 10 },
-  h1: { fontSize: 18, fontWeight: '700', color: theme.colors.text },
-  companion: { fontSize: theme.font.small, color: theme.colors.textDim, marginTop: -6 },
-  profileCard: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.input,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    padding: 14,
-    gap: 8,
-    marginTop: 6,
-  },
-  profileHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { fontSize: theme.font.body, fontWeight: '700', color: theme.colors.text },
-  label: { fontSize: theme.font.small, color: theme.colors.textDim, marginTop: 2 },
-  profileValue: { fontSize: theme.font.body, color: theme.colors.text, lineHeight: 21 },
-  input: {
-    backgroundColor: theme.colors.bg,
-    borderRadius: theme.radius.input,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: theme.font.body,
-    color: theme.colors.text,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    minHeight: 52,
-    textAlignVertical: 'top',
-  },
-  inputEditing: { borderColor: theme.colors.accent, borderWidth: 2 },
-  hint: { fontSize: theme.font.small, color: theme.colors.textDim, textAlign: 'center' },
+  content: { padding: 16, paddingBottom: 72, gap: 8 },
+  h1: { color: theme.colors.text, fontSize: theme.font.title, fontWeight: theme.fontWeight.semibold },
+  sectionTitle: { color: theme.colors.text, fontSize: theme.font.heading, fontWeight: theme.fontWeight.bold, marginTop: 10 },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -472,19 +440,18 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     borderRadius: theme.radius.input,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    minHeight: theme.touchTarget,
+    paddingVertical: 8,
   },
-  rowStatic: { backgroundColor: theme.colors.bg, borderColor: theme.colors.border },
   rowLabel: { fontSize: theme.font.body, color: theme.colors.text },
   rowValue: { fontSize: theme.font.small, color: theme.colors.textDim },
   sectionLabel: {
-    fontSize: 12,
+    fontSize: theme.font.small,
     color: theme.colors.textDim,
-    marginTop: 4,
+    marginTop: 2,
     marginLeft: 4,
-    marginBottom: -3,
+    marginBottom: -2,
   },
-  sectionHint: { color: theme.colors.textDim, fontSize: 12, lineHeight: 18, paddingHorizontal: 4, marginTop: -5 },
   dataCard: {
     backgroundColor: theme.colors.card,
     borderWidth: 1,
@@ -498,7 +465,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 8,
   },
   dataRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
   notifyCard: {
@@ -507,14 +474,14 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     borderRadius: theme.radius.input,
     paddingHorizontal: 14,
-    paddingVertical: 6,
-    gap: 2,
+    paddingVertical: 2,
   },
   notifyRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 7,
+    minHeight: theme.touchTarget,
+    paddingVertical: 4,
   },
   undoBar: {
     position: 'absolute',

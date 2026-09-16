@@ -58,8 +58,8 @@ export function CalendarSyncSetting() {
   </View>;
 }
 const styles = StyleSheet.create({
-  card: { backgroundColor: theme.colors.card, padding: 16, borderRadius: 16, gap: 8 },
+  card: { backgroundColor: theme.colors.card, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12, gap: 4 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontSize: 16, color: theme.colors.text }, detail: { fontSize: 13, lineHeight: 20, color: theme.colors.textDim },
+  title: { fontSize: theme.font.body, color: theme.colors.text }, detail: { fontSize: 12, lineHeight: 18, color: theme.colors.textDim },
   action: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }, link: { color: theme.colors.accent, fontSize: 15 },
 });
