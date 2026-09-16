@@ -67,7 +67,7 @@
     <path d="M142 183 C173 166 203 166 234 183" fill="none" stroke="#C9C1B7" stroke-width="2" stroke-dasharray="5 5"/>
     <text x="255" y="178" class="ink" font-size="15">瞳孔成对移动</text>
     <text x="255" y="203" class="dim" font-size="13">幅度 2–3 px</text>
-    <text x="24" y="257" class="ink" font-size="15">每 2.5–4 秒换一次注视方向</text>
+    <text x="24" y="257" class="ink" font-size="15">每 1.8–2.8 秒换一次注视方向</text>
     <text x="24" y="286" class="dim" font-size="13">不是持续抖动；停顿更像“活着”。</text>
 
     <rect x="0" y="350" width="420" height="238" rx="20" class="card"/>
@@ -79,8 +79,8 @@
     </g>
     <text x="160" y="441" class="ink" font-size="15">约每 5–8 秒眨一次</text>
     <text x="160" y="466" class="dim" font-size="13">160ms 完成，不打断导航。</text>
-    <text x="24" y="524" class="ink" font-size="15">选中：暖橙；未选中：灰色</text>
-    <text x="24" y="553" class="dim" font-size="13">动画都保留，但未选中更克制。</text>
+    <text x="24" y="524" class="ink" font-size="15">图标始终暖橙，不随选中状态变灰</text>
+    <text x="24" y="553" class="dim" font-size="13">仅“小知”文字深浅提示当前 Tab。</text>
 
     <rect x="0" y="608" width="420" height="242" rx="20" class="card"/>
     <text x="24" y="642" class="dim" font-size="13">Tab 实际比例</text>

@@ -4,7 +4,6 @@ import {
   Animated,
   AppState,
   type AppStateStatus,
-  type ColorValue,
   Easing,
   StyleSheet,
   View,
@@ -13,7 +12,6 @@ import {
 import { theme } from '../theme';
 
 type XiaozhiEyesIconProps = {
-  color: ColorValue;
   size: number;
   focused: boolean;
 };
@@ -30,7 +28,7 @@ function randomDelay(min: number, max: number) {
   return Math.round(min + Math.random() * (max - min));
 }
 
-export function XiaozhiEyesIcon({ color, size, focused }: XiaozhiEyesIconProps) {
+export function XiaozhiEyesIcon({ size, focused }: XiaozhiEyesIconProps) {
   const gazeX = useRef(new Animated.Value(0)).current;
   const gazeY = useRef(new Animated.Value(0)).current;
   const blink = useRef(new Animated.Value(1)).current;
@@ -90,7 +88,7 @@ export function XiaozhiEyesIcon({ color, size, focused }: XiaozhiEyesIconProps) 
         ]).start(({ finished }) => {
           if (finished && !cancelled) scheduleGaze();
         });
-      }, randomDelay(2500, 4000));
+      }, randomDelay(1800, 2800));
     };
 
     const scheduleBlink = () => {
@@ -126,9 +124,10 @@ export function XiaozhiEyesIcon({ color, size, focused }: XiaozhiEyesIconProps) 
     };
   }, [appState, blink, gazeX, gazeY, reduceMotion]);
 
-  const faceSize = Math.round(size + 8);
+  const faceSize = Math.round(size + 10);
+  const slotSize = Math.round(size + 12);
   const eyeStyle = {
-    backgroundColor: color,
+    backgroundColor: theme.colors.accent,
     transform: [
       { translateX: gazeX },
       { translateY: gazeY },
@@ -139,24 +138,39 @@ export function XiaozhiEyesIcon({ color, size, focused }: XiaozhiEyesIconProps) 
   return (
     <View
       style={[
-        styles.face,
+        styles.slot,
         {
-          width: faceSize,
-          height: faceSize,
-          borderRadius: faceSize / 2,
-          backgroundColor: focused ? theme.colors.accentSoft : '#F1ECE6',
+          width: slotSize,
+          height: slotSize,
         },
       ]}
     >
-      <View style={styles.eyes}>
-        <Animated.View style={[styles.eye, eyeStyle]} />
-        <Animated.View style={[styles.eye, eyeStyle]} />
+      <View
+        style={[
+          styles.face,
+          {
+            width: faceSize,
+            height: faceSize,
+            borderRadius: faceSize / 2,
+            backgroundColor: theme.colors.accentSoft,
+            transform: [{ scale: focused ? 1 : 30 / 34 }],
+          },
+        ]}
+      >
+        <View style={styles.eyes}>
+          <Animated.View style={[styles.eye, eyeStyle]} />
+          <Animated.View style={[styles.eye, eyeStyle]} />
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  slot: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   face: {
     alignItems: 'center',
     justifyContent: 'center',

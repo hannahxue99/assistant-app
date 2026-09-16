@@ -9,7 +9,7 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: theme.colors.accent,
-        tabBarInactiveTintColor: theme.colors.textDim,
+        tabBarInactiveTintColor: theme.colors.accent,
         tabBarStyle: {
           backgroundColor: theme.colors.card,
           borderTopColor: theme.colors.border,
@@ -25,15 +25,17 @@ export default function TabLayout() {
         name="index"
         options={{
           title: '首页',
-          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
+          tabBarIcon: ({ size, focused }) => (
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={theme.colors.accent} />
+          ),
         }}
       />
       <Tabs.Screen
         name="assistant"
         options={{
           title: '小知',
-          tabBarIcon: ({ color, size, focused }) => (
-            <XiaozhiEyesIcon color={color} size={size} focused={focused} />
+          tabBarIcon: ({ size, focused }) => (
+            <XiaozhiEyesIcon size={size} focused={focused} />
           ),
         }}
       />
@@ -41,7 +43,9 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: '我的',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
+          tabBarIcon: ({ size, focused }) => (
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={theme.colors.accent} />
+          ),
         }}
       />
     </Tabs>
