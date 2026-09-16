@@ -142,7 +142,7 @@ export function XiaozhiEyesIcon({ size, focused }: XiaozhiEyesIconProps) {
         {
           width: slotSize,
           height: slotSize,
-          transform: [{ translateY: focused ? -3 : 0 }],
+          transform: [{ translateY: focused ? -5 : 0 }],
         },
       ]}
     >
