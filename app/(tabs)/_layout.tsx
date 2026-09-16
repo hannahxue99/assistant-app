@@ -1,6 +1,7 @@
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 
+import { XiaozhiEyesIcon } from '@/src/components/XiaozhiEyesIcon';
 import { theme } from '@/src/theme';
 
 export default function TabLayout() {
@@ -32,11 +33,7 @@ export default function TabLayout() {
         options={{
           title: '小知',
           tabBarIcon: ({ color, size, focused }) => (
-            <MaterialCommunityIcons
-              name={focused ? 'robot-happy' : 'robot-happy-outline'}
-              size={size + 2}
-              color={color}
-            />
+            <XiaozhiEyesIcon color={color} size={size} focused={focused} />
           ),
         }}
       />

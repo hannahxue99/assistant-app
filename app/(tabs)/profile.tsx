@@ -8,6 +8,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -344,14 +345,16 @@ export default function ProfileScreen() {
 
         <Text style={styles.sectionTitle}>设置</Text>
         <Text style={styles.sectionLabel}>助手与同步</Text>
-        <Pressable style={styles.row} onPress={() => router.push('/settings/llm')}>
-          <Text style={styles.rowLabel}>理解引擎</Text>
-          <Text style={[styles.rowValue, llmStatus.warn && { color: theme.colors.red }]}>
-            {llmStatus.label} ›
-          </Text>
-        </Pressable>
-
-        <CalendarSyncSetting />
+        <View style={styles.settingsCard}>
+          <Pressable style={styles.settingsRow} onPress={() => router.push('/settings/llm')}>
+            <Text style={styles.rowLabel}>理解引擎</Text>
+            <Text style={[styles.rowValue, llmStatus.warn && { color: theme.colors.red }]}>
+              {llmStatus.label} ›
+            </Text>
+          </Pressable>
+          {Platform.OS === 'ios' && <View style={styles.settingsDivider} />}
+          <CalendarSyncSetting embedded />
+        </View>
 
         <Text style={styles.sectionLabel}>待办通知</Text>
         <View style={styles.notifyCard}>
@@ -365,6 +368,7 @@ export default function ProfileScreen() {
               thumbColor={profile?.notifyMorning ? theme.colors.accent : '#fff'}
             />
           </View>
+          <View style={styles.notifyDivider} />
           <View style={styles.notifyRow}>
             <Text style={styles.rowLabel}>晚 21:00 夜间待办</Text>
             <Switch
@@ -428,18 +432,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: 16, paddingBottom: 72, gap: 8 },
   sectionTitle: { color: theme.colors.text, fontSize: 19, fontWeight: theme.fontWeight.bold, marginTop: 10 },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.input,
-    paddingHorizontal: 14,
-    minHeight: theme.touchTarget,
-    paddingVertical: 8,
-  },
   rowLabel: { fontSize: theme.font.body, color: theme.colors.text },
   rowValue: { fontSize: theme.font.small, color: theme.colors.textDim },
   sectionLabel: {
@@ -465,6 +457,26 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   dataRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
+  settingsCard: {
+    backgroundColor: theme.colors.card,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.input,
+    overflow: 'hidden',
+  },
+  settingsRow: {
+    minHeight: theme.touchTarget,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  settingsDivider: {
+    marginHorizontal: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.border,
+  },
   notifyCard: {
     backgroundColor: theme.colors.card,
     borderWidth: 1,
@@ -479,6 +491,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: theme.touchTarget,
     paddingVertical: 4,
+  },
+  notifyDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.border,
   },
   undoBar: {
     position: 'absolute',
