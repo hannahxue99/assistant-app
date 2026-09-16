@@ -26,6 +26,14 @@
 - 创建 PR，清晰列出改动、验证结果、兼容性与回滚方式。
 - 不直接覆盖历史版本，不使用破坏性命令清除已有改动。
 
+### Dev / Release 双版本约束
+
+- “私人助手 Dev”仅用于开发验收：`com.huanxue.assistantapp.dev`、独立 SQLite、连接 Metro。
+- “私人助手”是生产版本：`com.huanxue.assistantapp`、延续生产 SQLite、Release Bundle 内嵌。
+- 开发启动使用 `npm run start:dev`；原生 Dev 安装使用 `npm run ios:dev`；生产覆盖安装只使用 `npm run ios:release`。
+- Dev 测试数据不迁移到 Release。发布新代码时重新构建生产变体，由新 Release 升级旧 Release。
+- 未设置 `APP_VARIANT` 默认生产配置；未知值必须中止配置解析，禁止生成身份不明的安装包。
+
 ## 4. 验收与合并
 
 - 先完成自动化检查，再提供手机端手工验收步骤。
@@ -33,7 +41,7 @@
 - 按改动类型选择真机更新方式：
   - JS、文案、样式：Metro Reload。
   - 原生依赖、权限、图标、签名或原生配置：重新编译并覆盖安装。
-  - Bundle ID 变化：视为新 App，必须先设计并验证数据迁移。
+  - 生产 Bundle ID 变化：视为新 App，必须先设计并验证数据迁移。固定的 `.dev` 测试身份不属于生产迁移来源。
 - Debug 测试 App 也属于产品验收界面，不得在用户导航中暴露组件预览、调试工具、测试数据或开发文案。
 - 用户验收通过后合并 PR。
 - 保留提交和 PR 历史，出现问题时可定位并回滚到上一版本。

@@ -52,11 +52,11 @@ scripts/           test-time.ts · test-schedule.ts 回归测试
 
 ```bash
 npm install
-npx expo run:ios --device
+npm run ios:dev
 ```
 
-- 首次会让你选开发团队（Apple ID 即可，免费 Personal Team）。
-- 编译完成后 App 会自动装到 iPhone。首次打开若提示"不受信任的开发者"：
+- 脚本会自动选择唯一连接的真机，并让 Xcode 创建或续期 Personal Team 描述文件；连接多台设备时可执行 `npm run ios:dev -- <设备 UDID 或名称>` 指定。
+- 编译完成后会安装独立的“私人助手 Dev”，不会覆盖手机上的“私人助手” Release。首次打开若提示"不受信任的开发者"：
   **设置 → 通用 → VPN与设备管理 → 信任你的 Apple ID**。
 - 免费证书 7 天过期，到期重跑一次命令即可（自用完全够）。
 
@@ -65,15 +65,14 @@ npx expo run:ios --device
 ### 第 2 步 · 日常开发（快速预览，大部分功能）
 
 ```bash
-npx expo start
+npm run start:dev
 ```
 
-iPhone 装 **Expo Go**（App Store），扫终端二维码即可。改代码秒级热更新。
-**注意**：Expo Go 里**语音识别、本地通知不可用**（原生模块），App 内有降级提示不会崩。这两个功能必须在第 1 步的 dev build 里验证。
+用 iPhone 打开“私人助手 Dev”并连接终端二维码。改代码可秒级热更新，语音识别、本地通知等原生能力也能正常验收。手机上的“私人助手” Release 不连接 Metro，也不会显示开发中的代码。
 
 ### 第 3 步 · 完整功能（dev build）
 
-第 1 步编译出的就是 dev client，之后每次 `npx expo start` 时手机打开"我的助手"（而不是 Expo Go），同样享受热更新 + 全部原生能力（语音/通知）。
+第 1 步编译出的就是 dev client。`npm run ios:dev` 只负责生成和安装，不会重复启动 Metro；安装后再执行 `npm run start:dev`。只有原生依赖、权限、图标或 App Config 改变时才需要重新安装，普通 JS、文案和样式改动只需启动 Metro。
 
 ## 二、配置 LLM 理解（可选但推荐）
 
@@ -111,7 +110,7 @@ npm run test:time   # 动过时间解析后必跑（14 条中文口语回归）
 
 | 症状 | 原因与解决 |
 |---|---|
-| 真机打开闪退/白屏 | 证书过期（免费 7 天）→ 重跑 `npx expo run:ios --device` |
+| 真机打开闪退/白屏 | Dev 证书过期（免费 7 天）→ 重跑 `npm run ios:dev` |
 | 语音按钮提示不可用 | 在 Expo Go 里 → 用 dev build 打开 |
 | 通知不弹 | 首次需授权；检查"我的→每日提醒"开关；Expo Go 里不支持 |
 | LLM 报错降级 | 检查 key/余额/网络；条目会以规则结果保存，不丢数据 |
@@ -122,7 +121,7 @@ npm run test:time   # 动过时间解析后必跑（14 条中文口语回归）
 **红屏 `No script URL provided... unsanitizedScriptURLString = (null)`**
 
 - 含义：dev client（手机上的 app 壳）里没存到 Metro 地址，取不到 JS 代码。**不是代码 bug**。
-- 正确姿势：**先在 Mac 起 Metro（`npx expo start`），再打开手机 app**。顺序反了必红屏。
+- 正确姿势：**先在 Mac 起 Metro（`npm run start:dev`），再打开“私人助手 Dev”**。顺序反了可能出现连接失败。
 - 只点「Reload JS」无效：URL 是 null 时重载多少次都没用，必须先让它知道地址。
 
 **点 Reload 还是红屏：Mac 在内网，手机路由不到**
@@ -132,14 +131,14 @@ npm run test:time   # 动过时间解析后必跑（14 条中文口语回归）
 - 解法（隧道模式）：
   ```bash
   npm install -g @expo/ngrok        # 一次性
-  npx expo start --tunnel --dev-client
+  npm run start:dev
   ```
   杀掉手机 app 重开 → 启动页手动输入隧道地址（形如 `https://xxx-8081.exp.direct`）。
 - **隧道地址每次重启服务都会变**，连不上先要新地址。
 
 **其他**
 
-- **`expo-dev-client` 必须装**：没装的话 dev build 只是个裸壳——没有启动页、无处手动输入 Metro 地址，红屏 null URL 时无解（2026-08-31 下午红屏反复的根因）。补装：`npx expo install expo-dev-client && npx expo run:ios --device`。
+- **`expo-dev-client` 必须装**：没装的话 dev build 只是个裸壳——没有启动页、无处手动输入 Metro 地址，红屏 null URL 时无解（2026-08-31 下午红屏反复的根因）。补装：`npx expo install expo-dev-client && npm run ios:dev`。
 - `--dev-client` 参数：不带时 expo start 默认 Expo Go 模式，语音/通知不可用；跑错模式按 `s` 切换或加参数重启。
 - `CI=1 npx expo start` 会禁用 watch 热更新（非交互模式专用，日常别加）。
 - `npm run test:time` / `test:schedule` 依赖 `tsx`，未装时 `npx tsx` 会自动提示安装，输 y 即可。
@@ -149,15 +148,15 @@ npm run test:time   # 动过时间解析后必跑（14 条中文口语回归）
 
 **换 App 图标不是热更新——必须重编译**
 
-- 图标是原生资源，`assets/images/icon.png` 改了之后 JS 热更新推不过去，必须 `npx expo run:ios --device` 重新编译安装
-- 但注意：先跑 `npx expo prebuild --no-install` 让 Expo 把新 icon 生成到 `ios/app/Images.xcassets/AppIcon.appiconset/`，否则编的还是旧图
+- 图标是原生资源，修改后 JS 热更新推不过去，必须用 `npm run ios:dev` 或 `npm run ios:release` 重新生成对应变体并安装
+- 两条变体脚本已内含干净 Prebuild，会把对应图标同步进原生工程，不要再手工混用旧命令
 - 电脑上验证新旧图标：预览打开 `assets/images/icon.png` 和 `AppIcon.appiconset/App-Icon-1024x1024@1x.png` 对比即可，真机效果只有装上才能确认（圆角/渲染是系统行为）
 
-**`expo prebuild` 会重置签名配置（连环坑）**
+**`expo prebuild` 曾经会重置签名配置（历史问题，现已自动化）**
 
-- prebuild 重新生成 `ios/app.xcodeproj`，会**丢掉手动改过的 `DEVELOPMENT_TEAM`**（报错 "Signing for app requires a development team"）——需要在 pbxproj 里两处 `PRODUCT_BUNDLE_IDENTIFIER` 前补 `DEVELOPMENT_TEAM = "xxx";`
-- prebuild 还会**把 expo-notifications 插件注入的 `aps-environment` entitlements 还原回来**——免费个人账号不支持 Push Notifications，会再次编译失败。每次 prebuild 后都要清空 `ios/app/app.entitlements`（留空 `<dict/>`）
-- prebuild 会删掉 `ios/app.xcworkspace`，需要 `cd ios && pod install` 重新生成，之后**必须用 `-workspace` 而不是 `-project` 编译**（xcodeproj 直接编缺 Pods 依赖）
+- 历史上 Prebuild 会丢掉手工设置的 `DEVELOPMENT_TEAM`；现在 `ios.appleTeamId` 已写入 App Config，会自动恢复
+- 历史上 expo-notifications 会注入 Personal Team 不支持的 `aps-environment`；现在本地通知配置插件会稳定移除
+- 干净 Prebuild 会重建 workspace 和 Pods；`npm run ios:dev` / `npm run ios:release` 已包含完整流程
 - expo CLI 调 xcodebuild 不带 `-allowProvisioningUpdates`，自动签名报 provisioning profile 错时直接用 xcodebuild 命令编（见下方命令）
 
 **免费账号 bundle ID 被 Apple 抢注，被迫换 ID（两个 App 的由来）**
@@ -216,10 +215,12 @@ xcrun devicectl device process launch --device <UDID> com.huanxue.assistantapp
 
 | 安装方式 | 命令 | 是否依赖 Mac / Metro | 适用场景 |
 |---|---|---|---|
-| 开发版（Debug） | `npx expo run:ios --device` | 运行代码时依赖 Metro | 日常开发、热更新、排查问题 |
-| 独立版（Release） | `npx expo run:ios --configuration Release --device` | 不依赖 Metro，JS Bundle 已内嵌 | 自己或家人日常试用 |
+| 开发版（私人助手 Dev） | `npm run ios:dev` | 运行代码时依赖 Metro | 日常开发、热更新、排查问题 |
+| 独立版（私人助手） | `npm run ios:release` | 不依赖 Metro，JS Bundle 已内嵌 | 自己或家人日常试用 |
 
 Release 版安装成功后可以关闭终端、断开数据线和关闭 Mac。App 的记录存在手机本地 SQLite，不依赖 Mac；LLM 会直接请求配置的 DeepSeek/OpenAI 兼容地址，因此使用 LLM 时仍需联网。
+
+两个版本可同时安装：Dev 使用 `com.huanxue.assistantapp.dev` 和独立测试数据；Release 继续使用 `com.huanxue.assistantapp` 并承接现有生产数据。Dev 数据不会自动进入 Release，删除 Dev 不影响 Release。
 
 ### 免费 Personal Team 的完整安装流程
 
@@ -229,7 +230,7 @@ Release 版安装成功后可以关闭终端、断开数据线和关闭 Mac。Ap
 4. 在项目根目录安装独立版：
 
    ```bash
-   npx expo run:ios --configuration Release --device
+   npm run ios:release
    ```
 
 5. 选择目标 iPhone，安装过程中保持手机解锁。
@@ -251,7 +252,7 @@ Release 版安装成功后可以关闭终端、断开数据线和关闭 Mac。Ap
 3. 使用原来的 Apple ID / Personal Team，在项目根目录重新执行：
 
    ```bash
-   npx expo run:ios --configuration Release --device
+   npm run ios:release
    ```
 
 4. 直接覆盖安装，获得新的约 7 天有效期。
@@ -279,7 +280,7 @@ Apple Personal Team 当前限制包括：描述文件 7 天过期、每个平台
 **签名和能力限制**
 
 - 免费 Personal Team 不支持远程 Push Notifications；本项目使用的本地提醒不等同于远程推送。
-- `expo prebuild` 可能重新生成签名配置和 entitlements，非必要不要运行；确需运行时按上文“真机调试踩坑存档 · 二”恢复 Team、workspace 和 entitlements。
+- `npm run ios:dev` 与 `npm run ios:release` 会用匹配的 App 身份执行干净 Prebuild，并从 App Config 恢复签名 Team 和本地通知 entitlement；不要绕过脚本混用变体。
 - `eas update` 或 JS 热更新不能延长免费签名有效期；7 天到期仍必须重新签名覆盖安装。
 
 ### 给家人安装时的现实限制
