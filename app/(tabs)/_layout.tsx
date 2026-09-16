@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 
 import { theme } from '@/src/theme';
@@ -25,6 +25,19 @@ export default function TabLayout() {
         options={{
           title: '首页',
           tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="assistant"
+        options={{
+          title: '小知',
+          tabBarIcon: ({ color, size, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? 'robot-happy' : 'robot-happy-outline'}
+              size={size + 2}
+              color={color}
+            />
+          ),
         }}
       />
       <Tabs.Screen

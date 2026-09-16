@@ -24,6 +24,7 @@ import { deriveEditedEntry } from './engine/edit-derived';
 import { calendarSchema } from './engine/calendar-schema';
 import { inferTimePrecision } from './engine/calendar-projection';
 import { runSingleFlight, type SingleFlightState } from './engine/single-flight';
+import { assistantSchema } from './assistant/schema';
 
 type DatabaseGlobal = typeof globalThis & {
   __assistantDatabaseRuntime?: SingleFlightState<SQLite.SQLiteDatabase>;
@@ -149,6 +150,7 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
       AND topic IN ('待办事项', '想法记录', '日常信息');
 
   `);
+  await database.execAsync(assistantSchema);
 
   // 旧版本只有 created_at。先探测列再迁移，避免重复 ALTER 导致启动失败。
   const columns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(entries)');
@@ -195,6 +197,27 @@ export async function queryAll<T>(sql: string, ...args: any[]): Promise<T[]> {
 
 function getDb(): Promise<SQLite.SQLiteDatabase> {
   return runSingleFlight(databaseRuntime, initializeDatabase);
+}
+
+/** 供拆分后的领域仓储复用现有单例连接，避免各模块重复打开 assistant.db。 */
+export async function withDatabaseConnection<T>(
+  task: (database: SQLite.SQLiteDatabase) => Promise<T>,
+): Promise<T> {
+  return task(await getDb());
+}
+
+/**
+ * 使用 Expo SQLite 的独占异步事务。回调内只能使用 txn，防止事务外查询意外混入。
+ */
+export async function withExclusiveDatabaseTransaction<T>(
+  task: (txn: SQLite.SQLiteDatabase) => Promise<T>,
+): Promise<T> {
+  const database = await getDb();
+  let result: T | undefined;
+  await database.withExclusiveTransactionAsync(async (txn) => {
+    result = await task(txn);
+  });
+  return result as T;
 }
 
 /** 保存通知补偿意图；通知不可用不影响已保存的记录。 */
