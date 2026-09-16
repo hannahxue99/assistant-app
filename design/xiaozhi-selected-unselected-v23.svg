@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="5" stdDeviation="10" flood-color="#2B2622" flood-opacity="0.08"/></filter>
+    <style>
+      .bg{fill:#F6F3EE}.card{fill:#FFF;stroke:#E8E2D9;stroke-width:1}.ink{fill:#2B2622;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}.dim{fill:#8A837B;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}.accentText{fill:#E0733A;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}.orange{fill:#E0733A}.eye{fill:#FFF7F2}.line{stroke:#E8E2D9;stroke-width:1}
+    </style>
+  </defs>
+  <rect width="800" height="800" class="bg"/>
+  <text x="48" y="64" class="ink" font-size="30" font-weight="700">小知：选中与未选中</text>
+  <text x="48" y="98" class="dim" font-size="15">脸始终为品牌橙；选中态通过放大和上移表达。</text>
+
+  <g transform="translate(48 142)">
+    <rect width="704" height="482" rx="24" class="card" filter="url(#shadow)"/>
+    <line x1="352" y1="28" x2="352" y2="454" class="line"/>
+
+    <g transform="translate(0 0)">
+      <text x="176" y="54" class="ink" font-size="18" font-weight="700" text-anchor="middle">未选中</text>
+      <text x="176" y="83" class="dim" font-size="14" text-anchor="middle">30pt · 正常位置</text>
+      <g transform="translate(126 133)">
+        <rect x="10" y="10" width="80" height="80" rx="40" class="orange"/>
+        <ellipse cx="40" cy="45" rx="7" ry="10" class="eye"/>
+        <ellipse cx="70" cy="45" rx="7" ry="10" class="eye"/>
+        <text x="50" y="132" class="accentText" font-size="17" font-weight="600" text-anchor="middle">小知</text>
+      </g>
+      <text x="176" y="338" class="dim" font-size="14" text-anchor="middle">脸：#E0733A</text>
+      <text x="176" y="367" class="dim" font-size="14" text-anchor="middle">眼睛：#FFF7F2</text>
+      <text x="176" y="410" class="dim" font-size="13" text-anchor="middle">仍保持眼睛移动</text>
+    </g>
+
+    <g transform="translate(352 0)">
+      <text x="176" y="54" class="ink" font-size="18" font-weight="700" text-anchor="middle">选中</text>
+      <text x="176" y="83" class="dim" font-size="14" text-anchor="middle">38pt · 上移 3pt</text>
+      <g transform="translate(120 120)">
+        <rect x="6" y="6" width="100" height="100" rx="50" class="orange"/>
+        <ellipse cx="42" cy="49" rx="8.5" ry="12" class="eye"/>
+        <ellipse cx="70" cy="49" rx="8.5" ry="12" class="eye"/>
+        <text x="56" y="145" class="accentText" font-size="17" font-weight="700" text-anchor="middle">小知</text>
+      </g>
+      <text x="176" y="338" class="dim" font-size="14" text-anchor="middle">脸：#E0733A</text>
+      <text x="176" y="367" class="dim" font-size="14" text-anchor="middle">眼睛：#FFF7F2</text>
+      <text x="176" y="410" class="dim" font-size="13" text-anchor="middle">更大、更靠上，动效相同</text>
+    </g>
+  </g>
+
+  <g transform="translate(48 656)">
+    <rect width="704" height="86" rx="18" fill="#FFF9F4" stroke="#ECDCCF"/>
+    <circle cx="34" cy="43" r="6" class="orange"/>
+    <text x="54" y="38" class="ink" font-size="14" font-weight="600">状态差异</text>
+    <text x="54" y="62" class="dim" font-size="13">只改变尺寸与纵向位置，切换时不发生颜色跳变。</text>
+  </g>
+</svg>

@@ -56,7 +56,7 @@ export function AssistantActionReceipt({
         ) : null}
       </View>
 
-      {state.groups.map((group) => {
+      {state.groups.map((group, index) => {
         const operation = group.primaryOperation;
         const target = group.target;
         return (
@@ -65,8 +65,9 @@ export function AssistantActionReceipt({
             accessibilityRole={target ? 'button' : undefined}
             accessibilityLabel={group.summaries.join('，')}
             disabled={!target}
+            hitSlop={target ? 4 : undefined}
             onPress={() => { if (target) onNavigate(target); }}
-            style={({ pressed }) => [styles.row, pressed && target && styles.pressed]}
+            style={({ pressed }) => [styles.row, index > 0 && styles.rowSpacing, pressed && target && styles.pressed]}
           >
             <Ionicons
               name={iconName(operation)}
@@ -95,22 +96,22 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: 7,
     paddingHorizontal: 10,
-    paddingTop: 5,
-    paddingBottom: 4,
+    paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#ECDCCF',
     backgroundColor: '#FFF9F4',
   },
-  header: { minHeight: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  header: { minHeight: 26, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   headerLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
-  undoButton: { minHeight: 30, minWidth: 72, alignItems: 'flex-end', justifyContent: 'center' },
+  undoButton: { minHeight: 26, minWidth: 72, alignItems: 'flex-end', justifyContent: 'center' },
   undoText: { color: theme.colors.textDim, fontSize: 12 },
-  row: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', gap: 7 },
-  summaryWrap: { flex: 1, paddingVertical: 3, gap: 1 },
+  row: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  rowSpacing: { marginTop: 2 },
+  summaryWrap: { flex: 1, paddingVertical: 1, gap: 0 },
   summary: { color: theme.colors.text, fontSize: theme.font.small, lineHeight: 18 },
   undone: { color: theme.colors.textDim, textDecorationLine: 'line-through' },
-  error: { color: theme.colors.red, fontSize: 12, lineHeight: 17, paddingBottom: 4 },
+  error: { color: theme.colors.red, fontSize: 12, lineHeight: 16, paddingTop: 2 },
   pressed: { opacity: 0.65 },
 });

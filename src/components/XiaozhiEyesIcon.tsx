@@ -124,10 +124,10 @@ export function XiaozhiEyesIcon({ size, focused }: XiaozhiEyesIconProps) {
     };
   }, [appState, blink, gazeX, gazeY, reduceMotion]);
 
-  const faceSize = Math.round(size + 10);
+  const faceSize = focused ? 38 : 30;
   const slotSize = Math.round(size + 12);
   const eyeStyle = {
-    backgroundColor: focused ? '#FFF7F2' : theme.colors.accent,
+    backgroundColor: '#FFF7F2',
     transform: [
       { translateX: gazeX },
       { translateY: gazeY },
@@ -153,8 +153,7 @@ export function XiaozhiEyesIcon({ size, focused }: XiaozhiEyesIconProps) {
             width: faceSize,
             height: faceSize,
             borderRadius: faceSize / 2,
-            backgroundColor: focused ? theme.colors.accent : theme.colors.accentSoft,
-            transform: [{ scale: focused ? 1 : 30 / 34 }],
+            backgroundColor: theme.colors.accent,
           },
         ]}
       >
