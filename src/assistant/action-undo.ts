@@ -3,6 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import {
   deleteAssistantTaskWithDatabase,
   getEntryWithDatabase,
+  reinsertAssistantTaskWithDatabase,
   restoreAssistantTaskWithDatabase,
   withExclusiveDatabaseTransaction,
 } from '../db';
@@ -29,6 +30,7 @@ function finalObjectRevisions(operations: AssistantOperation[]) {
   const events = new Map<string, number>();
   const memories = new Map<string, { revision: number; status: AssistantMemory['status'] }>();
   for (const operation of operations) {
+    if (operation.operationType === 'delete_todo' || operation.operationType === 'delete_event') continue;
     if (operation.objectType === 'todo') {
       const after = parseSnapshot<Entry>(operation.afterSnapshot);
       if (after) todos.set(operation.objectId, after.revisionAt);
@@ -69,6 +71,19 @@ async function canUndo(database: SQLiteDatabase, operations: AssistantOperation[
     if (!current || current.revision !== expected.revision || current.status !== expected.status) return false;
   }
   for (const operation of operations) {
+    if (operation.operationType === 'delete_todo') {
+      if (await getEntryWithDatabase(database, operation.objectId)) return false;
+      continue;
+    }
+    if (operation.operationType === 'delete_event') {
+      const after = parseSnapshot<{ event?: AssistantEvent; deletedTodoIds?: string[] }>(operation.afterSnapshot);
+      const current = await getEvent(operation.objectId, database);
+      if (!after?.event || !current || current.status !== 'closed' || current.revision !== after.event.revision) return false;
+      for (const todoId of after.deletedTodoIds ?? []) {
+        if (await getEntryWithDatabase(database, todoId)) return false;
+      }
+      continue;
+    }
     if (operation.objectType === 'event_update') {
       const row = await database.getFirstAsync(
         'SELECT id FROM assistant_event_updates WHERE id=? AND undone_at IS NULL', operation.objectId,
@@ -83,6 +98,16 @@ async function canUndo(database: SQLiteDatabase, operations: AssistantOperation[
     }
   }
   return true;
+}
+
+async function restoreRelations(database: SQLiteDatabase, relations: Array<{ id?: string }>): Promise<void> {
+  for (const relation of relations) {
+    if (!relation.id) throw new Error('关系撤销快照损坏');
+    const result = await database.runAsync(
+      'UPDATE assistant_object_relations SET undone_at=NULL WHERE id=?', relation.id,
+    );
+    if (result.changes === 0) throw new Error('关系撤销快照对应记录不存在');
+  }
 }
 
 async function restoreEvent(
@@ -120,6 +145,29 @@ async function undoOperation(
   operation: AssistantOperation,
   undoneAt: number,
 ): Promise<void> {
+  if (operation.operationType === 'delete_todo') {
+    const before = parseSnapshot<{ todo?: Entry; relations?: Array<{ id?: string }> }>(operation.beforeSnapshot);
+    if (!before?.todo) throw new Error('待办删除撤销快照损坏');
+    await reinsertAssistantTaskWithDatabase(database, before.todo);
+    await restoreRelations(database, before.relations ?? []);
+    return;
+  }
+
+  if (operation.operationType === 'delete_event') {
+    const before = parseSnapshot<{
+      event?: AssistantEvent;
+      deletedTodos?: Array<{ todo?: Entry; relations?: Array<{ id?: string }> }>;
+    }>(operation.beforeSnapshot);
+    if (!before?.event) throw new Error('事件删除撤销快照损坏');
+    await restoreEvent(database, before.event, undoneAt);
+    for (const snapshot of before.deletedTodos ?? []) {
+      if (!snapshot.todo) throw new Error('事件关联待办撤销快照损坏');
+      await reinsertAssistantTaskWithDatabase(database, snapshot.todo);
+      await restoreRelations(database, snapshot.relations ?? []);
+    }
+    return;
+  }
+
   if (operation.operationType === 'create_memory') {
     await database.runAsync('DELETE FROM assistant_memory_sources WHERE memory_id=?', operation.objectId);
     await database.runAsync('DELETE FROM assistant_memories WHERE id=?', operation.objectId);

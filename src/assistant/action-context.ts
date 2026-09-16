@@ -124,6 +124,7 @@ export async function loadAssistantActionContext(input: {
       if (existing.length < 3) updatesByEvent.set(row.event_id, [...existing, row.content]);
     }
     const todosByEvent = new Map<string, string[]>();
+    const openTodoCountsByEvent = new Map<string, number>();
     const linkedTodosByEvent = new Map<string, AssistantLinkedTodoCandidate[]>();
     for (const row of linkedTodoRows) {
       todosByEvent.set(row.event_id, [...(todosByEvent.get(row.event_id) ?? []), row.summary]);
@@ -131,6 +132,7 @@ export async function loadAssistantActionContext(input: {
       const openCount = existing.filter(item => !item.done).length;
       const doneCount = existing.length - openCount;
       const done = Boolean(row.done);
+      if (!done) openTodoCountsByEvent.set(row.event_id, (openTodoCountsByEvent.get(row.event_id) ?? 0) + 1);
       if ((!done && openCount < 8) || (done && doneCount < 3)) {
         linkedTodosByEvent.set(row.event_id, [...existing, {
           id: row.id,
@@ -149,6 +151,8 @@ export async function loadAssistantActionContext(input: {
       aliases: aliasesByEvent.get(row.id) ?? [],
       linkedTodoTexts: todosByEvent.get(row.id) ?? [],
       linkedTodos: linkedTodosByEvent.get(row.id) ?? [],
+      linkedTodoCount: (todosByEvent.get(row.id) ?? []).length,
+      openLinkedTodoCount: openTodoCountsByEvent.get(row.id) ?? 0,
       recentUpdateTexts: updatesByEvent.get(row.id) ?? [],
       revision: Number(row.revision),
       updatedAt: Number(row.updated_at),
@@ -171,14 +175,15 @@ export async function loadAssistantActionContext(input: {
     events = forceCandidate(events, allEvents, explicitEventId);
 
     const todoRows = await database.getAllAsync<any>(
-      `SELECT id, summary, raw_text, due_at, revision_at, updated_at
-       FROM entries WHERE kind='task' AND done=0
+      `SELECT id, summary, raw_text, due_at, done, revision_at, updated_at
+       FROM entries WHERE kind='task'
        ORDER BY updated_at DESC LIMIT 100`,
     );
     const allTodos: AssistantTodoCandidate[] = todoRows.map(row => ({
       id: row.id,
       text: row.summary || row.raw_text,
       dueAt: row.due_at ?? null,
+      done: Boolean(row.done),
       revisionAt: Number(row.revision_at),
       updatedAt: Number(row.updated_at),
       score: 0,
@@ -199,7 +204,7 @@ export async function loadAssistantActionContext(input: {
     todos = forceCandidate(todos, allTodos, explicitTodoId);
     const selectedLinkedTodoIds = new Set(events.flatMap(event => (
       event.linkedTodos ?? []
-    )).filter(todo => !todo.done).map(todo => todo.id));
+    )).map(todo => todo.id));
     const selectedLinkedTodos = allTodos.filter(todo => selectedLinkedTodoIds.has(todo.id));
     todos = [
       ...selectedLinkedTodos,

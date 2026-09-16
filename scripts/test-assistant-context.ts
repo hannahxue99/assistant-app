@@ -110,6 +110,7 @@ const linkedTodoContext = buildAssistantContext({
     events: [{
       id: 'event-loan', title: '公积金贷款还款', currentState: '计划继续提前还款',
       aliases: [], linkedTodoTexts: ['10月11日还款10万'], recentUpdateTexts: [],
+      linkedTodoCount: 4, openLinkedTodoCount: 3,
       linkedTodos: [
         {
           id: 'todo-open', text: '10月11日还款10万', dueAt: new Date(2026, 9, 11, 9).getTime(),
@@ -129,6 +130,7 @@ check(linkedTodoContext.contextBlock.includes('todo-open'), '事件上下文必�
 check(linkedTodoContext.contextBlock.includes('未完成'), '事件上下文必须提供相关待办状态');
 check(linkedTodoContext.contextBlock.includes('todo-done'), '最近完成的相关待办必须进入上下文');
 check(linkedTodoContext.contextBlock.includes('2026'), '事件上下文必须提供相关待办日期');
+check(linkedTodoContext.contextBlock.includes('共4条（未完成3条）'), '事件上下文必须提供完整关联待办数量');
 
 const crowdedEventContext = buildAssistantContext({
   recentMessages: Array.from({ length: 12 }, (_, index) => ({

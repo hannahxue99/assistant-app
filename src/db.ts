@@ -532,6 +532,29 @@ export async function restoreAssistantTaskWithDatabase(
   return getEntryWithDatabase(database, snapshot.id);
 }
 
+/** 撤销硬删除时按快照重新插入待办；仅供助手撤销事务使用。 */
+export async function reinsertAssistantTaskWithDatabase(
+  database: SQLite.SQLiteDatabase,
+  snapshot: Entry,
+): Promise<Entry> {
+  await database.runAsync(
+    `INSERT INTO entries (
+       id, raw_text, kind, summary, due_at, remind_at, topic, tags, persons,
+       parse_status, parse_source, corrected_from, created_at, updated_at, revision_at,
+       done, done_at, source, time_precision
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    snapshot.id, snapshot.rawText, snapshot.kind, snapshot.summary, snapshot.dueAt,
+    snapshot.remindAt, snapshot.topic, JSON.stringify(snapshot.tags), JSON.stringify(snapshot.persons),
+    snapshot.parseStatus, snapshot.parseSource, snapshot.correctedFrom, snapshot.createdAt,
+    snapshot.updatedAt, snapshot.revisionAt, snapshot.done, snapshot.doneAt, snapshot.source,
+    snapshot.timePrecision ?? null,
+  );
+  await syncFtsWithDatabase(database, snapshot.id);
+  const restored = await getEntryWithDatabase(database, snapshot.id);
+  if (!restored) throw new Error('待办恢复失败');
+  return restored;
+}
+
 export async function deleteAssistantTaskWithDatabase(
   database: SQLite.SQLiteDatabase,
   id: string,

@@ -5,7 +5,7 @@ export interface AssistantPromptMessage {
   content: string;
 }
 
-export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v7-long-term-memory';
+export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v8-delete-todo-event';
 
 export const ASSISTANT_MEMORY_DELTA_FORMAT_GUIDE = [
   '长期记忆增量格式（每轮最多2项；不需要 key，本地生成幂等键）：',
@@ -32,7 +32,7 @@ export const ASSISTANT_EVENT_DELTA_FORMAT_GUIDE = [
   '- progress 最多2条：{"type":"fact|decision|result|blocker|plan|correction","content":"本轮新增的关键变化"}；不要复述完整状态或重复最近进展。',
   '- todos 最多2条。新建：{"action":"create","todo_ref":"todo_1","text":"行动","date_status":"..."...}。修改：{"action":"update","todo_id":"候选ID","text":"可选新内容","date_status":"可选"...}。完成：{"action":"complete","todo_id":"候选ID"}。',
   '- 每个待办变化必须有对应 progress；相关待办由本地自动关联事件，不要在 operations 重复输出 link_todo_event。',
-  '- 取消待办暂不支持：不要输出 cancel，也绝不能用 complete 代替取消；只更新事件状态/进展，并在回复中说明待办尚未改变。',
+  '- 删除待办不要放进 event_delta.todos；使用普通 operations 的 delete_todo，绝不能用 complete 代替删除。',
 ] as const;
 
 export const ASSISTANT_OPERATION_FORMAT_GUIDE = [
@@ -41,11 +41,13 @@ export const ASSISTANT_OPERATION_FORMAT_GUIDE = [
   '- update_todo: 同上但使用 todo_id；只改内容时可以省略全部日期字段。',
   '- 更新已有待办时，只有用户改变日期才提供日期字段；date_status=absent 仅表示用户明确要求清除已有日期。日期含糊时先追问，不提交日期更新。',
   '- complete_todo: {"key":"...","type":"complete_todo","todo_id":"候选ID"}',
+  '- delete_todo: {"key":"...","type":"delete_todo","todo_id":"候选ID"}',
   '- create_event: {"key":"...","type":"create_event","event_ref":"event_1","title":"稳定主线标题","current_state":"当前状态"}',
   '- update_event: {"key":"...","type":"update_event","event_id":"候选ID","current_state":"新状态"}',
   '- append_event_update: {"key":"...","type":"append_event_update","event_id":"候选ID"或"event_ref":"event_1","content":"有意义的新进展"}',
   '- rename_event: {"key":"...","type":"rename_event","event_id":"候选ID","title":"新标题"}',
   '- pin_event: {"key":"...","type":"pin_event","event_id":"候选ID","pinned":true|false}',
+  '- delete_event: {"key":"...","type":"delete_event","event_id":"候选ID","linked_todo_policy":"keep|delete"}',
   '- link_todo_event: {"key":"...","type":"link_todo_event","todo_id":"候选ID"或"todo_ref":"todo_1","event_id":"候选ID"或"event_ref":"event_1"}',
   '- 日期由你根据参考时间和用户时区解析：resolved 必须保留 date_text 并给 due_date；只有明确时刻才给 due_time 且精度为 dateTime；仅日期精度为 date。',
   '- 日期含糊时用 ambiguous，只保留 date_text，不猜 due_date；没有日期时用 absent，其他日期字段全部省略。没有合适操作时返回空数组。',
@@ -78,6 +80,11 @@ export function buildAssistantPromptMessages(input: {
     '- 只有明确持续跟进、多阶段，或已有主线出现新状态时才建/更新事件。',
     '- 独立判断长期记忆：不要因为内容进入事件或待办就自动记忆，也不要把今天/最近的情绪和计划误当长期特征。',
     '- 不确定是否属于某个已有事件时不要静默合并；自然回复只追问一个必要问题，event_deltas 和 operations 都留空。',
+    '- 用户要求删除时，先确认目标只有一个。多个候选时只追问要删哪一个，operations 留空；不得猜测。',
+    '- 删除待办会同时从首页和所有关联事件中消失；原对话消息保留。目标明确时输出 delete_todo。',
+    '- 删除事件且没有关联待办时，直接输出 delete_event，linked_todo_policy=keep。',
+    '- 删除事件若有关联待办：用户已明确“保留待办”就用 keep，明确“一起删”就用 delete；用户没说明时只问“关联的 N 条待办也一起删除吗？”，operations 留空。用户没有回答前什么都不删除。',
+    '- 删除事件的 linked_todo_policy=delete 会删除全部关联待办，包括已完成和未完成。不得仅根据上下文展示的部分待办自行缩小范围。',
     '',
     '严格只输出 JSON，不要代码块或额外文字：',
     '{',
@@ -96,7 +103,7 @@ export function buildAssistantPromptMessages(input: {
     '',
     ...ASSISTANT_MEMORY_DELTA_FORMAT_GUIDE,
     '',
-    '普通候选操作只用于独立待办、重命名、置顶等不属于 event_delta 的动作：',
+    '普通候选操作用于独立待办、删除、重命名、置顶等不属于 event_delta 的动作：',
     ...ASSISTANT_OPERATION_FORMAT_GUIDE,
     '',
     '操作判断示例（参考时间 2026-09-15，时区 Asia/Shanghai）：',

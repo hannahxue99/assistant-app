@@ -17,11 +17,11 @@ type XiaozhiEyesIconProps = {
 };
 
 const GAZE_POSITIONS = [
-  { x: -2, y: 0 },
-  { x: 0, y: -1 },
-  { x: 2, y: 0 },
-  { x: 1, y: 1 },
-  { x: -1, y: 1 },
+  { x: -3.5, y: 0 },
+  { x: 0, y: -2 },
+  { x: 3.5, y: 0 },
+  { x: 2, y: 2 },
+  { x: -2, y: 2 },
 ] as const;
 
 function randomDelay(min: number, max: number) {
@@ -88,7 +88,7 @@ export function XiaozhiEyesIcon({ size, focused }: XiaozhiEyesIconProps) {
         ]).start(({ finished }) => {
           if (finished && !cancelled) scheduleGaze();
         });
-      }, randomDelay(1800, 2800));
+      }, randomDelay(900, 1500));
     };
 
     const scheduleBlink = () => {
@@ -142,6 +142,7 @@ export function XiaozhiEyesIcon({ size, focused }: XiaozhiEyesIconProps) {
         {
           width: slotSize,
           height: slotSize,
+          transform: [{ translateY: focused ? -3 : 0 }],
         },
       ]}
     >

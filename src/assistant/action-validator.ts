@@ -106,7 +106,7 @@ export function validateAssistantActions(input: {
       continue;
     }
 
-    if (operation.type === 'complete_todo') {
+    if (operation.type === 'complete_todo' || operation.type === 'delete_todo') {
       if (!todoIds.has(operation.todoId)) reject(operation, 'candidate_not_allowed');
       else accepted.push(operation);
       continue;
@@ -162,7 +162,7 @@ export function validateAssistantActions(input: {
       continue;
     }
 
-    if (operation.type === 'rename_event' || operation.type === 'pin_event') {
+    if (operation.type === 'rename_event' || operation.type === 'pin_event' || operation.type === 'delete_event') {
       const denied = eventAllowed(operation.eventId);
       if (denied) reject(operation, denied);
       else accepted.push(operation);

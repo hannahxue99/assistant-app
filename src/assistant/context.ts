@@ -126,7 +126,7 @@ function renderContextBlock(input: {
         `  - ${todo.id}｜${todo.text.slice(0, 120)}｜${todo.done ? '已完成' : '未完成'}${todo.dueAt ? `｜日期：${new Date(todo.dueAt).toLocaleString('zh-CN')}` : '｜暂无日期'}｜版本：${todo.revisionAt}`
       ));
       return [
-        `- ${item.id}｜${item.title}｜当前：${item.currentState || '暂无状态'}｜事件版本：${item.revision}`,
+        `- ${item.id}｜${item.title}｜当前：${item.currentState || '暂无状态'}｜事件版本：${item.revision}｜关联待办：共${item.linkedTodoCount ?? linkedTodos.length}条（未完成${item.openLinkedTodoCount ?? linkedTodos.filter(todo => !todo.done).length}条）`,
         ...(todoLines.length ? ['  相关待办：', ...todoLines] : []),
       ].join('\n');
     }).join('\n')}`);
@@ -137,7 +137,7 @@ function renderContextBlock(input: {
   const standaloneTodos = input.actionContext?.todos.filter(todo => !eventLinkedTodoIds.has(todo.id)) ?? [];
   if (standaloneTodos.length) {
     sections.push(`其他可更新的待办候选（只能使用这些 ID）：\n${standaloneTodos.map(item => (
-      `- ${item.id}｜${item.text}${item.dueAt ? `｜日期：${new Date(item.dueAt).toLocaleString('zh-CN')}` : '｜暂无日期'}`
+      `- ${item.id}｜${item.text}｜${item.done ? '已完成' : '未完成'}${item.dueAt ? `｜日期：${new Date(item.dueAt).toLocaleString('zh-CN')}` : '｜暂无日期'}`
     )).join('\n')}`);
   }
   return sections.join('\n\n');

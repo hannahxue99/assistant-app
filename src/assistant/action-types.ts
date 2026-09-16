@@ -55,11 +55,13 @@ export type AssistantOperationType =
   | 'create_todo'
   | 'update_todo'
   | 'complete_todo'
+  | 'delete_todo'
   | 'create_event'
   | 'update_event'
   | 'append_event_update'
   | 'rename_event'
   | 'pin_event'
+  | 'delete_event'
   | 'link_todo_event'
   | 'create_memory'
   | 'activate_memory'
@@ -116,11 +118,13 @@ export type AssistantOperationProposal =
   | ({ key: string; type: 'create_todo'; todoRef: string; text: string } & AssistantDateProposal)
   | ({ key: string; type: 'update_todo'; todoId: string; text?: string } & Partial<AssistantDateProposal>)
   | { key: string; type: 'complete_todo'; todoId: string }
+  | { key: string; type: 'delete_todo'; todoId: string }
   | { key: string; type: 'create_event'; eventRef: string; title: string; currentState: string }
   | { key: string; type: 'update_event'; eventId: string; currentState: string }
   | { key: string; type: 'append_event_update'; event: AssistantObjectRef; content: string }
   | { key: string; type: 'rename_event'; eventId: string; title: string }
   | { key: string; type: 'pin_event'; eventId: string; pinned: boolean }
+  | { key: string; type: 'delete_event'; eventId: string; linkedTodoPolicy: 'keep' | 'delete' }
   | { key: string; type: 'link_todo_event'; todo: AssistantObjectRef; event: AssistantObjectRef };
 
 export interface AssistantEventCandidate {
@@ -130,6 +134,8 @@ export interface AssistantEventCandidate {
   aliases: string[];
   linkedTodoTexts: string[];
   linkedTodos?: AssistantLinkedTodoCandidate[];
+  linkedTodoCount?: number;
+  openLinkedTodoCount?: number;
   recentUpdateTexts?: string[];
   revision: number;
   updatedAt: number;
@@ -149,6 +155,7 @@ export interface AssistantTodoCandidate {
   id: string;
   text: string;
   dueAt: number | null;
+  done?: boolean;
   revisionAt: number;
   updatedAt: number;
   score: number;

@@ -55,7 +55,7 @@ function compactSummary(value: unknown): string | undefined {
 }
 
 export function inspectAssistantReplyWarnings(reply: string): AssistantProtocolWarning[] {
-  const claim = /我(?:已经|已|刚刚)?(?:替你|帮你|为你)?(?:把[^，。！？]{0,30})?(?:记下|记录|保存|创建|新建|更新|修改|完成|置顶|关联)(?:了|好|完成)|(?:已经|已)(?:帮你|为你|替你)(?:把[^，。！？]{0,30})?(?:记下|记录|保存|创建|新建|更新|修改|完成|置顶|关联)|(?:待办|事件)(?:已经|已)(?:创建|保存|更新|完成)|(?:^|[，。！？；])(?:好的?[，,]?)?(?:已经|已)?(?:帮你|替你|为你)?(?:记下|记录|保存|创建|新建|更新|修改|完成|置顶|关联)(?:了|好|完成)/;
+  const claim = /我(?:已经|已|刚刚)?(?:替你|帮你|为你)?(?:把[^，。！？]{0,30})?(?:记下|记录|保存|创建|新建|更新|修改|完成|置顶|关联|删除)(?:了|好|完成)|(?:已经|已)(?:帮你|为你|替你)(?:把[^，。！？]{0,30})?(?:记下|记录|保存|创建|新建|更新|修改|完成|置顶|关联|删除)|(?:待办|事件)(?:已经|已)(?:创建|保存|更新|完成|删除)|(?:^|[，。！？；])(?:好的?[，,]?)?(?:已经|已)?(?:帮你|替你|为你)?(?:记下|记录|保存|创建|新建|更新|修改|完成|置顶|关联|删除)(?:了|好|完成)/;
   return claim.test(reply) ? ['reply_execution_claim'] : [];
 }
 
@@ -175,6 +175,8 @@ function parseOperation(value: unknown): AssistantOperationProposal {
     }
     case 'complete_todo':
       return { key, type: raw.type, todoId: identifier(raw.todo_id, 'todo_id') };
+    case 'delete_todo':
+      return { key, type: raw.type, todoId: identifier(raw.todo_id, 'todo_id') };
     case 'create_event':
       return {
         key,
@@ -212,6 +214,18 @@ function parseOperation(value: unknown): AssistantOperationProposal {
         eventId: identifier(raw.event_id, 'event_id'),
         pinned: raw.pinned,
       };
+    case 'delete_event': {
+      const linkedTodoPolicy = requiredText(raw.linked_todo_policy, 'linked_todo_policy', 16);
+      if (linkedTodoPolicy !== 'keep' && linkedTodoPolicy !== 'delete') {
+        throw new AssistantProtocolError('linked_todo_policy 非法');
+      }
+      return {
+        key,
+        type: raw.type,
+        eventId: identifier(raw.event_id, 'event_id'),
+        linkedTodoPolicy,
+      };
+    }
     case 'link_todo_event':
       return {
         key,

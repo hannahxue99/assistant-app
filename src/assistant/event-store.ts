@@ -157,6 +157,24 @@ export function updateEventState(input: {
   });
 }
 
+export function closeEvent(input: {
+  eventId: string;
+  expectedRevision: number;
+  updatedAt?: number;
+}, database?: SQLiteDatabase): Promise<AssistantEvent | null> {
+  const updatedAt = input.updatedAt ?? Date.now();
+  return writeWith(database, async (connection) => {
+    const result = await connection.runAsync(
+      `UPDATE assistant_events
+       SET status='closed', pinned_at=NULL, revision=revision+1, updated_at=?
+       WHERE id=? AND status='active' AND revision=?`,
+      updatedAt, input.eventId, input.expectedRevision,
+    );
+    if (result.changes === 0) return null;
+    return rowToEvent(await connection.getFirstAsync<any>('SELECT * FROM assistant_events WHERE id=?', input.eventId));
+  });
+}
+
 export function appendEventUpdate(input: {
   id?: string;
   eventId: string;
@@ -317,7 +335,9 @@ export function getEventDetail(
   database?: SQLiteDatabase,
 ): Promise<AssistantEventDetail | null> {
   return readWith(database, async (connection) => {
-    const eventRow = await connection.getFirstAsync<any>('SELECT * FROM assistant_events WHERE id=?', eventId);
+    const eventRow = await connection.getFirstAsync<any>(
+      "SELECT * FROM assistant_events WHERE id=? AND status='active'", eventId,
+    );
     if (!eventRow) return null;
     const todoRows = await connection.getAllAsync<any>(
       `SELECT e.id, e.summary, e.raw_text, e.due_at, e.done, e.updated_at

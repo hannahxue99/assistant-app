@@ -351,7 +351,7 @@ export default function ProfileScreen() {
               {llmStatus.label} ›
             </Text>
           </Pressable>
-          <CalendarSyncSetting embedded showTopDivider />
+          <CalendarSyncSetting embedded topDividerStyle={styles.dataRowBorder} />
         </View>
 
         <Text style={styles.sectionLabel}>待办通知</Text>
@@ -366,7 +366,7 @@ export default function ProfileScreen() {
               thumbColor={profile?.notifyMorning ? theme.colors.accent : '#fff'}
             />
           </View>
-          <View style={[styles.notifyRow, styles.notifyRowDivider]}>
+          <View style={[styles.notifyRow, styles.dataRowBorder]}>
             <Text style={styles.rowLabel}>晚 21:00 夜间待办</Text>
             <Switch
               value={profile?.notifyEvening ?? false}
@@ -483,10 +483,6 @@ const styles = StyleSheet.create({
     minHeight: theme.touchTarget,
     paddingHorizontal: 14,
     paddingVertical: 4,
-  },
-  notifyRowDivider: {
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
   },
   undoBar: {
     position: 'absolute',

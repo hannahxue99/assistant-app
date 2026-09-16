@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import {
   completeAssistantTaskWithDatabase,
+  deleteAssistantTaskWithDatabase,
   getEntryWithDatabase,
   insertAssistantTaskWithDatabase,
   updateAssistantTaskWithDatabase,
@@ -26,6 +27,7 @@ import {
 import type { ValidatedAssistantMemoryDelta } from './memory-types';
 import {
   appendEventUpdate,
+  closeEvent,
   createEvent,
   getEvent,
   linkObjects,
@@ -126,6 +128,9 @@ async function applyActions(database: SQLiteDatabase, input: {
   const localTodoRefs = new Map<string, string>();
   const localEventRefs = new Map<string, string>();
   const todoRevisions = new Map(input.actionContext.todos.map(todo => [todo.id, todo.revisionAt]));
+  for (const event of input.actionContext.events) {
+    for (const todo of event.linkedTodos ?? []) todoRevisions.set(todo.id, todo.revisionAt);
+  }
   const eventRevisions = new Map(input.actionContext.events.map(event => [event.id, event.revision]));
   let sequence = input.sequenceStart ?? 0;
 
@@ -158,6 +163,39 @@ async function applyActions(database: SQLiteDatabase, input: {
         before: null,
         after: todo,
         receiptSummary: `建立待办：${todo.summary}`,
+        sequence: sequence++,
+        createdAt: input.createdAt,
+      }));
+      continue;
+    }
+
+    if (operation.type === 'delete_todo') {
+      const expectedRevisionAt = todoRevisions.get(operation.todoId);
+      const before = await getEntryWithDatabase(database, operation.todoId);
+      if (!before || expectedRevisionAt === undefined || before.revisionAt !== expectedRevisionAt) {
+        throw new Error('删除待办时发生版本冲突');
+      }
+      const relations = await database.getAllAsync<any>(
+        `SELECT * FROM assistant_object_relations
+         WHERE ((from_type='todo' AND from_id=?) OR (to_type='todo' AND to_id=?))
+           AND undone_at IS NULL`,
+        operation.todoId, operation.todoId,
+      );
+      await database.runAsync(
+        `UPDATE assistant_object_relations SET undone_at=?
+         WHERE ((from_type='todo' AND from_id=?) OR (to_type='todo' AND to_id=?))
+           AND undone_at IS NULL`,
+        input.createdAt, operation.todoId, operation.todoId,
+      );
+      await deleteAssistantTaskWithDatabase(database, operation.todoId);
+      committed.push(await insertOperation(database, {
+        requestId: input.requestId,
+        operation,
+        objectType: 'todo',
+        objectId: before.id,
+        before: { todo: before, relations },
+        after: { deleted: true, todoId: before.id, revisionAt: before.revisionAt },
+        receiptSummary: `删除待办：${before.summary}`,
         sequence: sequence++,
         createdAt: input.createdAt,
       }));
@@ -234,6 +272,72 @@ async function applyActions(database: SQLiteDatabase, input: {
         before: null,
         after: event,
         receiptSummary: `建立事件：${event.title}`,
+        sequence: sequence++,
+        createdAt: input.createdAt,
+      }));
+      continue;
+    }
+
+    if (operation.type === 'delete_event') {
+      const expectedRevision = eventRevisions.get(operation.eventId);
+      const before = await getEvent(operation.eventId, database);
+      if (!before || expectedRevision === undefined || before.revision !== expectedRevision || before.status !== 'active') {
+        throw new Error('删除事件时发生版本冲突');
+      }
+      const linkedRows = await database.getAllAsync<any>(
+        `SELECT e.id
+         FROM assistant_object_relations r
+         JOIN entries e ON e.id=r.from_id
+         WHERE r.from_type='todo' AND r.relation_type='belongs_to'
+           AND r.to_type='event' AND r.to_id=? AND r.undone_at IS NULL`,
+        operation.eventId,
+      );
+      const deletedTodos: Array<{ todo: unknown; relations: any[] }> = [];
+      if (operation.linkedTodoPolicy === 'delete') {
+        for (const row of linkedRows) {
+          const todo = await getEntryWithDatabase(database, row.id);
+          if (!todo) throw new Error('删除事件关联待办时发生版本冲突');
+          const knownRevision = todoRevisions.get(todo.id);
+          if (knownRevision !== undefined && knownRevision !== todo.revisionAt) {
+            throw new Error('删除事件关联待办时发生版本冲突');
+          }
+          const relations = await database.getAllAsync<any>(
+            `SELECT * FROM assistant_object_relations
+             WHERE ((from_type='todo' AND from_id=?) OR (to_type='todo' AND to_id=?))
+               AND undone_at IS NULL`,
+            todo.id, todo.id,
+          );
+          deletedTodos.push({ todo, relations });
+        }
+      }
+      const after = await closeEvent({
+        eventId: operation.eventId,
+        expectedRevision,
+        updatedAt: input.createdAt,
+      }, database);
+      if (!after) throw new Error('删除事件时发生版本冲突');
+      if (operation.linkedTodoPolicy === 'delete') {
+        for (const snapshot of deletedTodos) {
+          const todo = snapshot.todo as { id: string };
+          await database.runAsync(
+            `UPDATE assistant_object_relations SET undone_at=?
+             WHERE ((from_type='todo' AND from_id=?) OR (to_type='todo' AND to_id=?))
+               AND undone_at IS NULL`,
+            input.createdAt, todo.id, todo.id,
+          );
+          await deleteAssistantTaskWithDatabase(database, todo.id);
+        }
+      }
+      committed.push(await insertOperation(database, {
+        requestId: input.requestId,
+        operation,
+        objectType: 'event',
+        objectId: before.id,
+        before: { event: before, deletedTodos },
+        after: { event: after, deletedTodoIds: deletedTodos.map(item => (item.todo as { id: string }).id) },
+        receiptSummary: operation.linkedTodoPolicy === 'delete' && deletedTodos.length
+          ? `删除事件及 ${deletedTodos.length} 条关联待办：${before.title}`
+          : `删除事件：${before.title}`,
         sequence: sequence++,
         createdAt: input.createdAt,
       }));

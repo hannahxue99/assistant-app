@@ -7,7 +7,7 @@
   </defs>
   <rect width="1000" height="800" class="bg"/>
   <text x="55" y="64" class="ink" font-size="30" font-weight="700">底部导航：全橙色，用形态表达选中</text>
-  <text x="55" y="98" class="dim" font-size="15">颜色不再承担状态；首页 / 我的切换空心实心，小知切换大小。</text>
+  <text x="55" y="98" class="dim" font-size="15">小知选中时放大并上移 3pt；眼神加大幅度，每 0.9–1.5 秒移动一次。</text>
 
   <g transform="translate(55 142)">
     <rect width="890" height="180" rx="22" class="card" filter="url(#shadow)"/>
@@ -39,9 +39,9 @@
       <text x="20" y="79" class="orange" font-size="12" font-weight="600" text-anchor="middle">首页</text>
     </g>
     <g transform="translate(416 54)">
-      <rect x="5" y="6" width="44" height="44" rx="22" fill="#E0733A"/>
-      <ellipse cx="20" cy="24" rx="4.5" ry="6.7" fill="#FFF7F2"/>
-      <ellipse cx="34" cy="24" rx="4.5" ry="6.7" fill="#FFF7F2"/>
+      <rect x="5" y="3" width="44" height="44" rx="22" fill="#E0733A"/>
+      <ellipse cx="20" cy="21" rx="4.5" ry="6.7" fill="#FFF7F2"/>
+      <ellipse cx="34" cy="21" rx="4.5" ry="6.7" fill="#FFF7F2"/>
       <text x="27" y="83" class="orange" font-size="12" font-weight="600" text-anchor="middle">小知</text>
     </g>
     <g transform="translate(720 58)">

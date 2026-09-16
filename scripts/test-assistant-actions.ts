@@ -127,6 +127,31 @@ const invalidId = validateAssistantActions({
 check(invalidId.accepted.length === 0 && invalidId.rejected[0]?.reason === 'candidate_not_allowed',
   '上下文外的对象 ID 必须拒绝');
 
+const validDelete = validateAssistantActions({
+  operations: [
+    { key: 'delete-todo', type: 'delete_todo', todoId: 'todo-photo' },
+    { key: 'delete-event', type: 'delete_event', eventId: 'event-house', linkedTodoPolicy: 'keep' },
+  ],
+  actionContext: context,
+  currentMessage: '删掉整理照片，事件也删掉但保留待办',
+  recentEvidence: [],
+  referenceAt: now,
+});
+check(validDelete.accepted.length === 2, '上下文内待办与事件删除应通过校验');
+
+const invalidDelete = validateAssistantActions({
+  operations: [
+    { key: 'delete-todo', type: 'delete_todo', todoId: 'todo-unknown' },
+    { key: 'delete-event', type: 'delete_event', eventId: 'event-unknown', linkedTodoPolicy: 'delete' },
+  ],
+  actionContext: context,
+  currentMessage: '删除',
+  recentEvidence: [],
+  referenceAt: now,
+});
+check(invalidDelete.accepted.length === 0 && invalidDelete.rejected.length === 2,
+  '上下文外删除目标必须全部拒绝');
+
 const duplicateEventText = validateAssistantActions({
   operations: [
     { key: 'state', type: 'update_event', eventId: 'event-house', currentState: '正在看房' },

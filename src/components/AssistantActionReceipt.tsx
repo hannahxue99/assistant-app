@@ -14,6 +14,7 @@ interface AssistantActionReceiptProps {
 }
 
 function iconName(operation: AssistantOperation): keyof typeof Ionicons.glyphMap {
+  if (operation.operationType === 'delete_todo' || operation.operationType === 'delete_event') return 'trash-outline';
   if (operation.objectType === 'todo') return operation.operationType === 'complete_todo'
     ? 'checkmark-circle-outline' : 'checkbox-outline';
   if (operation.objectType === 'event_update') return 'pulse-outline';

@@ -66,8 +66,8 @@
     </g>
     <path d="M142 183 C173 166 203 166 234 183" fill="none" stroke="#C9C1B7" stroke-width="2" stroke-dasharray="5 5"/>
     <text x="255" y="178" class="ink" font-size="15">瞳孔成对移动</text>
-    <text x="255" y="203" class="dim" font-size="13">幅度 2–3 px</text>
-    <text x="24" y="257" class="ink" font-size="15">每 1.8–2.8 秒换一次注视方向</text>
+    <text x="255" y="203" class="dim" font-size="13">明显扫视：水平 ±3.5 px · 垂直 ±2 px</text>
+    <text x="24" y="257" class="ink" font-size="15">每 0.9–1.5 秒换一次注视方向</text>
     <text x="24" y="286" class="dim" font-size="13">不是持续抖动；停顿更像“活着”。</text>
 
     <rect x="0" y="350" width="420" height="238" rx="20" class="card"/>
@@ -106,7 +106,7 @@
   <g transform="translate(55 900)">
     <rect width="890" height="238" rx="20" fill="#FFFFFF" stroke="#E8E2D9"/>
     <text x="25" y="42" class="ink" font-size="18" font-weight="700">交互边界</text>
-    <circle cx="31" cy="79" r="4" fill="#E0733A"/><text x="47" y="84" class="ink" font-size="15">两组设置只改变视觉归组，点击、开关、权限流程都不变。</text>
+    <circle cx="31" cy="79" r="4" fill="#E0733A"/><text x="47" y="84" class="ink" font-size="15">三组设置复用数据管理的同一分隔线样式，点击与开关逻辑不变。</text>
     <circle cx="31" cy="116" r="4" fill="#E0733A"/><text x="47" y="121" class="ink" font-size="15">日历出现错误说明时，说明和“重试 / 去设置”在同一行下方展开。</text>
     <circle cx="31" cy="153" r="4" fill="#E0733A"/><text x="47" y="158" class="ink" font-size="15">眼睛只在 App 前台运行；切后台、减少动态效果时使用静态图标。</text>
     <circle cx="31" cy="190" r="4" fill="#E0733A"/><text x="47" y="195" class="ink" font-size="15">动效不表达“正在回答”，避免和小知执行状态混淆。</text>

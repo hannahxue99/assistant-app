@@ -364,6 +364,147 @@ async function main() {
     '本轮后对象发生变化时必须拒绝撤销');
   assert.equal((await db.getEntry(conflictTodo.id)).summary, '整理贷款合同', '冲突撤销不得覆盖较新状态');
 
+  const deleteTodoEvent = await eventStore.createEvent({
+    id: 'event-delete-todo', title: '健身计划', currentState: '每周训练', createdAt: 4800,
+  });
+  const deleteTodo = await db.insertEntry({ rawText: '周五去游泳', source: 'text', createdAt: 4810 }, {
+    kind: 'task', summary: '周五去游泳', dueAt: 9000, tags: [], topic: null, persons: [],
+  });
+  await eventStore.linkObjects({
+    fromType: 'todo', fromId: deleteTodo.id, relationType: 'belongs_to',
+    toType: 'event', toId: deleteTodoEvent.id, createdAt: 4820,
+  });
+  const deleteTodoUser = await assistantStore.saveUserTurn({
+    requestId: 'request-delete-todo', content: '把周五游泳删掉', source: 'text', createdAt: 4830,
+  });
+  const deletedTodoTurn = await actionStore.completeAssistantTurnWithActions({
+    requestId: 'request-delete-todo', userMessageId: deleteTodoUser.id, userSource: deleteTodoUser.source,
+    reply: '会删除这条待办。', segment: { action: 'continue' },
+    operations: [{ key: 'delete', type: 'delete_todo', todoId: deleteTodo.id }],
+    actionContext: {
+      events: [{
+        id: deleteTodoEvent.id, title: deleteTodoEvent.title, currentState: deleteTodoEvent.currentState,
+        aliases: [], linkedTodoTexts: [deleteTodo.summary], linkedTodos: [{
+          id: deleteTodo.id, text: deleteTodo.summary, dueAt: deleteTodo.dueAt, done: false,
+          revisionAt: deleteTodo.revisionAt, updatedAt: deleteTodo.updatedAt,
+        }], revision: deleteTodoEvent.revision, updatedAt: deleteTodoEvent.updatedAt, score: 1,
+      }],
+      todos: [{
+        id: deleteTodo.id, text: deleteTodo.summary, dueAt: deleteTodo.dueAt,
+        revisionAt: deleteTodo.revisionAt, updatedAt: deleteTodo.updatedAt, score: 1,
+      }], explicitEventId: null, segmentEventId: null,
+    },
+    createdAt: 4830,
+  });
+  assert.equal(await db.getEntry(deleteTodo.id), null, '删除待办应移除同一待办实体');
+  assert.equal((await eventStore.getEventDetail(deleteTodoEvent.id)).todos.length, 0,
+    '删除待办后所有关联事件详情都不应再出现它');
+  assert.ok(sqlite.prepare('SELECT entry_id FROM calendar_jobs WHERE entry_id=?').get(deleteTodo.id),
+    '删除待办应保留日历删除补偿任务');
+  assert.match(deletedTodoTurn.operations[0].receiptSummary, /删除待办/, '删除应生成可撤销回执');
+  assert.equal((await actionUndo.undoAssistantRequest('request-delete-todo', 4840)).status, 'undone');
+  assert.equal((await db.getEntry(deleteTodo.id)).summary, deleteTodo.summary, '撤销应恢复待办');
+  assert.equal((await eventStore.getEventDetail(deleteTodoEvent.id)).todos.length, 1, '撤销应恢复事件关联');
+
+  const keepEvent = await eventStore.createEvent({
+    id: 'event-delete-keep', title: '装修计划', currentState: '等待报价', createdAt: 4900,
+  });
+  const keptTodo = await db.insertEntry({ rawText: '查看装修报价', source: 'text', createdAt: 4910 }, {
+    kind: 'task', summary: '查看装修报价', dueAt: null, tags: [], topic: null, persons: [],
+  });
+  await eventStore.linkObjects({
+    fromType: 'todo', fromId: keptTodo.id, relationType: 'belongs_to',
+    toType: 'event', toId: keepEvent.id, createdAt: 4920,
+  });
+  const keepUser = await assistantStore.saveUserTurn({
+    requestId: 'request-delete-event-keep', content: '删掉装修事件，待办保留', source: 'text', createdAt: 4930,
+  });
+  await actionStore.completeAssistantTurnWithActions({
+    requestId: 'request-delete-event-keep', userMessageId: keepUser.id, userSource: keepUser.source,
+    reply: '会保留关联待办。', segment: { action: 'continue' },
+    operations: [{ key: 'delete', type: 'delete_event', eventId: keepEvent.id, linkedTodoPolicy: 'keep' }],
+    actionContext: {
+      events: [{ ...keepEvent, aliases: [], linkedTodoTexts: [keptTodo.summary], score: 1 }],
+      todos: [], explicitEventId: keepEvent.id, segmentEventId: null,
+    }, createdAt: 4930,
+  });
+  assert.equal((await eventStore.getEvent(keepEvent.id)).status, 'closed', '删除事件应软关闭事件');
+  assert.equal(await eventStore.getEventDetail(keepEvent.id), null, '已删除事件详情不应继续暴露');
+  assert.ok(await db.getEntry(keptTodo.id), '选择保留时关联待办必须保留');
+  assert.equal((await actionUndo.undoAssistantRequest('request-delete-event-keep', 4940)).status, 'undone');
+  assert.equal((await eventStore.getEvent(keepEvent.id)).status, 'active', '撤销应恢复事件');
+
+  const cascadeEvent = await eventStore.createEvent({
+    id: 'event-delete-cascade', title: '搬家计划', currentState: '准备收尾', createdAt: 5000,
+  });
+  const cascadeOpen = await db.insertEntry({ rawText: '退还钥匙', source: 'text', createdAt: 5010 }, {
+    kind: 'task', summary: '退还钥匙', dueAt: null, tags: [], topic: null, persons: [],
+  });
+  const cascadeDone = await db.insertEntry({ rawText: '打包完成', source: 'text', createdAt: 5020 }, {
+    kind: 'task', summary: '打包完成', dueAt: null, tags: [], topic: null, persons: [],
+  });
+  await db.setDone(cascadeDone.id, true);
+  const cascadeDoneCurrent = await db.getEntry(cascadeDone.id);
+  for (const [todo, createdAt] of [[cascadeOpen, 5030], [cascadeDoneCurrent, 5040]]) {
+    await eventStore.linkObjects({
+      fromType: 'todo', fromId: todo.id, relationType: 'belongs_to',
+      toType: 'event', toId: cascadeEvent.id, createdAt,
+    });
+  }
+  const cascadeUser = await assistantStore.saveUserTurn({
+    requestId: 'request-delete-event-cascade', content: '搬家事件和关联待办都删掉', source: 'voice', createdAt: 5050,
+  });
+  await actionStore.completeAssistantTurnWithActions({
+    requestId: 'request-delete-event-cascade', userMessageId: cascadeUser.id, userSource: cascadeUser.source,
+    reply: '会一起删除。', segment: { action: 'continue' },
+    operations: [{ key: 'delete', type: 'delete_event', eventId: cascadeEvent.id, linkedTodoPolicy: 'delete' }],
+    actionContext: {
+      events: [{
+        ...cascadeEvent, aliases: [], linkedTodoTexts: [cascadeOpen.summary, cascadeDoneCurrent.summary], score: 1,
+        linkedTodos: [
+          { id: cascadeOpen.id, text: cascadeOpen.summary, dueAt: null, done: false, revisionAt: cascadeOpen.revisionAt, updatedAt: cascadeOpen.updatedAt },
+          { id: cascadeDoneCurrent.id, text: cascadeDoneCurrent.summary, dueAt: null, done: true, revisionAt: cascadeDoneCurrent.revisionAt, updatedAt: cascadeDoneCurrent.updatedAt },
+        ],
+      }], todos: [], explicitEventId: cascadeEvent.id, segmentEventId: null,
+    }, createdAt: 5050,
+  });
+  assert.equal(await db.getEntry(cascadeOpen.id), null, '级联删除应删除未完成待办');
+  assert.equal(await db.getEntry(cascadeDoneCurrent.id), null, '级联删除也应删除已完成待办');
+  assert.equal((await eventStore.getEvent(cascadeEvent.id)).status, 'closed');
+  assert.equal((await actionUndo.undoAssistantRequest('request-delete-event-cascade', 5060)).status, 'undone');
+  assert.ok(await db.getEntry(cascadeOpen.id), '级联撤销应恢复未完成待办');
+  assert.equal((await db.getEntry(cascadeDoneCurrent.id)).done, 1, '级联撤销应按原状态恢复已完成待办');
+  assert.equal((await eventStore.getEventDetail(cascadeEvent.id)).todos.length, 2, '级联撤销应恢复全部关联');
+
+  const rollbackEvent = await eventStore.createEvent({
+    id: 'event-delete-rollback', title: '冲突事件', currentState: '测试回滚', createdAt: 5100,
+  });
+  const rollbackTodo = await db.insertEntry({ rawText: '冲突待办', source: 'text', createdAt: 5110 }, {
+    kind: 'task', summary: '冲突待办', dueAt: null, tags: [], topic: null, persons: [],
+  });
+  await eventStore.linkObjects({
+    fromType: 'todo', fromId: rollbackTodo.id, relationType: 'belongs_to',
+    toType: 'event', toId: rollbackEvent.id, createdAt: 5120,
+  });
+  await db.setDone(rollbackTodo.id, true);
+  const rollbackUser = await assistantStore.saveUserTurn({
+    requestId: 'request-delete-event-rollback', content: '事件待办一起删', source: 'text', createdAt: 5130,
+  });
+  await assert.rejects(() => actionStore.completeAssistantTurnWithActions({
+    requestId: 'request-delete-event-rollback', userMessageId: rollbackUser.id, userSource: rollbackUser.source,
+    reply: '会一起删除。', segment: { action: 'continue' },
+    operations: [{ key: 'delete', type: 'delete_event', eventId: rollbackEvent.id, linkedTodoPolicy: 'delete' }],
+    actionContext: {
+      events: [{
+        ...rollbackEvent, aliases: [], linkedTodoTexts: [rollbackTodo.summary], score: 1,
+        linkedTodos: [{ id: rollbackTodo.id, text: rollbackTodo.summary, dueAt: null, done: false,
+          revisionAt: rollbackTodo.revisionAt, updatedAt: rollbackTodo.updatedAt }],
+      }], todos: [], explicitEventId: rollbackEvent.id, segmentEventId: null,
+    }, createdAt: 5130,
+  }), /版本冲突/, '任一关联待办版本冲突时必须整笔失败');
+  assert.equal((await eventStore.getEvent(rollbackEvent.id)).status, 'active', '失败事务不得关闭事件');
+  assert.ok(await db.getEntry(rollbackTodo.id), '失败事务不得删除部分待办');
+
   const legacyEnvelope = legacyBackup.parseLegacyExportMarkdown(`# 我的个人助手记录
 
 ## 待办 · 2025/8/21 09:20:00

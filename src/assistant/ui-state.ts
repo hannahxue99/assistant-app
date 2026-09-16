@@ -199,6 +199,7 @@ function snapshot(value: string): any | null {
 }
 
 export function assistantReceiptTarget(operation: AssistantOperation, now = Date.now()): string | null {
+  if (operation.operationType === 'delete_todo' || operation.operationType === 'delete_event') return null;
   if (operation.objectType === 'todo') {
     const after = snapshot(operation.afterSnapshot);
     const dueAt = typeof after?.dueAt === 'number' ? after.dueAt : null;

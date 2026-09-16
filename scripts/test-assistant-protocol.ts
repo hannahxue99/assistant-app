@@ -55,6 +55,18 @@ const existingOperations = parseAssistantTurnOutput(JSON.stringify({
 check(existingOperations.operations[0].type === 'update_event', '应解析候选事件更新');
 check(existingOperations.operations[1].type === 'complete_todo', '应解析候选待办完成');
 
+const deletionOperations = parseAssistantTurnOutput(JSON.stringify({
+  reply: '会按你的选择处理。',
+  segment: { action: 'continue' },
+  operations: [
+    { key: 'delete-todo', type: 'delete_todo', todo_id: 'todo-existing' },
+    { key: 'delete-event', type: 'delete_event', event_id: 'event-existing', linked_todo_policy: 'keep' },
+  ],
+}));
+check(deletionOperations.operations[0].type === 'delete_todo', '应解析删除待办');
+check(deletionOperations.operations[1].type === 'delete_event'
+  && deletionOperations.operations[1].linkedTodoPolicy === 'keep', '应解析删除事件及关联待办策略');
+
 const withEventDelta = parseAssistantTurnOutput(JSON.stringify({
   reply: '这条还款主线会持续很长时间。',
   segment: { action: 'continue' },
@@ -161,6 +173,8 @@ for (const [label, operations] of [
   ['新待办缺少日期判断', [{ key: 'x', type: 'create_todo', todo_ref: 'todo_1', text: '买牛奶' }]],
   ['resolved 缺少日期', [{ key: 'x', type: 'create_todo', todo_ref: 'todo_1', text: '买牛奶', date_status: 'resolved', date_text: '明天', time_precision: 'date' }]],
   ['date 状态却带时间', [{ key: 'x', type: 'create_todo', todo_ref: 'todo_1', text: '买牛奶', date_status: 'resolved', date_text: '明天', due_date: '2026-09-16', due_time: '09:00', time_precision: 'date' }]],
+  ['删除事件缺少关联待办策略', [{ key: 'x', type: 'delete_event', event_id: 'event-a' }]],
+  ['删除事件策略非法', [{ key: 'x', type: 'delete_event', event_id: 'event-a', linked_todo_policy: 'ask' }]],
 ] as const) {
   let rejected = false;
   try {
@@ -257,6 +271,9 @@ check(prompt[0].content.includes('银行说下个月可能调整利率'), '提�
 check(prompt[0].content.includes('due_date'), '提示词必须要求模型解析日期');
 check(prompt[0].content.includes('memory_deltas'), '提示词必须要求模型独立判断长期记忆');
 check(prompt[0].content.includes('临时状态'), '提示词必须区分临时状态与长期记忆');
+check(prompt[0].content.includes('关联的 N 条待办也一起删除吗'), '删除含待办事件时必须先确认级联范围');
+check(prompt[0].content.includes('用户没有回答前什么都不删除'), '删除确认未答时不得提交操作');
+check(prompt[0].content.includes('包括已完成和未完成'), '级联删除范围必须覆盖全部关联待办');
 check(prompt.at(-1)?.content === '那继续梳理。', '最近原话必须保持角色与顺序');
 check(extractPartialJsonStringField('{"reply":"第一行\\n第', 'reply') === '第一行\n第',
   '流式 JSON 应解码完整转义并保留未闭合回复');

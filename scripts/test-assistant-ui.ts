@@ -148,6 +148,13 @@ check(assistantReceiptTarget(operation({
 check(assistantReceiptTarget(operation({
   operationType: 'create_event', objectType: 'event', objectId: 'event-1',
 })) === '/event/event-1', '事件回执应进入事件详情');
+check(assistantReceiptTarget(operation({
+  operationType: 'delete_todo', objectType: 'todo', objectId: 'todo-1',
+  afterSnapshot: JSON.stringify({ deleted: true, todoId: 'todo-1' }),
+})) === null, '已删除待办回执不得跳向不存在的对象');
+check(assistantReceiptTarget(operation({
+  operationType: 'delete_event', objectType: 'event', objectId: 'event-1',
+})) === null, '已删除事件回执不得跳向关闭的详情页');
 check(!assistantReceiptState([operation({ status: 'undone', undoneAt: 2 })]).canUndo,
   '已撤销操作不得再次显示可用撤销');
 
