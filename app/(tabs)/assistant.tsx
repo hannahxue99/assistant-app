@@ -422,6 +422,6 @@ const styles = StyleSheet.create({
   olderError: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 },
   olderErrorText: { color: theme.colors.textDim, fontSize: theme.font.small },
   olderRetryText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
-  composerWrap: { paddingHorizontal: 12, paddingTop: 7, paddingBottom: 8, borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.bg },
+  composerWrap: { paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6, borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.bg },
   pressed: { opacity: 0.72 },
 });

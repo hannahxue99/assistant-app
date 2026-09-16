@@ -427,7 +427,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   content: { padding: 16, paddingBottom: 72, gap: 8 },
-  sectionTitle: { color: theme.colors.text, fontSize: theme.font.heading, fontWeight: theme.fontWeight.bold, marginTop: 10 },
+  sectionTitle: { color: theme.colors.text, fontSize: 19, fontWeight: theme.fontWeight.bold, marginTop: 10 },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',

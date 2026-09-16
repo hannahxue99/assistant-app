@@ -102,7 +102,7 @@ export function MemorySection({ state, memories, summary, busyId, onRetry, onSav
 const styles = StyleSheet.create({
   section: { gap: 7, marginTop: 2 },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 2 },
-  sectionTitle: { color: theme.colors.text, fontSize: theme.font.heading, fontWeight: '700' },
+  sectionTitle: { color: theme.colors.text, fontSize: 19, fontWeight: '700' },
   summary: { color: theme.colors.textDim, fontSize: 12 },
   list: { gap: 6 },
   card: { backgroundColor: theme.colors.card, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 12, paddingVertical: 9, gap: 4 },

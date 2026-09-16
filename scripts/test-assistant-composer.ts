@@ -3,6 +3,11 @@ import {
   canSendAssistantComposer,
   joinAssistantComposerText,
 } from '../src/assistant/composer-state';
+import {
+  normalizeVoiceLevel,
+  smoothVoiceLevel,
+  voiceLevelBarHeights,
+} from '../src/assistant/voice-level';
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -48,5 +53,20 @@ check(
   !canSendAssistantComposer({ text: '等待中', listening: false, unavailable: true }),
   '等待回复时不得发送第二条消息',
 );
+
+check(normalizeVoiceLevel(-2) === 0, '不可听音量应归零');
+check(normalizeVoiceLevel(5) === 0.5, '中等音量应归一化');
+check(normalizeVoiceLevel(12) === 1, '超出范围的音量应封顶');
+check(normalizeVoiceLevel(Number.NaN) === 0, '非法音量不得污染 UI');
+
+const risingLevel = smoothVoiceLevel(0.1, 8);
+const fallingLevel = smoothVoiceLevel(0.8, 0);
+check(risingLevel > 0.5 && risingLevel <= 1, '说话时波动条应快速上升');
+check(fallingLevel > 0 && fallingLevel < 0.8, '停顿时波动条应平滑回落');
+
+const silentBars = voiceLevelBarHeights(0);
+const loudBars = voiceLevelBarHeights(1);
+check(silentBars.length === 5 && silentBars.every(height => height === 4), '静音时应保留五根最小提示条');
+check(loudBars[2] === 24 && loudBars[2] > loudBars[0], '高音量时中间波动条应最明显');
 
 console.log('assistant composer state tests passed');
