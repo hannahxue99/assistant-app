@@ -5,6 +5,7 @@ import {
   hasPendingAssistantReply,
   isAssistantComposerDisabled,
   mergeAssistantMessages,
+  pendingAssistantRequestId,
   assistantReceiptState,
   assistantReceiptTarget,
   assistantTodoNavigationIntent,
@@ -72,11 +73,16 @@ check(assistantFailureLabel(missingKey, false) === '尚未回复', '未配置时
 
 const sending = { ...message('sending', 24), status: 'sending' as const };
 check(hasPendingAssistantReply([sending]), '发送中的用户消息应标记为等待回复');
+check(pendingAssistantRequestId([message('older', 23), sending]) === sending.requestId,
+  '停止按钮必须绑定当前发送中的请求');
 check(!hasPendingAssistantReply([latestFailure]), '失败消息不应继续标记为等待回复');
 check(isAssistantComposerDisabled('loading', []), '首次加载期间输入应禁用');
 check(isAssistantComposerDisabled('error', []), '首次加载失败时输入应禁用');
-check(isAssistantComposerDisabled('ready', [sending]), '有回复处理中时输入应禁用');
+check(!isAssistantComposerDisabled('ready', [sending]), '有回复处理中时输入仍应允许编辑草稿');
 check(!isAssistantComposerDisabled('ready', [latestFailure]), '回复失败后输入应恢复');
+const cancelled = { ...message('cancelled', 25), status: 'failed' as const, errorCode: 'cancelled' };
+check(!canRetryAssistantMessage(cancelled, [cancelled], 'configured'), '用户主动停止后不应显示重试');
+check(assistantFailureLabel(cancelled, false) === '已停止', '主动停止应显示独立状态而不是失败');
 check(canLoadOlderAssistantMessages('idle', false), '空闲时允许自动加载更早记录');
 check(!canLoadOlderAssistantMessages('error', false), '分页失败后必须停止自动重试');
 check(canLoadOlderAssistantMessages('error', true), '用户点击重试后允许再次分页');

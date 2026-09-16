@@ -1,4 +1,5 @@
 import {
+  assistantComposerControl,
   assistantComposerMode,
   canSendAssistantComposer,
   joinAssistantComposerText,
@@ -53,6 +54,8 @@ check(
   !canSendAssistantComposer({ text: '等待中', listening: false, unavailable: true }),
   '等待回复时不得发送第二条消息',
 );
+check(assistantComposerControl(false) === 'send', '空闲时右侧应为发送按钮');
+check(assistantComposerControl(true) === 'stop', '模型执行中右侧应为停止按钮');
 
 check(normalizeVoiceLevel(-2) === 0, '不可听音量应归零');
 check(normalizeVoiceLevel(5) === 0.5, '中等音量应归一化');

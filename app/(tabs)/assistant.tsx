@@ -19,10 +19,11 @@ import {
   hasPendingAssistantReply,
   isAssistantComposerDisabled,
   mergeAssistantMessages,
+  pendingAssistantRequestId,
   shouldFollowAssistantEnd,
   shouldScrollAssistantOnFocus,
 } from '../../src/assistant/ui-state';
-import { retryAssistantTurn, sendAssistantTurn } from '../../src/assistant/orchestrator';
+import { cancelAssistantTurn, retryAssistantTurn, sendAssistantTurn } from '../../src/assistant/orchestrator';
 import { listOperationsByRequestIds } from '../../src/assistant/action-store';
 import { undoAssistantRequest } from '../../src/assistant/action-undo';
 import { getRequestState, listMessages, saveUserTurn } from '../../src/assistant/store';
@@ -77,6 +78,7 @@ export default function AssistantScreen() {
   const [hasOlder, setHasOlder] = useState(false);
   const [engineStatus, setEngineStatus] = useState<AssistantEngineStatus>('unknown');
   const [undoingRequestId, setUndoingRequestId] = useState<string | null>(null);
+  const [stoppingRequestId, setStoppingRequestId] = useState<string | null>(null);
   const [undoErrors, setUndoErrors] = useState<Record<string, string>>({});
   const [streamingReplies, setStreamingReplies] = useState<Record<string, AssistantMessage>>({});
 
@@ -229,20 +231,33 @@ export default function AssistantScreen() {
       launchContext,
       onReplyText: text => updateStreamingReply(requestId, userMessage.createdAt, text),
     });
+    void job
+      .then((result) => {
+        if (mountedRef.current) {
+          setMessages(current => mergeAssistantMessages(current, [{
+            ...result.assistantMessage,
+            operations: result.operations,
+          }]));
+        }
+      })
+      .catch(async () => {
+        await getRequestState(requestId).catch(() => null);
+      })
+      .finally(async () => {
+        clearStreamingReply(requestId);
+        await loadLatest(true).catch(() => {});
+      });
+  }
+
+  async function stopCurrentTurn(requestId: string | null) {
+    if (!requestId || stoppingRequestId) return;
+    setStoppingRequestId(requestId);
     try {
-      const result = await job;
-      if (mountedRef.current) {
-        setMessages(current => mergeAssistantMessages(current, [{
-          ...result.assistantMessage,
-          operations: result.operations,
-        }]));
-      }
-    } catch (error) {
-      const saved = await getRequestState(requestId).catch(() => null);
-      if (!saved) throw error;
-    } finally {
+      await cancelAssistantTurn(requestId);
       clearStreamingReply(requestId);
-      await loadLatest(true).catch(() => {});
+      await loadLatest(true);
+    } finally {
+      if (mountedRef.current) setStoppingRequestId(null);
     }
   }
 
@@ -292,6 +307,7 @@ export default function AssistantScreen() {
   }
 
   const composerDisabled = isAssistantComposerDisabled(initialLoad, messages);
+  const activeRequestId = pendingAssistantRequestId(messages);
   const composerProcessing = hasPendingAssistantReply(messages);
 
   return (
@@ -392,8 +408,9 @@ export default function AssistantScreen() {
         <View style={styles.composerWrap}>
           <AssistantComposer
             onSend={send}
+            onStop={() => stopCurrentTurn(activeRequestId)}
             disabled={composerDisabled}
-            processing={composerProcessing}
+            processing={composerProcessing || stoppingRequestId !== null}
           />
         </View>
       </KeyboardAvoidingView>

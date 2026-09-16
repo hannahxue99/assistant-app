@@ -92,6 +92,7 @@ export function canRetryAssistantMessage(
   engineStatus: AssistantEngineStatus,
 ): boolean {
   if (message.role !== 'user' || message.status !== 'failed') return false;
+  if (message.errorCode === 'cancelled') return false;
   const latestUser = [...messages].reverse().find(item => item.role === 'user');
   if (latestUser?.id !== message.id) return false;
   if (message.errorCode === 'missing-key') return engineStatus === 'configured';
@@ -99,6 +100,7 @@ export function canRetryAssistantMessage(
 }
 
 export function assistantFailureLabel(message: AssistantMessage, canRetry: boolean): string {
+  if (message.errorCode === 'cancelled') return '已停止';
   if (!canRetry) return message.errorCode === 'missing-key' ? '尚未回复' : '这条未回复';
   if (message.errorCode === 'interrupted') return '上次回复被中断 · 重试';
   if (message.errorCode === 'provider' || message.errorCode === 'invalid-response') {
@@ -110,13 +112,18 @@ export function assistantFailureLabel(message: AssistantMessage, canRetry: boole
 
 export function isAssistantComposerDisabled(
   initialLoad: AssistantInitialLoadStatus,
-  messages: AssistantMessage[],
+  _messages: AssistantMessage[],
 ): boolean {
-  return initialLoad !== 'ready' || hasPendingAssistantReply(messages);
+  return initialLoad !== 'ready';
 }
 
 export function hasPendingAssistantReply(messages: AssistantMessage[]): boolean {
   return messages.some(item => item.role === 'user' && item.status === 'sending');
+}
+
+export function pendingAssistantRequestId(messages: AssistantMessage[]): string | null {
+  const pending = [...messages].reverse().find(item => item.role === 'user' && item.status === 'sending');
+  return pending?.requestId ?? null;
 }
 
 export function canLoadOlderAssistantMessages(

@@ -553,6 +553,15 @@ export async function completeAssistantTurnWithActions(input: {
 }): Promise<{ assistantMessage: AssistantMessage; operations: AssistantOperation[] }> {
   const createdAt = input.createdAt ?? Date.now();
   return withExclusiveDatabaseTransaction(async (database) => {
+    const request = await database.getFirstAsync<{ status: string; error_code: string | null }>(
+      'SELECT status, error_code FROM assistant_requests WHERE id=?',
+      input.requestId,
+    );
+    if (!request || request.status !== 'pending') {
+      const error = new Error('助手请求已经结束');
+      Object.assign(error, { code: request?.error_code === 'cancelled' ? 'cancelled' : 'request-ended' });
+      throw error;
+    }
     const operations = await applyActions(database, { ...input, createdAt });
     const memoryOperations = await applyMemoryDeltas(database, {
       requestId: input.requestId,

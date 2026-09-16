@@ -1,4 +1,5 @@
 export type AssistantComposerMode = 'idle' | 'input' | 'listening' | 'processing';
+export type AssistantComposerControl = 'send' | 'stop';
 
 interface AssistantComposerState {
   text: string;
@@ -22,4 +23,8 @@ export function assistantComposerMode(state: AssistantComposerState): AssistantC
 
 export function canSendAssistantComposer(state: AssistantComposerState): boolean {
   return Boolean(state.text.trim()) && !state.listening && !state.unavailable;
+}
+
+export function assistantComposerControl(processing: boolean): AssistantComposerControl {
+  return processing ? 'stop' : 'send';
 }

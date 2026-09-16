@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1200" viewBox="0 0 1000 1200">
+  <defs>
+    <style>
+      .bg { fill: #f6f3ee; }
+      .panel { fill: #fff; stroke: #e8e2d9; stroke-width: 2; }
+      .user { fill: #e0733a; }
+      .ai { fill: #fff; stroke: #e8e2d9; stroke-width: 1.5; }
+      .ink { fill: #2b2622; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+      .dim { fill: #8a837b; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+      .accent { fill: #e0733a; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+      .white { fill: #fff; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+      .arrow { stroke: #c9c0b6; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#c9c0b6"/></marker>
+  </defs>
+  <rect class="bg" width="1000" height="1200"/>
+  <text x="50" y="60" class="ink" font-size="30" font-weight="700">小知：可输入、可中止的执行状态</text>
+  <text x="50" y="95" class="dim" font-size="16">模型运行不再锁死输入框；停止按钮真正终止请求，而不是只隐藏动画</text>
+
+  <rect x="50" y="135" width="420" height="420" rx="26" class="panel"/>
+  <text x="82" y="178" class="dim" font-size="13">01 · 空闲</text>
+  <rect x="178" y="220" width="250" height="76" rx="18" class="user"/>
+  <text x="198" y="251" class="white" font-size="14">帮我规划下个月还款</text>
+  <text x="405" y="280" class="white" font-size="11" text-anchor="end" opacity="0.75">18:20</text>
+  <rect x="78" y="460" width="364" height="58" rx="29" class="ai"/>
+  <circle cx="109" cy="489" r="20" fill="#f9e8dd"/>
+  <text x="109" y="496" class="accent" font-size="18" text-anchor="middle">⌕</text>
+  <text x="140" y="495" class="dim" font-size="15">发消息给小知</text>
+  <circle cx="410" cy="489" r="20" fill="#d8d2cc"/>
+  <path d="M410 496 v-14 M405 488 l5-5 5 5" fill="none" stroke="#fff" stroke-width="2"/>
+
+  <rect x="530" y="135" width="420" height="420" rx="26" class="panel"/>
+  <text x="562" y="178" class="accent" font-size="13">02 · 小知执行中</text>
+  <rect x="658" y="220" width="250" height="76" rx="18" class="user"/>
+  <text x="678" y="251" class="white" font-size="14">帮我规划下个月还款</text>
+  <text x="885" y="280" class="white" font-size="11" text-anchor="end" opacity="0.75">18:20</text>
+  <rect x="562" y="320" width="270" height="104" rx="18" class="ai"/>
+  <text x="582" y="351" class="ink" font-size="14">我先帮你梳理还款节奏，</text>
+  <text x="582" y="376" class="ink" font-size="14">目前需要先确认…</text>
+  <text x="582" y="407" class="accent" font-size="12">小知正在处理 ▋</text>
+  <rect x="558" y="460" width="364" height="58" rx="29" class="ai"/>
+  <circle cx="589" cy="489" r="20" fill="#f1ede8"/>
+  <text x="589" y="496" class="dim" font-size="18" text-anchor="middle">⌕</text>
+  <text x="620" y="495" class="ink" font-size="15">另外，下月 11 号…</text>
+  <circle cx="890" cy="489" r="20" fill="#e0733a"/>
+  <rect x="884" y="483" width="12" height="12" rx="2" fill="#fff"/>
+
+  <path d="M475 345 C498 345 503 345 526 345" class="arrow"/>
+  <path d="M740 560 C740 595 620 610 575 645" class="arrow"/>
+
+  <rect x="290" y="650" width="420" height="390" rx="26" class="panel"/>
+  <text x="322" y="693" class="dim" font-size="13">03 · 用户点击停止</text>
+  <rect x="418" y="735" width="250" height="76" rx="18" class="user"/>
+  <text x="438" y="766" class="white" font-size="14">帮我规划下个月还款</text>
+  <text x="645" y="795" class="white" font-size="11" text-anchor="end" opacity="0.75">18:20</text>
+  <rect x="322" y="835" width="285" height="118" rx="18" class="ai"/>
+  <text x="342" y="866" class="ink" font-size="14">我先帮你梳理还款节奏，</text>
+  <text x="342" y="891" class="ink" font-size="14">目前需要先确认…</text>
+  <text x="342" y="927" class="dim" font-size="12">已停止 · 未执行任何操作</text>
+  <rect x="318" y="970" width="364" height="58" rx="29" class="ai"/>
+  <circle cx="349" cy="999" r="20" fill="#f9e8dd"/>
+  <text x="349" y="1006" class="accent" font-size="18" text-anchor="middle">⌕</text>
+  <text x="380" y="1005" class="ink" font-size="15">另外，下月 11 号…</text>
+  <circle cx="650" cy="999" r="20" fill="#e0733a"/>
+  <path d="M650 1006 v-14 M645 998 l5-5 5 5" fill="none" stroke="#fff" stroke-width="2"/>
+
+  <text x="50" y="1102" class="ink" font-size="18" font-weight="700">关键规则</text>
+  <text x="50" y="1135" class="dim" font-size="14">执行中可输入草稿，但不能发送第二条；右侧方块用于停止。完成或停止后，草稿原样保留。</text>
+  <text x="50" y="1164" class="dim" font-size="14">停止后保留已显示的半截回复；未完成的待办、事件、记忆与事件增量全部不落库。</text>
+</svg>

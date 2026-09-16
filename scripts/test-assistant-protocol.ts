@@ -437,6 +437,30 @@ async function main() {
   check(rateLimitCalls === 2 && afterRateLimit.providerMetadata.attemptCount === 2,
     '限流错误应执行一次完整重试');
 
+  const cancelController = new AbortController();
+  let cancellationCalls = 0;
+  const cancelledRequest = requestAssistantTurn({
+    settings: { llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model' },
+    context: { contextBlock: '上下文', recentMessages: [] },
+    signal: cancelController.signal,
+    fetchImpl: async (_url, init) => {
+      cancellationCalls += 1;
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      });
+    },
+  });
+  await Promise.resolve();
+  cancelController.abort();
+  let cancellationError: any = null;
+  try {
+    await cancelledRequest;
+  } catch (error) {
+    cancellationError = error;
+  }
+  check(cancellationCalls === 1, '用户停止后不得再自动请求第二次');
+  check(cancellationError?.code === 'cancelled', '主动停止必须与网络失败区分');
+
   console.log('assistant protocol tests passed');
 }
 

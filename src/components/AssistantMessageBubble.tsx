@@ -45,6 +45,11 @@ export function AssistantMessageBubble({
           />
         </View>
       ) : null}
+      {!isUser && message.errorCode === 'cancelled' ? (
+        <View style={styles.statusRow}>
+          <Text style={styles.statusText}>已停止 · 未执行任何操作</Text>
+        </View>
+      ) : null}
       {isUser && message.status === 'sending' ? (
         <View style={styles.statusRow}>
           <ActivityIndicator size="small" color={theme.colors.textDim} />

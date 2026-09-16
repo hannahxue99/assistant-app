@@ -153,6 +153,11 @@ export async function completeTurnWithDatabase(
 
     const request = await txn.getFirstAsync<any>('SELECT * FROM assistant_requests WHERE id=?', input.requestId);
     if (!request) throw new Error('找不到对应请求');
+    if (request.status !== 'pending') {
+      const error = new Error('助手请求已经结束');
+      Object.assign(error, { code: request.error_code === 'cancelled' ? 'cancelled' : 'request-ended' });
+      throw error;
+    }
     const userRow = await txn.getFirstAsync<any>('SELECT * FROM assistant_messages WHERE id=?', request.user_message_id);
     if (!userRow) throw new Error('找不到对应用户消息');
 
@@ -221,6 +226,57 @@ export async function failTurn(requestId: string, errorCode: string, updatedAt =
 }
 
 /**
+ * 用户主动停止一轮。部分自然回复可保留，但语义操作由上层整体放弃。
+ * 返回 false 表示请求已经由另一条路径先完成。
+ */
+export async function cancelTurn(
+  requestId: string,
+  partialReply: string | null,
+  updatedAt = Date.now(),
+): Promise<boolean> {
+  return withExclusiveDatabaseTransaction(async (txn) => {
+    const request = await txn.getFirstAsync<any>('SELECT * FROM assistant_requests WHERE id=?', requestId);
+    if (!request || request.status !== 'pending') return false;
+    const userRow = await txn.getFirstAsync<any>(
+      "SELECT * FROM assistant_messages WHERE request_id=? AND role='user'",
+      requestId,
+    );
+    if (!userRow) return false;
+
+    const reply = partialReply?.trim() ?? '';
+    if (reply) {
+      const existing = await txn.getFirstAsync<any>(
+        "SELECT id FROM assistant_messages WHERE request_id=? AND role='assistant'",
+        requestId,
+      );
+      if (!existing) {
+        await txn.runAsync(
+          `INSERT INTO assistant_messages (
+             id, request_id, role, content, source, status, segment_id,
+             legacy_entry_id, created_at, updated_at
+           ) VALUES (?, ?, 'assistant', ?, 'assistant', 'saved', ?, NULL, ?, ?)`,
+          makeId('message', updatedAt), requestId, reply, userRow.segment_id, updatedAt, updatedAt,
+        );
+      }
+      await txn.runAsync(
+        "UPDATE assistant_messages SET status='saved', updated_at=? WHERE id=?",
+        updatedAt, userRow.id,
+      );
+    } else {
+      await txn.runAsync(
+        "UPDATE assistant_messages SET status='failed', updated_at=? WHERE id=?",
+        updatedAt, userRow.id,
+      );
+    }
+    await txn.runAsync(
+      "UPDATE assistant_requests SET status='failed', error_code='cancelled', updated_at=? WHERE id=?",
+      updatedAt, requestId,
+    );
+    return true;
+  });
+}
+
+/**
  * App 冷启动时，进程内请求已经不存在；把遗留 pending 恢复为可重试状态。
  */
 export async function recoverInterruptedAssistantRequests(updatedAt = Date.now()): Promise<number> {
@@ -278,7 +334,9 @@ export async function getRequestState(requestId: string): Promise<AssistantReque
       id: request.id,
       status: request.status,
       userMessage: rowToMessage({ ...userRow, request_error_code: request.error_code }),
-      assistantMessage: assistantRow ? rowToMessage(assistantRow) : null,
+      assistantMessage: assistantRow
+        ? rowToMessage({ ...assistantRow, request_error_code: request.error_code })
+        : null,
     };
   });
 }

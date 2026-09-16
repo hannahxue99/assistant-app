@@ -86,6 +86,39 @@ async function main() {
   const completed = await first;
   assert.equal(completed.assistantMessage.content, '好，我们继续。');
 
+  provider = async input => {
+    input.onReplyText?.('我先帮你梳理到这里');
+    return new Promise(resolve => {
+      const finishDespiteCancellation = () => resolve({
+        reply: '不应提交的完整回复',
+        segment: { action: 'continue' },
+        operations: [{
+          key: 'cancelled-todo', type: 'create_todo', todoRef: 'todo_1',
+          text: '不应落库的停止待办', dateStatus: 'absent',
+        }],
+      });
+      if (input.signal?.aborted) finishDespiteCancellation();
+      else input.signal?.addEventListener('abort', finishDespiteCancellation, { once: true });
+    });
+  };
+  const cancelledJob = orchestrator.sendAssistantTurn({
+    requestId: 'request-cancelled', content: '先规划一下还款', source: 'text', settings, createdAt: 1500,
+  });
+  void cancelledJob.catch(() => {});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(await orchestrator.cancelAssistantTurn('request-cancelled'), true,
+    '停止按钮必须终止当前任务并完成持久化收尾');
+  await assert.rejects(cancelledJob, /取消/);
+  const cancelledState = await store.getRequestState('request-cancelled');
+  assert.equal(cancelledState.status, 'failed');
+  assert.equal(cancelledState.userMessage.status, 'saved', '已有部分回复时用户消息应保持正常历史状态');
+  assert.equal(cancelledState.assistantMessage.content, '我先帮你梳理到这里', '已显示的部分回复应保留');
+  assert.equal(cancelledState.assistantMessage.errorCode, 'cancelled', '部分回复应带主动停止标记');
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM assistant_operations WHERE request_id='request-cancelled'").get().count, 0,
+    '停止请求不得写入任何对象操作');
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM entries WHERE summary='不应落库的停止待办'").get().count, 0,
+    '即使 Provider 忽略取消并返回完整操作，本地提交闸门也必须整体拒绝');
+
   provider = async () => { throw Object.assign(new Error('offline'), { code: 'network' }); };
   await assert.rejects(orchestrator.sendAssistantTurn({
     requestId: 'request-2', content: '断网时也要保存', source: 'text', settings, createdAt: 2000,

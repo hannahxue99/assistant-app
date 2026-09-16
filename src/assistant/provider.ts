@@ -9,7 +9,7 @@ import {
 } from './protocol';
 import { extractPartialJsonStringField } from './streaming-json';
 
-export type AssistantProviderErrorCode = 'missing-key' | 'timeout' | 'network' | 'provider' | 'invalid-response';
+export type AssistantProviderErrorCode = 'missing-key' | 'timeout' | 'network' | 'provider' | 'invalid-response' | 'cancelled';
 
 export interface AssistantProviderAttempt {
   attempt: number;
@@ -176,7 +176,7 @@ async function requestCompletion(input: {
     if (error instanceof AssistantProviderError) throw error;
     if (timedOut) throw new AssistantProviderError('timeout', '回复超时，请稍后重试');
     if (input.callerSignal?.aborted) {
-      throw new AssistantProviderError('network', '请求已取消', undefined, false);
+      throw new AssistantProviderError('cancelled', '请求已取消', undefined, false);
     }
     throw new AssistantProviderError('network', `网络请求失败：${error?.message ?? '未知错误'}`);
   } finally {

@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Keyboard,
   Pressable,
   StyleSheet,
@@ -14,6 +15,7 @@ import {
 } from 'expo-speech-recognition';
 
 import {
+  assistantComposerControl,
   assistantComposerMode,
   canSendAssistantComposer,
   joinAssistantComposerText,
@@ -23,6 +25,7 @@ import { theme } from '../theme';
 
 interface AssistantComposerProps {
   onSend: (content: string, source: 'text' | 'voice') => Promise<void>;
+  onStop?: () => Promise<void>;
   disabled?: boolean;
   processing?: boolean;
 }
@@ -39,11 +42,13 @@ function VoiceLevelBars({ level }: { level: number }) {
 
 export function AssistantComposer({
   onSend,
+  onStop = async () => {},
   disabled = false,
   processing = false,
 }: AssistantComposerProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0);
   const [recognitionError, setRecognitionError] = useState<string | null>(null);
@@ -108,7 +113,6 @@ export function AssistantComposer({
     usedVoiceRef.current = false;
     baseTextRef.current = '';
     finalTextRef.current = '';
-    Keyboard.dismiss();
     try {
       await onSend(content, source);
     } catch {
@@ -117,6 +121,19 @@ export function AssistantComposer({
       setSubmitError('消息没有发出，内容已为你保留');
     } finally {
       setSending(false);
+    }
+  }
+
+  async function stopProcessing() {
+    if (!processing || stopping) return;
+    setStopping(true);
+    setSubmitError(null);
+    try {
+      await onStop();
+    } catch {
+      setSubmitError('暂时没能停止，请再试一次');
+    } finally {
+      setStopping(false);
     }
   }
 
@@ -171,10 +188,12 @@ export function AssistantComposer({
     void startListening();
   }
 
-  const unavailable = sending || disabled || processing;
-  const awaitingReply = sending || processing;
-  const mode = assistantComposerMode({ text, listening, unavailable });
-  const canSend = canSendAssistantComposer({ text, listening, unavailable });
+  const inputUnavailable = sending || disabled;
+  const sendUnavailable = inputUnavailable || processing || stopping;
+  const mode = assistantComposerMode({ text, listening, unavailable: inputUnavailable });
+  const control = assistantComposerControl(processing || stopping);
+  const canSend = canSendAssistantComposer({ text, listening, unavailable: sendUnavailable });
+  const micUnavailable = inputUnavailable || processing || stopping;
 
   return (
     <View style={styles.wrap}>
@@ -184,14 +203,14 @@ export function AssistantComposer({
           mode === 'listening' && styles.composerListening,
           mode === 'processing' && styles.composerDisabled,
         ]}
-        accessibilityState={{ disabled: unavailable, busy: awaitingReply }}
+        accessibilityState={{ disabled: inputUnavailable, busy: processing || stopping }}
       >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={listening ? '停止语音输入' : '开始语音输入'}
-          accessibilityState={{ selected: listening, disabled: unavailable }}
+          accessibilityState={{ selected: listening, disabled: micUnavailable }}
           onPress={toggleListening}
-          disabled={unavailable}
+          disabled={micUnavailable}
           hitSlop={4}
           style={({ pressed }) => [
             styles.iconButton,
@@ -202,7 +221,7 @@ export function AssistantComposer({
           <Ionicons
             name={listening ? 'stop' : 'mic-outline'}
             size={listening ? 17 : 20}
-            color={listening ? '#FFFFFF' : unavailable ? theme.colors.textDim : theme.colors.accent}
+            color={listening ? '#FFFFFF' : micUnavailable ? theme.colors.textDim : theme.colors.accent}
           />
         </Pressable>
         {listening ? <VoiceLevelBars level={voiceLevel} /> : null}
@@ -212,8 +231,8 @@ export function AssistantComposer({
             setText(value);
             if (submitError) setSubmitError(null);
           }}
-          editable={!unavailable && !listening}
-          placeholder={listening ? '' : awaitingReply ? '小知回复后可继续输入' : '发消息给小知'}
+          editable={!inputUnavailable && !listening}
+          placeholder={listening ? '' : '发消息给小知'}
           placeholderTextColor={theme.colors.textDim}
           selectionColor={theme.colors.accent}
           multiline
@@ -221,7 +240,23 @@ export function AssistantComposer({
           style={styles.input}
           accessibilityLabel="给小知发送消息"
         />
-        {listening ? <Text style={styles.listeningLabel}>正在听</Text> : (
+        {listening ? <Text style={styles.listeningLabel}>正在听</Text> : control === 'stop' ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={stopping ? '正在停止小知' : '停止小知'}
+            accessibilityState={{ busy: stopping, disabled: stopping }}
+            disabled={stopping}
+            onPress={() => { void stopProcessing(); }}
+            hitSlop={4}
+            style={({ pressed }) => [
+              styles.stopButton,
+              stopping && styles.stopButtonBusy,
+              pressed && styles.pressed,
+            ]}
+          >
+            {stopping ? <ActivityIndicator size="small" color="#FFFFFF" /> : <View style={styles.stopGlyph} />}
+          </Pressable>
+        ) : (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="发送消息"
@@ -298,6 +333,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: theme.colors.accent,
   },
+  stopButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.accent,
+  },
+  stopButtonBusy: { opacity: 0.7 },
+  stopGlyph: { width: 12, height: 12, borderRadius: 2, backgroundColor: '#FFFFFF' },
   sendDisabled: { backgroundColor: '#D8D2CC' },
   voiceBars: { width: 32, height: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, alignSelf: 'center' },
   voiceBar: { width: 3, minHeight: 4, borderRadius: 2, backgroundColor: theme.colors.accent },

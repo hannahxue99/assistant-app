@@ -18,6 +18,7 @@ import {
 import { rankRelevantEntries, rankRelevantSegments } from './retrieval';
 import {
   beginRetry,
+  cancelTurn,
   failTurn,
   getCurrentSegment,
   getRequestState,
@@ -57,10 +58,24 @@ type RetryInput = {
   onReplyText?: (text: string) => void;
 };
 
-const runtime = globalThis as typeof globalThis & {
-  __assistantTurnJobs?: Map<string, Promise<AssistantTurnResult>>;
+type AssistantTurnJob = {
+  promise: Promise<AssistantTurnResult>;
+  controller: AbortController;
+  partialReply: string;
 };
-const jobs = runtime.__assistantTurnJobs ??= new Map();
+
+const runtime = globalThis as typeof globalThis & {
+  __assistantTurnJobsV2?: Map<string, AssistantTurnJob>;
+};
+const jobs = runtime.__assistantTurnJobsV2 ??= new Map();
+
+function cancellationError(): Error & { code: string } {
+  return Object.assign(new Error('请求已取消'), { code: 'cancelled' });
+}
+
+function throwIfCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw cancellationError();
+}
 
 async function safelyLog(work: () => Promise<void>): Promise<void> {
   try {
@@ -91,7 +106,13 @@ async function runSavedTurn(input: {
   settings?: Settings;
   launchContext?: AssistantLaunchContext | null;
   onReplyText?: (text: string) => void;
+  signal?: AbortSignal;
+  getPartialReply?: () => string;
 }): Promise<AssistantTurnResult> {
+  if (input.signal?.aborted) {
+    await cancelTurn(input.requestId, input.getPartialReply?.() ?? null).catch(() => {});
+    throw cancellationError();
+  }
   const state = await getRequestState(input.requestId);
   if (!state) throw new Error('找不到待处理的用户消息');
   if (state.status === 'succeeded' && state.assistantMessage) {
@@ -161,13 +182,16 @@ async function runSavedTurn(input: {
   }));
 
   try {
+    throwIfCancelled(input.signal);
     const output = await requestAssistantTurn({
       settings,
       context,
       referenceAt: state.userMessage.createdAt,
       timeZone,
+      signal: input.signal,
       onReplyText: input.onReplyText,
     });
+    throwIfCancelled(input.signal);
     const eventDeltas = output.eventDeltas ?? [];
     const memoryDeltas = output.memoryDeltas ?? [];
     await safelyLog(() => recordAssistantModelDecision({
@@ -207,6 +231,7 @@ async function runSavedTurn(input: {
       acceptedMemoryDeltas: memoryValidation.accepted,
       rejectedMemoryDeltas: memoryValidation.rejected,
     }));
+    throwIfCancelled(input.signal);
     const replyForCommit = output.providerMetadata?.protocolWarnings.includes('reply_execution_claim')
       && validation.accepted.length === 0
       && memoryValidation.accepted.length === 0
@@ -256,7 +281,8 @@ async function runSavedTurn(input: {
       },
     };
   } catch (error: any) {
-    const errorCode = typeof error?.code === 'string' ? error.code : 'unknown';
+    const cancelled = input.signal?.aborted || error?.code === 'cancelled';
+    const errorCode = cancelled ? 'cancelled' : typeof error?.code === 'string' ? error.code : 'unknown';
     const diagnostics = error?.diagnostics;
     const errorDetail = typeof error?.message === 'string' ? error.message : String(error ?? '未知错误');
     await safelyLog(() => recordAssistantDecisionFailure({
@@ -277,6 +303,10 @@ async function runSavedTurn(input: {
         providerAttempts: diagnostics?.attempts ?? [],
       });
     }
+    if (cancelled) {
+      await cancelTurn(input.requestId, input.getPartialReply?.() ?? null).catch(() => {});
+      throw cancellationError();
+    }
     await failTurn(input.requestId, errorCode).catch(() => {});
     throw error;
   }
@@ -284,29 +314,70 @@ async function runSavedTurn(input: {
 
 export function sendAssistantTurn(input: SendInput): Promise<AssistantTurnResult> {
   const existing = jobs.get(input.requestId);
-  if (existing) return existing;
-  const job = (async () => {
+  if (existing) return existing.promise;
+  const controller = new AbortController();
+  const entry: AssistantTurnJob = {
+    controller,
+    partialReply: '',
+    promise: Promise.resolve(null as unknown as AssistantTurnResult),
+  };
+  jobs.set(input.requestId, entry);
+  entry.promise = (async () => {
     await saveUserTurn({
       requestId: input.requestId,
       content: input.content,
       source: input.source,
       createdAt: input.createdAt,
     });
-    return runSavedTurn(input);
-  })().finally(() => jobs.delete(input.requestId));
-  jobs.set(input.requestId, job);
-  return job;
+    return runSavedTurn({
+      ...input,
+      signal: controller.signal,
+      getPartialReply: () => entry.partialReply,
+      onReplyText: (text) => {
+        entry.partialReply = text;
+        input.onReplyText?.(text);
+      },
+    });
+  })().finally(() => {
+    if (jobs.get(input.requestId) === entry) jobs.delete(input.requestId);
+  });
+  return entry.promise;
 }
 
 export function retryAssistantTurn(input: RetryInput): Promise<AssistantTurnResult> {
   const existing = jobs.get(input.requestId);
-  if (existing) return existing;
-  const job = (async () => {
+  if (existing) return existing.promise;
+  const controller = new AbortController();
+  const entry: AssistantTurnJob = {
+    controller,
+    partialReply: '',
+    promise: Promise.resolve(null as unknown as AssistantTurnResult),
+  };
+  jobs.set(input.requestId, entry);
+  entry.promise = (async () => {
     const state = await getRequestState(input.requestId);
     if (!state) throw new Error('找不到可重试的消息');
     if (state.status !== 'succeeded') await beginRetry(input.requestId);
-    return runSavedTurn(input);
-  })().finally(() => jobs.delete(input.requestId));
-  jobs.set(input.requestId, job);
-  return job;
+    return runSavedTurn({
+      ...input,
+      signal: controller.signal,
+      getPartialReply: () => entry.partialReply,
+      onReplyText: (text) => {
+        entry.partialReply = text;
+        input.onReplyText?.(text);
+      },
+    });
+  })().finally(() => {
+    if (jobs.get(input.requestId) === entry) jobs.delete(input.requestId);
+  });
+  return entry.promise;
+}
+
+export async function cancelAssistantTurn(requestId: string): Promise<boolean> {
+  const job = jobs.get(requestId);
+  if (!job) return cancelTurn(requestId, null);
+  job.controller.abort();
+  const cancelled = await cancelTurn(requestId, job.partialReply);
+  void job.promise.catch(() => {});
+  return cancelled;
 }
