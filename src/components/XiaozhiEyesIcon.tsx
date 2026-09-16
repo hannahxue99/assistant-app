@@ -127,7 +127,7 @@ export function XiaozhiEyesIcon({ size, focused }: XiaozhiEyesIconProps) {
   const faceSize = Math.round(size + 10);
   const slotSize = Math.round(size + 12);
   const eyeStyle = {
-    backgroundColor: theme.colors.accent,
+    backgroundColor: focused ? '#FFF7F2' : theme.colors.accent,
     transform: [
       { translateX: gazeX },
       { translateY: gazeY },
@@ -152,7 +152,7 @@ export function XiaozhiEyesIcon({ size, focused }: XiaozhiEyesIconProps) {
             width: faceSize,
             height: faceSize,
             borderRadius: faceSize / 2,
-            backgroundColor: theme.colors.accentSoft,
+            backgroundColor: focused ? theme.colors.accent : theme.colors.accentSoft,
             transform: [{ scale: focused ? 1 : 30 / 34 }],
           },
         ]}

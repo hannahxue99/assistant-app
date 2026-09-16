@@ -39,9 +39,9 @@
       <text x="20" y="79" class="orange" font-size="12" font-weight="600" text-anchor="middle">首页</text>
     </g>
     <g transform="translate(416 54)">
-      <rect x="5" y="6" width="44" height="44" rx="22" fill="#F9E8DD"/>
-      <ellipse cx="20" cy="24" rx="4.5" ry="6.7" fill="#E0733A"/>
-      <ellipse cx="34" cy="24" rx="4.5" ry="6.7" fill="#E0733A"/>
+      <rect x="5" y="6" width="44" height="44" rx="22" fill="#E0733A"/>
+      <ellipse cx="20" cy="24" rx="4.5" ry="6.7" fill="#FFF7F2"/>
+      <ellipse cx="34" cy="24" rx="4.5" ry="6.7" fill="#FFF7F2"/>
       <text x="27" y="83" class="orange" font-size="12" font-weight="600" text-anchor="middle">小知</text>
     </g>
     <g transform="translate(720 58)">

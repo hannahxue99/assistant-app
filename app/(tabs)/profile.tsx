@@ -8,7 +8,6 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import {
   Alert,
-  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -352,8 +351,7 @@ export default function ProfileScreen() {
               {llmStatus.label} ›
             </Text>
           </Pressable>
-          {Platform.OS === 'ios' && <View style={styles.settingsDivider} />}
-          <CalendarSyncSetting embedded />
+          <CalendarSyncSetting embedded showTopDivider />
         </View>
 
         <Text style={styles.sectionLabel}>待办通知</Text>
@@ -368,8 +366,7 @@ export default function ProfileScreen() {
               thumbColor={profile?.notifyMorning ? theme.colors.accent : '#fff'}
             />
           </View>
-          <View style={styles.notifyDivider} />
-          <View style={styles.notifyRow}>
+          <View style={[styles.notifyRow, styles.notifyRowDivider]}>
             <Text style={styles.rowLabel}>晚 21:00 夜间待办</Text>
             <Switch
               value={profile?.notifyEvening ?? false}
@@ -472,17 +469,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  settingsDivider: {
-    marginHorizontal: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.border,
-  },
   notifyCard: {
     backgroundColor: theme.colors.card,
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.input,
-    paddingHorizontal: 14,
     paddingVertical: 2,
   },
   notifyRow: {
@@ -490,10 +481,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     minHeight: theme.touchTarget,
+    paddingHorizontal: 14,
     paddingVertical: 4,
   },
-  notifyDivider: {
-    borderTopWidth: StyleSheet.hairlineWidth,
+  notifyRowDivider: {
+    borderTopWidth: 1,
     borderTopColor: theme.colors.border,
   },
   undoBar: {

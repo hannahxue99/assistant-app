@@ -5,9 +5,10 @@ import { theme } from '../theme';
 
 type CalendarSyncSettingProps = {
   embedded?: boolean;
+  showTopDivider?: boolean;
 };
 
-export function CalendarSyncSetting({ embedded = false }: CalendarSyncSettingProps) {
+export function CalendarSyncSetting({ embedded = false, showTopDivider = false }: CalendarSyncSettingProps) {
   const [status, setStatus] = useState<Awaited<ReturnType<typeof calendarStatus>> | null>(null);
   const [busy, setBusy] = useState(false);
   const refresh = useCallback(() => { void calendarStatus().then(setStatus).catch(() => {}); }, []);
@@ -47,7 +48,7 @@ export function CalendarSyncSetting({ embedded = false }: CalendarSyncSettingPro
       void setCalendarEnabled(false).catch(() => Alert.alert('关闭失败', '请重试')).finally(() => { setBusy(false); refresh(); });
     }
   }
-  return <View style={[styles.card, embedded && styles.embeddedCard]}>
+  return <View style={[styles.card, embedded && styles.embeddedCard, showTopDivider && styles.topDivider]}>
     <View style={styles.row}><Text style={styles.title}>同步到苹果日历</Text>
       <Switch accessibilityLabel="同步到苹果日历" disabled={busy || !status} value={!!status?.enabled} onValueChange={toggle} />
     </View>
@@ -64,6 +65,7 @@ export function CalendarSyncSetting({ embedded = false }: CalendarSyncSettingPro
 const styles = StyleSheet.create({
   card: { backgroundColor: theme.colors.card, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12, gap: 4 },
   embeddedCard: { borderRadius: 0, minHeight: theme.touchTarget },
+  topDivider: { borderTopWidth: 1, borderTopColor: theme.colors.border },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { fontSize: theme.font.body, color: theme.colors.text }, detail: { fontSize: 12, lineHeight: 18, color: theme.colors.textDim },
   action: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }, link: { color: theme.colors.accent, fontSize: 15 },
