@@ -306,6 +306,10 @@ async function main() {
   check(!capturedBody.includes('secret'), 'API Key 不得进入请求 body');
   check(capturedBody.includes('fixture-model'), '请求应使用当前模型设置');
   check(capturedBody.includes('"stream":true'), 'Provider 必须启用流式返回');
+  check(capturedBody.includes('"thinking":{"type":"enabled"}')
+    && capturedBody.includes('"reasoning_effort":"high"'),
+  'Provider 应显式开启 DeepSeek 思考并设置推理强度');
+  check(providerResult.reasoning === null, '未返回思考内容时应保持空状态');
 
   const modelJson = JSON.stringify({
     reply: '下个月10号继续还款。',
@@ -316,12 +320,17 @@ async function main() {
     }],
   });
   const deltas = [modelJson.slice(0, 15), modelJson.slice(15, 27), modelJson.slice(27)];
-  const sse = `${deltas.map((content, index) => `data: ${JSON.stringify({
+  const reasoningEvent = `data: ${JSON.stringify({
+    choices: [{ delta: { reasoning_content: '先判断是否需要建立待办。' }, finish_reason: null }],
+  })}\n\n`;
+  const sse = `${reasoningEvent}${deltas.map((content, index) => `data: ${JSON.stringify({
     choices: [{ delta: { content }, finish_reason: index === deltas.length - 1 ? 'stop' : null }],
     usage: index === deltas.length - 1 ? { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 } : null,
   })}\n\n`).join('')}data: [DONE]\n\n`;
   const bytes = new TextEncoder().encode(sse);
   const streamedText: string[] = [];
+  const streamedReasoning: string[] = [];
+  const progressStages: string[] = [];
   const streamed = await requestAssistantTurn({
     settings: {
       llmEnabled: true,
@@ -340,69 +349,23 @@ async function main() {
       },
     }), { status: 200, headers: { 'content-type': 'text/event-stream' } }),
     onReplyText: text => streamedText.push(text),
+    onReasoningText: text => streamedReasoning.push(text),
+    onProgress: stage => progressStages.push(stage),
   });
   check(streamed.reply === '下个月10号继续还款。', '流式 Provider 必须重组完整 JSON');
   check(streamedText.length > 1 && streamedText.at(-1) === streamed.reply, '自然回复应分段呈现并以完整回复结束');
   check(streamed.providerMetadata.totalTokens === 18 && streamed.providerMetadata.finishReason === 'stop',
     '流式元数据应记录 token usage 与结束原因');
+  check(progressStages.includes('thinking') && progressStages.includes('answering'),
+    '推理内容到达时应保持思考状态，reply 到达后应切换回答状态');
+  check(!streamed.reply.includes('先判断是否需要建立待办'),
+    '原始 reasoning_content 不得进入用户回复');
+  check(streamed.reasoning?.content === '先判断是否需要建立待办。'
+    && streamedReasoning.at(-1) === streamed.reasoning.content,
+  '思考内容应流式更新并在完成后完整返回');
 
-  const retryBodies: string[] = [];
-  const retryDisplays: string[] = [];
-  let retryCalls = 0;
-  const retried = await requestAssistantTurn({
-    settings: {
-      llmEnabled: true,
-      llmBaseUrl: 'https://example.test/v1',
-      llmKey: 'secret',
-      llmModel: 'fixture-model',
-    },
-    context: {
-      contextBlock: '第二次完整请求也必须保留的上下文',
-      recentMessages: [{ id: 'u', role: 'user', content: '下个月11号还款10万', createdAt: 1 }],
-    },
-    referenceAt: new Date('2026-09-15T15:39:06+08:00').getTime(),
-    timeZone: 'Asia/Shanghai',
-    fetchImpl: async (_url, init) => {
-      retryBodies.push(String(init?.body));
-      retryCalls += 1;
-      const content = retryCalls === 1
-        ? '{"reply":"好的，记下了","segment":{"action":"continue"},"operations":[{"key":"todo","type":"create_todo","todo_ref":"todo_1","text":"还款10万","date_status":"resolved","date_text":"下个月11号"}]}'
-        : '{"reply":"好的，记下了","segment":{"action":"continue"},"operations":[{"key":"todo","type":"create_todo","todo_ref":"todo_1","text":"还款10万","date_status":"resolved","date_text":"下个月11号","due_date":"2026-10-11","time_precision":"date"}]}';
-      if (retryCalls === 1) {
-        const event = JSON.stringify({
-          choices: [{ delta: { content }, finish_reason: 'stop' }],
-          usage: { prompt_tokens: 5, completion_tokens: 6, total_tokens: 11 },
-        });
-        return new Response(`data: ${event}\n\ndata: [DONE]\n\n`, {
-          status: 200,
-          headers: { 'content-type': 'text/event-stream' },
-        });
-      }
-      return new Response(JSON.stringify({
-        choices: [{ message: { content }, finish_reason: 'stop' }],
-        usage: { prompt_tokens: 5, completion_tokens: 6, total_tokens: 11 },
-      }), { status: 200, headers: { 'content-type': 'application/json' } });
-    },
-    onReplyText: text => retryDisplays.push(text),
-  });
-  check(retryCalls === 2, '协议损坏时最多重试一次完整请求');
-  check(retried.operations[0].type === 'create_todo', '第二次完整结果必须重新通过同一严格协议');
-  check(retried.providerMetadata.attemptCount === 2
-    && retried.providerMetadata.attempts[0].errorCode === 'invalid-response'
-    && retried.providerMetadata.attempts[1].errorCode === null,
-  'Provider 元数据应分别记录失败和成功尝试');
-  check(retried.providerMetadata.totalTokens === 22, '两次完整调用的 token 应合并计入本轮');
-  check(retryBodies[0] === retryBodies[1]
-    && retryBodies[1].includes('第二次完整请求也必须保留的上下文')
-    && retryBodies[1].includes('下个月11号还款10万'),
-  '重试必须原样携带同一份完整上下文，而非发送 JSON 修补提示');
-  check(retryDisplays[0] === '好的，记下了' && retryDisplays.includes('') && retryDisplays.at(-1) === retried.reply,
-    '重试前应清空第一次流式草稿，最终只展示第二次有效回复');
-  check(retried.providerMetadata.protocolWarnings.includes('reply_execution_claim'),
-    '第二次自然成功措辞应记录为告警但不导致失败');
-
-  let failedRetryCalls = 0;
-  let failedRetryError: any = null;
+  let invalidResponseCalls = 0;
+  let invalidResponseError: any = null;
   try {
     await requestAssistantTurn({
       settings: {
@@ -413,20 +376,20 @@ async function main() {
       },
       context: { contextBlock: '上下文', recentMessages: [] },
       fetchImpl: async () => {
-        failedRetryCalls += 1;
+        invalidResponseCalls += 1;
         return new Response(JSON.stringify({
           choices: [{ message: { content: '{"reply":"收到","segment":{"action":"bad"}}' } }],
         }), { status: 200, headers: { 'content-type': 'application/json' } });
       },
     });
   } catch (error) {
-    failedRetryError = error;
+    invalidResponseError = error;
   }
-  check(failedRetryCalls === 2, '连续损坏时也只能调用两次，不能无限重试');
-  check(failedRetryError?.code === 'invalid-response'
-    && failedRetryError?.diagnostics?.attemptCount === 2
-    && failedRetryError?.diagnostics?.attempts.every((attempt: any) => attempt.errorCode === 'invalid-response'),
-  '两次仍失败时必须携带逐次诊断状态');
+  check(invalidResponseCalls === 1, '协议损坏时不得自动发起第二次模型请求');
+  check(invalidResponseError?.code === 'invalid-response'
+    && invalidResponseError?.diagnostics?.attemptCount === 1
+    && invalidResponseError?.diagnostics?.attempts[0]?.errorCode === 'invalid-response',
+  '单次协议失败必须保留本次诊断状态');
 
   let unauthorizedCalls = 0;
   await requestAssistantTurn({
@@ -440,19 +403,80 @@ async function main() {
   check(unauthorizedCalls === 1, '鉴权错误不应自动重试');
 
   let rateLimitCalls = 0;
-  const afterRateLimit = await requestAssistantTurn({
+  await requestAssistantTurn({
     settings: { llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model' },
     context: { contextBlock: '上下文', recentMessages: [] },
     fetchImpl: async () => {
       rateLimitCalls += 1;
-      if (rateLimitCalls === 1) return new Response('slow down', { status: 429 });
-      return new Response(JSON.stringify({
-        choices: [{ message: { content: '{"reply":"重试成功","segment":{"action":"continue"}}' } }],
-      }), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response('slow down', { status: 429 });
     },
-  });
-  check(rateLimitCalls === 2 && afterRateLimit.providerMetadata.attemptCount === 2,
-    '限流错误应执行一次完整重试');
+  }).then(() => { throw new Error('429 应失败'); }, () => {});
+  check(rateLimitCalls === 1, '限流错误也不得自动发起第二次模型请求');
+
+  let firstByteTimeoutError: any = null;
+  try {
+    await requestAssistantTurn({
+      settings: { llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model' },
+      context: { contextBlock: '上下文', recentMessages: [] },
+      timeouts: { firstByteMs: 20, streamIdleMs: 50, totalMs: 100 },
+      fetchImpl: async (_url, init) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      }),
+    });
+  } catch (error) {
+    firstByteTimeoutError = error;
+  }
+  check(firstByteTimeoutError?.code === 'timeout'
+    && firstByteTimeoutError?.message.includes('等待回复开始'),
+  '完全没有响应数据时应触发首包超时');
+
+  let streamIdleError: any = null;
+  try {
+    await requestAssistantTurn({
+      settings: { llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model' },
+      context: { contextBlock: '上下文', recentMessages: [] },
+      timeouts: { firstByteMs: 50, streamIdleMs: 20, totalMs: 100 },
+      fetchImpl: async (_url, init) => new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+            choices: [{ delta: { reasoning_content: '仍在思考' }, finish_reason: null }],
+          })}\n\n`));
+          init?.signal?.addEventListener('abort', () => controller.error(new Error('aborted')), { once: true });
+        },
+      }), { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+    });
+  } catch (error) {
+    streamIdleError = error;
+  }
+  check(streamIdleError?.code === 'timeout' && streamIdleError?.message.includes('回复流中断'),
+    '收到首个推理数据后长时间无新数据应触发流中断超时');
+
+  let totalTimeoutError: any = null;
+  try {
+    await requestAssistantTurn({
+      settings: { llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model' },
+      context: { contextBlock: '上下文', recentMessages: [] },
+      timeouts: { firstByteMs: 50, streamIdleMs: 30, totalMs: 55 },
+      fetchImpl: async (_url, init) => new Response(new ReadableStream({
+        start(controller) {
+          const encoder = new TextEncoder();
+          const emit = () => controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            choices: [{ delta: { reasoning_content: '持续思考' }, finish_reason: null }],
+          })}\n\n`));
+          emit();
+          const interval = setInterval(emit, 10);
+          init?.signal?.addEventListener('abort', () => {
+            clearInterval(interval);
+            controller.error(new Error('aborted'));
+          }, { once: true });
+        },
+      }), { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+    });
+  } catch (error) {
+    totalTimeoutError = error;
+  }
+  check(totalTimeoutError?.code === 'timeout' && totalTimeoutError?.message.includes('回复处理超时'),
+    '流持续活跃时仍应遵守总时长上限');
 
   const cancelController = new AbortController();
   let cancellationCalls = 0;

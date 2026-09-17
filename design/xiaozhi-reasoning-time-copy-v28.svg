@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="720" viewBox="0 0 1320 720">
+  <style>
+    .bg{fill:#f5f1eb}.card{fill:#fff;stroke:#ded6ce;stroke-width:2}.soft{fill:#fff1e7}.orange{fill:#ea7134}.ink{fill:#29241f}.muted{fill:#81776e}.h1{font:700 30px -apple-system,"PingFang SC",sans-serif}.h2{font:650 18px -apple-system,"PingFang SC",sans-serif}.body{font:15px -apple-system,"PingFang SC",sans-serif}.small{font:13px -apple-system,"PingFang SC",sans-serif}.tiny{font:12px -apple-system,"PingFang SC",sans-serif}
+  </style>
+  <rect class="bg" width="1320" height="720"/>
+  <text class="h1 ink" x="54" y="52">思考过程、历史时间与复制</text>
+  <text class="body muted" x="54" y="82">思考默认折叠，消息按自然日分组，长按文字使用 iOS 原生复制菜单。</text>
+
+  <g transform="translate(54 116)">
+    <rect class="card" width="360" height="530" rx="30"/>
+    <text class="h2 ink" x="24" y="42">1　思考中可展开</text>
+    <rect class="orange" x="72" y="69" width="258" height="64" rx="19"/>
+    <text class="body" fill="#fff" x="91" y="107">下个月还款怎么安排？</text>
+    <text class="tiny muted" x="164" y="161">今天</text>
+    <rect class="soft" x="24" y="181" width="310" height="42" rx="21"/>
+    <circle class="orange" cx="47" cy="202" r="5"/>
+    <text class="small ink" x="61" y="207">小知正在思考 · 18 秒</text>
+    <text class="body muted" x="311" y="208">⌃</text>
+    <rect class="card" x="24" y="233" width="310" height="134" rx="17"/>
+    <text class="small muted" x="42" y="263">先确认用户是在寻求建议，</text>
+    <text class="small muted" x="42" y="288">再结合已有贷款事件和待办，</text>
+    <text class="small muted" x="42" y="313">避免生成重复任务……</text>
+    <text class="tiny muted" x="42" y="348">模型生成的思考过程，仅供参考</text>
+    <text class="small muted" x="24" y="407">• 展开后随 reasoning_content 流式增长</text>
+    <text class="small muted" x="24" y="434">• 回答开始后计时仍持续</text>
+  </g>
+
+  <g transform="translate(480 116)">
+    <rect class="card" width="360" height="530" rx="30"/>
+    <text class="h2 ink" x="24" y="42">2　完成后默认折叠</text>
+    <text class="tiny muted" x="165" y="84">昨天</text>
+    <rect class="soft" x="24" y="104" width="310" height="42" rx="21"/>
+    <text class="small ink" x="44" y="130">思考了 1 分 08 秒</text>
+    <text class="body muted" x="310" y="131">›</text>
+    <rect class="card" x="24" y="160" width="310" height="148" rx="17"/>
+    <text class="body ink" x="42" y="194">可以先把还款拆成两步：</text>
+    <text class="body ink" x="42" y="224">先确认下个月现金流，再为</text>
+    <text class="body ink" x="42" y="254">11 号建立明确待办。</text>
+    <text class="tiny muted" x="42" y="291">用时 1 分 24 秒 · 16:21</text>
+    <rect class="soft" x="24" y="322" width="310" height="82" rx="17"/>
+    <text class="small ink" x="42" y="353">已更新贷款事件</text>
+    <text class="small ink" x="42" y="382">已创建 11 号还款待办</text>
+    <text class="small muted" x="24" y="444">点击“思考了…”才读取完整文本</text>
+  </g>
+
+  <g transform="translate(906 116)">
+    <rect class="card" width="360" height="530" rx="30"/>
+    <text class="h2 ink" x="24" y="42">3　跨日时间＋原生复制</text>
+    <text class="tiny muted" x="145" y="84">2025 年 12 月 31 日</text>
+    <rect class="orange" x="92" y="104" width="242" height="68" rx="19"/>
+    <text class="body" fill="#fff" x="111" y="134">这件事帮我记一下</text>
+    <text class="tiny" fill="#ffe3d4" x="290" y="157">23:58</text>
+    <rect class="card" x="24" y="188" width="310" height="89" rx="17"/>
+    <text class="body ink" x="42" y="222">好，我已经记下了。</text>
+    <text class="tiny muted" x="42" y="261">23:59</text>
+    <text class="tiny muted" x="165" y="318">1 月 2 日 周五</text>
+    <rect class="card" x="24" y="338" width="310" height="86" rx="17"/>
+    <text class="body ink" x="42" y="372">长按这段文字</text>
+    <text class="tiny muted" x="42" y="407">09:12</text>
+    <rect x="112" y="445" width="142" height="43" rx="12" fill="#28231f"/>
+    <text class="small" fill="#fff" x="141" y="472">复制　查询…</text>
+    <text class="small muted" x="24" y="516">用户、助手、思考文本均可选择</text>
+  </g>
+</svg>

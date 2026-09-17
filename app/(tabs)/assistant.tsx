@@ -33,6 +33,12 @@ import type {
   AssistantMessage,
   AssistantOlderLoadStatus,
 } from '../../src/assistant/types';
+import type { AssistantRuntimeStage } from '../../src/assistant/runtime-state';
+import { getAssistantReasoning } from '../../src/assistant/reasoning-store';
+import {
+  formatAssistantDateSeparator,
+  shouldShowAssistantDateSeparator,
+} from '../../src/assistant/message-time';
 import { AssistantComposer } from '../../src/components/AssistantComposer';
 import { AssistantEmptyState } from '../../src/components/AssistantEmptyState';
 import { AssistantLoadErrorState } from '../../src/components/AssistantLoadErrorState';
@@ -83,6 +89,11 @@ export default function AssistantScreen() {
   const [streamingReplies, setStreamingReplies] = useState<Record<string, AssistantMessage>>({});
 
   const displayMessages = useMemo(() => mergeAssistantMessages(messages, Object.values(streamingReplies)), [messages, streamingReplies]);
+  const requestStartedAt = useMemo(() => new Map(
+    messages
+      .filter(message => message.role === 'user')
+      .map(message => [message.requestId, message.createdAt] as const),
+  ), [messages]);
 
   const scrollToLatest = useCallback((animated: boolean, keepPending = true) => {
     if (keepPending) pendingEndScrollRef.current = { animated };
@@ -96,24 +107,43 @@ export default function AssistantScreen() {
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: pending?.animated ?? false }));
   }, []);
 
-  const updateStreamingReply = useCallback((requestId: string, createdAt: number, content: string) => {
-    if (!mountedRef.current || !content) return;
-    setStreamingReplies(current => ({
-      ...current,
-      [requestId]: {
-        id: `streaming-${requestId}`,
-        requestId,
-        role: 'assistant',
-        content,
-        source: 'assistant',
-        status: 'streaming',
-        segmentId: 'streaming',
-        createdAt: createdAt + 1,
-        updatedAt: Date.now(),
-        legacyEntryId: null,
-        errorCode: null,
-      },
-    }));
+  const updateStreamingReply = useCallback((input: {
+    requestId: string;
+    messageCreatedAt: number;
+    runtimeStartedAt?: number;
+    content?: string;
+    stage?: AssistantRuntimeStage;
+    reasoningContent?: string;
+    reasoningCompletedAt?: number;
+  }) => {
+    if (!mountedRef.current) return;
+    setStreamingReplies((current) => {
+      const existing = current[input.requestId];
+      return {
+        ...current,
+        [input.requestId]: {
+          id: `streaming-${input.requestId}`,
+          requestId: input.requestId,
+          role: 'assistant',
+          content: input.content ?? existing?.content ?? '',
+          source: 'assistant',
+          status: 'streaming',
+          segmentId: 'streaming',
+          createdAt: input.messageCreatedAt + 1,
+          updatedAt: Date.now(),
+          legacyEntryId: null,
+          errorCode: null,
+          runtimeStage: input.stage ?? existing?.runtimeStage ?? 'thinking',
+          runtimeStartedAt: existing?.runtimeStartedAt ?? input.runtimeStartedAt ?? Date.now(),
+          reasoningAvailable: Boolean(input.reasoningContent || existing?.reasoningAvailable),
+          reasoningContent: input.reasoningContent ?? existing?.reasoningContent,
+          reasoningStartedAt: input.reasoningContent
+            ? existing?.reasoningStartedAt ?? Date.now()
+            : existing?.reasoningStartedAt,
+          reasoningCompletedAt: input.reasoningCompletedAt ?? existing?.reasoningCompletedAt,
+        },
+      };
+    });
     if (followEndRef.current) scrollToLatest(false, false);
   }, [scrollToLatest]);
 
@@ -219,8 +249,15 @@ export default function AssistantScreen() {
   async function send(content: string, source: 'text' | 'voice') {
     const requestId = makeRequestId();
     const userMessage = await saveUserTurn({ requestId, content, source });
+    const runtimeStartedAt = Date.now();
     if (mountedRef.current) {
       setMessages(current => mergeAssistantMessages(current, [userMessage]));
+      updateStreamingReply({
+        requestId,
+        messageCreatedAt: userMessage.createdAt,
+        runtimeStartedAt,
+        stage: 'thinking',
+      });
       followEndRef.current = true;
       scrollToLatest(true);
     }
@@ -229,14 +266,40 @@ export default function AssistantScreen() {
       content,
       source,
       launchContext,
-      onReplyText: text => updateStreamingReply(requestId, userMessage.createdAt, text),
+      onReplyText: text => updateStreamingReply({
+        requestId,
+        messageCreatedAt: userMessage.createdAt,
+        runtimeStartedAt,
+        content: text,
+        stage: 'answering',
+        reasoningCompletedAt: Date.now(),
+      }),
+      onReasoningText: text => updateStreamingReply({
+        requestId,
+        messageCreatedAt: userMessage.createdAt,
+        runtimeStartedAt,
+        reasoningContent: text,
+        stage: 'thinking',
+      }),
+      onProgress: stage => updateStreamingReply({
+        requestId,
+        messageCreatedAt: userMessage.createdAt,
+        runtimeStartedAt,
+        stage,
+      }),
     });
     void job
       .then((result) => {
         if (mountedRef.current) {
+          clearStreamingReply(requestId);
           setMessages(current => mergeAssistantMessages(current, [{
             ...result.assistantMessage,
             operations: result.operations,
+            runtimeStartedAt,
+            reasoningAvailable: Boolean(result.reasoning),
+            reasoningContent: result.reasoning?.content,
+            reasoningStartedAt: result.reasoning?.startedAt,
+            reasoningCompletedAt: result.reasoning?.completedAt,
           }]));
         }
       })
@@ -262,6 +325,7 @@ export default function AssistantScreen() {
   }
 
   function retry(requestId: string) {
+    const runtimeStartedAt = Date.now();
     setMessages(current => current.map(item => (
       item.requestId === requestId && item.role === 'user'
         ? { ...item, status: 'sending', errorCode: null, updatedAt: Date.now() }
@@ -270,14 +334,52 @@ export default function AssistantScreen() {
     void (async () => {
       try {
         const userMessage = messages.find(item => item.requestId === requestId && item.role === 'user');
+        updateStreamingReply({
+          requestId,
+          messageCreatedAt: userMessage?.createdAt ?? runtimeStartedAt,
+          runtimeStartedAt,
+          stage: 'thinking',
+        });
         const job = retryAssistantTurn({
           requestId,
           launchContext,
-          onReplyText: text => updateStreamingReply(requestId, userMessage?.createdAt ?? Date.now(), text),
+          onReplyText: text => updateStreamingReply({
+            requestId,
+            messageCreatedAt: userMessage?.createdAt ?? runtimeStartedAt,
+            runtimeStartedAt,
+            content: text,
+            stage: 'answering',
+            reasoningCompletedAt: Date.now(),
+          }),
+          onReasoningText: text => updateStreamingReply({
+            requestId,
+            messageCreatedAt: userMessage?.createdAt ?? runtimeStartedAt,
+            runtimeStartedAt,
+            reasoningContent: text,
+            stage: 'thinking',
+          }),
+          onProgress: stage => updateStreamingReply({
+            requestId,
+            messageCreatedAt: userMessage?.createdAt ?? runtimeStartedAt,
+            runtimeStartedAt,
+            stage,
+          }),
         });
         await Promise.resolve();
         await loadLatest(false);
-        await job;
+        const result = await job;
+        if (mountedRef.current) {
+          clearStreamingReply(requestId);
+          setMessages(current => mergeAssistantMessages(current, [{
+            ...result.assistantMessage,
+            operations: result.operations,
+            runtimeStartedAt,
+            reasoningAvailable: Boolean(result.reasoning),
+            reasoningContent: result.reasoning?.content,
+            reasoningStartedAt: result.reasoning?.startedAt,
+            reasoningCompletedAt: result.reasoning?.completedAt,
+          }]));
+        }
       } catch {
         // 错误状态由对应消息承载，不再重复显示页面级错误。
       } finally {
@@ -363,16 +465,30 @@ export default function AssistantScreen() {
             ref={listRef}
             data={displayMessages}
             keyExtractor={item => item.id}
-            renderItem={({ item }) => (
-              <AssistantMessageBubble
-                message={item}
-                onRetry={retry}
-                canRetry={canRetryAssistantMessage(item, messages, engineStatus)}
-                onNavigate={navigateFromMessage}
-                onUndo={undo}
-                undoing={undoingRequestId === item.requestId}
-                undoError={undoErrors[item.requestId]}
-              />
+            renderItem={({ item, index }) => (
+              <View>
+                {shouldShowAssistantDateSeparator(
+                  item.createdAt,
+                  index > 0 ? displayMessages[index - 1]?.createdAt : undefined,
+                ) ? (
+                  <View style={styles.dateSeparatorWrap}>
+                    <Text style={styles.dateSeparatorText}>
+                      {formatAssistantDateSeparator(item.createdAt)}
+                    </Text>
+                  </View>
+                ) : null}
+                <AssistantMessageBubble
+                  message={item}
+                  onRetry={retry}
+                  canRetry={canRetryAssistantMessage(item, messages, engineStatus)}
+                  onNavigate={navigateFromMessage}
+                  onUndo={undo}
+                  undoing={undoingRequestId === item.requestId}
+                  undoError={undoErrors[item.requestId]}
+                  runtimeStartedAt={item.runtimeStartedAt ?? requestStartedAt.get(item.requestId)}
+                  onLoadReasoning={getAssistantReasoning}
+                />
+              </View>
             )}
             contentContainerStyle={[styles.listContent, messages.length === 0 && styles.emptyList]}
             ListEmptyComponent={<AssistantEmptyState />}
@@ -439,6 +555,8 @@ const styles = StyleSheet.create({
   olderError: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 },
   olderErrorText: { color: theme.colors.textDim, fontSize: theme.font.small },
   olderRetryText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
-  composerWrap: { paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6, borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.bg },
+  dateSeparatorWrap: { alignItems: 'center', paddingTop: 7, paddingBottom: 3 },
+  dateSeparatorText: { color: theme.colors.textDim, fontSize: 11, lineHeight: 17, paddingHorizontal: 9, paddingVertical: 2, borderRadius: 11, backgroundColor: theme.colors.card },
+  composerWrap: { paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6 },
   pressed: { opacity: 0.72 },
 });

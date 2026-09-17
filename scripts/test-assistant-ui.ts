@@ -15,6 +15,16 @@ import {
   shouldFollowAssistantEnd,
 } from '../src/assistant/ui-state';
 import { ASSISTANT_EMPTY_DESCRIPTION } from '../src/assistant/ui-copy';
+import {
+  assistantCompletedRuntimeLabel,
+  assistantRuntimeLabel,
+  formatAssistantRuntimeDuration,
+} from '../src/assistant/runtime-state';
+import {
+  formatAssistantDateSeparator,
+  formatAssistantMessageTime,
+  shouldShowAssistantDateSeparator,
+} from '../src/assistant/message-time';
 import type { AssistantMessage } from '../src/assistant/types';
 import type { AssistantOperation } from '../src/assistant/action-types';
 
@@ -46,6 +56,19 @@ const latest = [message('c', 3, '新内容'), message('d', 4)];
 const merged = mergeAssistantMessages(current, latest);
 check(merged.map(item => item.id).join(',') === 'b,c,d', '刷新时必须去重并按稳定时间顺序合并');
 check(merged[1].content === '新内容', '相同 id 应采用 updatedAt 不更旧的版本');
+
+const transientRuntime = {
+  ...message('runtime', 5),
+  role: 'assistant' as const,
+  runtimeStage: 'answering' as const,
+  runtimeStartedAt: 1,
+};
+const refreshedRuntime = mergeAssistantMessages(
+  [transientRuntime],
+  [{ ...transientRuntime, runtimeStage: undefined, runtimeStartedAt: undefined }],
+)[0];
+check(refreshedRuntime.runtimeStage === 'answering' && refreshedRuntime.runtimeStartedAt === 1,
+  '数据库刷新不得抹掉当前进程内的流式计时状态');
 
 const sameTime = mergeAssistantMessages([message('z', 10)], [message('a', 10)]);
 check(sameTime.map(item => item.id).join(',') === 'a,z', '同一时间使用 id 保证稳定顺序');
@@ -80,6 +103,28 @@ check(isAssistantComposerDisabled('loading', []), '首次加载期间输入应�
 check(isAssistantComposerDisabled('error', []), '首次加载失败时输入应禁用');
 check(!isAssistantComposerDisabled('ready', [sending]), '有回复处理中时输入仍应允许编辑草稿');
 check(!isAssistantComposerDisabled('ready', [latestFailure]), '回复失败后输入应恢复');
+check(formatAssistantRuntimeDuration(8_999) === '8 秒', '一分钟内运行时间应按整秒展示');
+check(formatAssistantRuntimeDuration(68_999) === '1 分 08 秒', '一分钟后应切换为分秒展示');
+check(assistantRuntimeLabel('thinking', 68_000) === '小知正在思考 · 1 分 08 秒',
+  '思考状态应展示连续运行时间');
+check(assistantRuntimeLabel('answering', 72_000) === '小知正在回答 · 1 分 12 秒',
+  '开始流式回答后只切换阶段文案，不重置计时');
+check(assistantRuntimeLabel('finalizing', 80_000) === '小知正在整理 · 1 分 20 秒',
+  '本地校验提交阶段应继续沿用同一运行时间');
+check(assistantCompletedRuntimeLabel(84_000) === '用时 1 分 24 秒',
+  '完成后应弱化展示本轮总用时');
+const todayAtNoon = new Date(2026, 8, 15, 12, 0).getTime();
+const yesterdayAtNoon = new Date(2026, 8, 14, 12, 0).getTime();
+const sameYear = new Date(2026, 5, 8, 9, 5).getTime();
+const lastYear = new Date(2025, 11, 31, 23, 59).getTime();
+check(formatAssistantDateSeparator(todayAtNoon, NOW) === '今天', '当天消息应显示今天');
+check(formatAssistantDateSeparator(yesterdayAtNoon, NOW) === '昨天', '前一天消息应显示昨天');
+check(/^6月8日 周./.test(formatAssistantDateSeparator(sameYear, NOW)), '同年历史消息应显示月日和星期');
+check(formatAssistantDateSeparator(lastYear, NOW) === '2025年12月31日', '跨年消息应显示完整日期');
+check(shouldShowAssistantDateSeparator(todayAtNoon, undefined), '列表首条应显示日期分隔');
+check(!shouldShowAssistantDateSeparator(todayAtNoon, todayAtNoon - 60_000), '同一天的相邻消息不应重复显示日期');
+check(shouldShowAssistantDateSeparator(todayAtNoon, yesterdayAtNoon), '跨天时应显示日期分隔');
+check(/^[0-2]\d:[0-5]\d$/.test(formatAssistantMessageTime(todayAtNoon)), '气泡内只保留时分');
 const cancelled = { ...message('cancelled', 25), status: 'failed' as const, errorCode: 'cancelled' };
 check(!canRetryAssistantMessage(cancelled, [cancelled], 'configured'), '用户主动停止后不应显示重试');
 check(assistantFailureLabel(cancelled, false) === '已停止', '主动停止应显示独立状态而不是失败');

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="390" viewBox="0 0 920 390">
+  <style>
+    .bg{fill:#f6f3ee}.phone{fill:#f6f3ee;stroke:#d7cfc7;stroke-width:2}.card{fill:#fff;stroke:#e8e2d9;stroke-width:2}.orange{fill:#e0733a}.soft{fill:#f9e8dd}.ink{fill:#2b2622}.muted{fill:#8a837b}.h{font:650 18px -apple-system,"PingFang SC",sans-serif}.body{font:14px -apple-system,"PingFang SC",sans-serif}.small{font:12px -apple-system,"PingFang SC",sans-serif}
+  </style>
+  <rect class="bg" width="920" height="390"/>
+  <text class="h ink" x="170" y="34">调整前：底栏＋输入框</text>
+  <text class="h ink" x="618" y="34">调整后：仅输入框</text>
+  <g transform="translate(55 56)">
+    <rect class="phone" width="360" height="300" rx="28"/>
+    <rect class="card" x="25" y="50" width="240" height="70" rx="17"/>
+    <text class="body ink" x="43" y="89">我先帮你把事情理清。</text>
+    <rect x="1" y="182" width="358" height="92" fill="#f6f3ee" stroke="#e8e2d9" stroke-width="2"/>
+    <text class="small muted" x="14" y="202">外层底栏</text>
+    <rect class="card" x="14" y="211" width="332" height="50" rx="25"/>
+    <circle class="soft" cx="40" cy="236" r="18"/>
+    <text class="body muted" x="69" y="241">发消息给小知</text>
+    <circle cx="320" cy="236" r="18" fill="#d8d2cc"/>
+  </g>
+  <g transform="translate(505 56)">
+    <rect class="phone" width="360" height="300" rx="28"/>
+    <rect class="card" x="25" y="50" width="240" height="70" rx="17"/>
+    <text class="body ink" x="43" y="89">我先帮你把事情理清。</text>
+    <rect class="card" x="14" y="211" width="332" height="50" rx="25"/>
+    <circle class="soft" cx="40" cy="236" r="18"/>
+    <text class="body muted" x="69" y="241">发消息给小知</text>
+    <circle cx="320" cy="236" r="18" fill="#d8d2cc"/>
+  </g>
+</svg>

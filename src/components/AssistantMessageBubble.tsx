@@ -1,5 +1,13 @@
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import {
+  assistantCompletedRuntimeLabel,
+  assistantRuntimeLabel,
+  formatAssistantRuntimeDuration,
+} from '../assistant/runtime-state';
+import { formatAssistantMessageTime } from '../assistant/message-time';
+import type { AssistantReasoning } from '../assistant/reasoning-store';
 import { assistantFailureLabel } from '../assistant/ui-state';
 import type { AssistantMessage } from '../assistant/types';
 import { theme } from '../theme';
@@ -13,6 +21,8 @@ interface AssistantMessageBubbleProps {
   onUndo?: (requestId: string) => void;
   undoing?: boolean;
   undoError?: string | null;
+  runtimeStartedAt?: number;
+  onLoadReasoning?: (requestId: string) => Promise<AssistantReasoning | null>;
 }
 
 export function AssistantMessageBubble({
@@ -23,17 +33,110 @@ export function AssistantMessageBubble({
   onUndo = () => {},
   undoing = false,
   undoError = null,
+  runtimeStartedAt,
+  onLoadReasoning = async () => null,
 }: AssistantMessageBubbleProps) {
   const isUser = message.role === 'user';
   const isStreaming = !isUser && message.status === 'streaming';
+  const [now, setNow] = useState(() => Date.now());
+  const [reasoningExpanded, setReasoningExpanded] = useState(false);
+  const [loadedReasoning, setLoadedReasoning] = useState<AssistantReasoning | null>(null);
+  const [reasoningLoading, setReasoningLoading] = useState(false);
+  const [reasoningError, setReasoningError] = useState(false);
+  const startedAt = message.runtimeStartedAt ?? runtimeStartedAt;
+  useEffect(() => {
+    if (!isStreaming || startedAt === undefined) return undefined;
+    setNow(Date.now());
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [isStreaming, startedAt]);
+  const elapsedMs = startedAt === undefined
+    ? 0
+    : Math.max(0, (isStreaming ? now : message.createdAt) - startedAt);
+  const completedRuntime = !isUser && !isStreaming && startedAt !== undefined && elapsedMs <= 300_000
+    ? assistantCompletedRuntimeLabel(elapsedMs)
+    : null;
+  const reasoningText = message.reasoningContent ?? loadedReasoning?.content ?? '';
+  const reasoningStartedAt = message.reasoningStartedAt ?? loadedReasoning?.startedAt;
+  const reasoningCompletedAt = message.reasoningCompletedAt ?? loadedReasoning?.completedAt;
+  const hasReasoning = !isUser && Boolean(message.reasoningAvailable || reasoningText);
+  const reasoningDuration = reasoningStartedAt !== undefined && reasoningCompletedAt !== undefined
+    ? formatAssistantRuntimeDuration(Math.max(0, reasoningCompletedAt - reasoningStartedAt))
+    : null;
+
+  async function toggleReasoning() {
+    if (reasoningExpanded) {
+      setReasoningExpanded(false);
+      return;
+    }
+    setReasoningExpanded(true);
+    if (reasoningText || reasoningLoading || !message.reasoningAvailable) return;
+    setReasoningLoading(true);
+    setReasoningError(false);
+    try {
+      const loaded = await onLoadReasoning(message.requestId);
+      setLoadedReasoning(loaded);
+      if (!loaded) setReasoningError(true);
+    } catch {
+      setReasoningError(true);
+    } finally {
+      setReasoningLoading(false);
+    }
+  }
+
+  const runtimeStage = message.runtimeStage ?? 'thinking';
   return (
     <View style={[styles.row, isUser ? styles.userRow : styles.assistantRow]}>
-      <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-        <Text style={[styles.content, isUser && styles.userContent]}>
-          {message.content}{isStreaming ? <Text style={styles.cursor}>▋</Text> : null}
-        </Text>
-        {!isStreaming ? <Text style={[styles.time, isUser && styles.userTime]}>{formatMessageTime(message.createdAt)}</Text> : null}
-      </View>
+      {hasReasoning ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: reasoningExpanded }}
+          accessibilityLabel={reasoningExpanded ? '收起思考过程' : '展开思考过程'}
+          onPress={() => { void toggleReasoning(); }}
+          style={({ pressed }) => [styles.reasoningHeader, pressed && styles.retryPressed]}
+        >
+          {isStreaming && runtimeStage === 'thinking' ? (
+            <ActivityIndicator size="small" color={theme.colors.accent} />
+          ) : null}
+          <Text style={styles.reasoningHeaderText}>
+            {isStreaming && runtimeStage === 'thinking' && startedAt !== undefined
+              ? assistantRuntimeLabel('thinking', elapsedMs)
+              : `思考了 ${reasoningDuration ?? formatAssistantRuntimeDuration(elapsedMs)}`}
+          </Text>
+          <Text style={styles.reasoningChevron}>{reasoningExpanded ? '⌃' : '›'}</Text>
+        </Pressable>
+      ) : isStreaming && startedAt !== undefined ? (
+        <View accessibilityLabel={assistantRuntimeLabel(runtimeStage, elapsedMs)} style={styles.runtimeRow}>
+          <ActivityIndicator size="small" color={theme.colors.accent} />
+          <Text style={styles.runtimeText}>{assistantRuntimeLabel(runtimeStage, elapsedMs)}</Text>
+        </View>
+      ) : null}
+      {hasReasoning && reasoningExpanded ? (
+        <View style={styles.reasoningBody}>
+          {reasoningLoading ? <ActivityIndicator size="small" color={theme.colors.accent} /> : null}
+          {reasoningText ? <Text selectable style={styles.reasoningText}>{reasoningText}</Text> : null}
+          {reasoningError ? <Text style={styles.reasoningError}>思考过程暂时无法加载</Text> : null}
+          {reasoningText ? <Text style={styles.reasoningNote}>模型生成的思考过程，仅供参考</Text> : null}
+        </View>
+      ) : null}
+      {isStreaming && hasReasoning && runtimeStage !== 'thinking' && startedAt !== undefined ? (
+        <View style={styles.answeringStatus}>
+          <ActivityIndicator size="small" color={theme.colors.accent} />
+          <Text style={styles.runtimeText}>{assistantRuntimeLabel(runtimeStage, elapsedMs)}</Text>
+        </View>
+      ) : null}
+      {message.content ? (
+        <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
+          <Text selectable style={[styles.content, isUser && styles.userContent]}>
+            {message.content}{isStreaming ? <Text style={styles.cursor}>▋</Text> : null}
+          </Text>
+          {!isStreaming ? (
+            <Text style={[styles.time, isUser && styles.userTime]}>
+              {completedRuntime ? `${completedRuntime} · ` : ''}{formatAssistantMessageTime(message.createdAt)}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
       {!isUser && message.operations?.length ? (
         <View style={styles.receiptWrap}>
           <AssistantActionReceipt
@@ -48,12 +151,6 @@ export function AssistantMessageBubble({
       {!isUser && message.errorCode === 'cancelled' ? (
         <View style={styles.statusRow}>
           <Text style={styles.statusText}>已停止 · 未执行任何操作</Text>
-        </View>
-      ) : null}
-      {isUser && message.status === 'sending' ? (
-        <View style={styles.statusRow}>
-          <ActivityIndicator size="small" color={theme.colors.textDim} />
-          <Text style={styles.statusText}>小知正在想…</Text>
         </View>
       ) : null}
       {isUser && message.status === 'failed' ? (
@@ -76,10 +173,6 @@ export function AssistantMessageBubble({
   );
 }
 
-function formatMessageTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-}
-
 const styles = StyleSheet.create({
   row: { width: '100%', marginVertical: 5 },
   userRow: { alignItems: 'flex-end' },
@@ -92,6 +185,16 @@ const styles = StyleSheet.create({
   time: { color: theme.colors.textDim, fontSize: 11, marginTop: 4 },
   userTime: { color: 'rgba(255,255,255,0.72)', textAlign: 'right' },
   cursor: { color: theme.colors.accent },
+  runtimeRow: { minHeight: 36, maxWidth: '86%', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 16, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 4 },
+  runtimeText: { color: theme.colors.textDim, fontSize: 13 },
+  reasoningHeader: { minHeight: 38, maxWidth: '86%', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 19, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 4 },
+  reasoningHeaderText: { flexShrink: 1, color: theme.colors.textDim, fontSize: 13 },
+  reasoningChevron: { color: theme.colors.textDim, fontSize: 18, lineHeight: 20 },
+  reasoningBody: { width: '86%', gap: 8, paddingHorizontal: 13, paddingVertical: 11, borderRadius: 16, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 5 },
+  reasoningText: { color: theme.colors.textDim, fontSize: 13, lineHeight: 20 },
+  reasoningNote: { color: theme.colors.textDim, fontSize: 11, marginTop: 2 },
+  reasoningError: { color: theme.colors.red, fontSize: 12 },
+  answeringStatus: { minHeight: 30, maxWidth: '86%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 7, marginBottom: 3 },
   statusRow: { minHeight: 24, flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3, paddingHorizontal: 3 },
   statusText: { color: theme.colors.textDim, fontSize: 12 },
   retry: { minHeight: 32, justifyContent: 'center', marginTop: 2, paddingHorizontal: 4 },

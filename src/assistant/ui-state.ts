@@ -79,7 +79,21 @@ export function mergeAssistantMessages(
   const byId = new Map<string, AssistantMessage>();
   for (const item of [...current, ...incoming]) {
     const existing = byId.get(item.id);
-    if (!existing || item.updatedAt >= existing.updatedAt) byId.set(item.id, item);
+    if (!existing) {
+      byId.set(item.id, item);
+      continue;
+    }
+    if (item.updatedAt >= existing.updatedAt) {
+      byId.set(item.id, {
+        ...item,
+        runtimeStage: item.runtimeStage ?? existing.runtimeStage,
+        runtimeStartedAt: item.runtimeStartedAt ?? existing.runtimeStartedAt,
+        reasoningAvailable: item.reasoningAvailable || existing.reasoningAvailable,
+        reasoningContent: item.reasoningContent ?? existing.reasoningContent,
+        reasoningStartedAt: item.reasoningStartedAt ?? existing.reasoningStartedAt,
+        reasoningCompletedAt: item.reasoningCompletedAt ?? existing.reasoningCompletedAt,
+      });
+    }
   }
   return [...byId.values()].sort((left, right) => (
     left.createdAt - right.createdAt || left.id.localeCompare(right.id)

@@ -73,7 +73,7 @@ async function main() {
   const store = load('src/assistant/store.ts');
   await db.initDatabase();
 
-  for (const table of ['assistant_messages', 'conversation_segments', 'assistant_requests']) {
+  for (const table of ['assistant_messages', 'conversation_segments', 'assistant_requests', 'assistant_reasoning']) {
     const row = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table);
     assert.equal(row?.name, table, `${table} 应在数据库初始化时创建`);
   }
@@ -107,6 +107,20 @@ async function main() {
   });
   assert.equal(duplicateReply.id, reply.id, '同一请求只能形成一条助手回复');
   assert.equal(duplicateReply.content, reply.content, '重复完成不得覆盖首次回复');
+
+  const reasoningStore = load('src/assistant/reasoning-store.ts');
+  await reasoningStore.saveAssistantReasoningWithDatabase(adapter, {
+    requestId: 'request-1',
+    content: '先判断这是否是需要记住的行动。',
+    startedAt: 2100,
+    completedAt: 2900,
+    createdAt: 3000,
+  });
+  const reasoning = await reasoningStore.getAssistantReasoning('request-1');
+  assert.equal(reasoning?.content, '先判断这是否是需要记住的行动。', '思考过程应能按请求独立读取');
+  const replyWithReasoning = await store.getMessage(reply.id);
+  assert.equal(replyWithReasoning.reasoningAvailable, true, '消息列表只应携带思考过程元数据');
+  assert.equal(replyWithReasoning.reasoningContent, undefined, '列表查询不应提前加载完整思考文本');
 
   const failedUser = await store.saveUserTurn({
     requestId: 'request-2',

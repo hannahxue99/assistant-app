@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="680" viewBox="0 0 1320 680">
+  <style>
+    .bg{fill:#f5f1eb}.card{fill:#fff;stroke:#ded6ce;stroke-width:2}.soft{fill:#fff1e7}.orange{fill:#ea7134}.ink{fill:#29241f}.muted{fill:#81776e}.h1{font:700 30px -apple-system,"PingFang SC",sans-serif}.h2{font:650 18px -apple-system,"PingFang SC",sans-serif}.body{font:15px -apple-system,"PingFang SC",sans-serif}.small{font:13px -apple-system,"PingFang SC",sans-serif}
+  </style>
+  <rect class="bg" width="1320" height="680"/>
+  <text class="h1 ink" x="60" y="58">小知流式运行状态</text>
+  <text class="body muted" x="60" y="88">同一计时从发送持续到本地整理完成；60 秒后切换为“分 + 秒”。</text>
+  <g transform="translate(60 130)">
+    <rect class="card" width="270" height="430" rx="28"/>
+    <text class="h2 ink" x="24" y="44">1　思考中</text>
+    <rect class="orange" x="52" y="78" width="194" height="62" rx="18"/>
+    <text class="body" fill="#fff" x="72" y="114">下个月还款怎么安排？</text>
+    <rect class="soft" x="24" y="172" width="222" height="66" rx="17"/>
+    <text class="body ink" x="44" y="211">小知正在思考 · 8 秒</text>
+    <text class="small muted" x="24" y="274">推理流到达，但不展示原文</text>
+  </g>
+  <g transform="translate(370 130)">
+    <rect class="card" width="270" height="430" rx="28"/>
+    <text class="h2 ink" x="24" y="44">2　超过一分钟</text>
+    <rect class="orange" x="52" y="78" width="194" height="62" rx="18"/>
+    <text class="body" fill="#fff" x="72" y="114">下个月还款怎么安排？</text>
+    <rect class="soft" x="24" y="172" width="222" height="66" rx="17"/>
+    <text class="body ink" x="39" y="211">小知正在思考 · 1 分 08 秒</text>
+    <text class="small muted" x="24" y="274">超过 90 秒不增加额外提示</text>
+  </g>
+  <g transform="translate(680 130)">
+    <rect class="card" width="270" height="430" rx="28"/>
+    <text class="h2 ink" x="24" y="44">3　回答中</text>
+    <rect fill="#f1ece6" x="24" y="78" width="222" height="38" rx="19"/>
+    <text class="small muted" x="44" y="102">小知正在回答 · 1 分 12 秒</text>
+    <rect class="card" x="24" y="136" width="222" height="138" rx="17"/>
+    <text class="body ink" x="42" y="169">可以先拆成两步：</text>
+    <text class="body ink" x="42" y="198">确认现金流，再为 11 号</text>
+    <text class="body ink" x="42" y="227">建立还款待办▋</text>
+    <text class="small muted" x="24" y="310">reply 逐字出现，计时不归零</text>
+  </g>
+  <g transform="translate(990 130)">
+    <rect class="card" width="270" height="430" rx="28"/>
+    <text class="h2 ink" x="24" y="44">4　完成</text>
+    <rect class="card" x="24" y="78" width="222" height="150" rx="17"/>
+    <text class="body ink" x="42" y="111">可以先拆成两步：</text>
+    <text class="body ink" x="42" y="140">确认现金流，再为 11 号</text>
+    <text class="body ink" x="42" y="169">建立还款待办。</text>
+    <text class="small muted" x="42" y="205">用时 1 分 24 秒</text>
+    <rect class="soft" x="24" y="248" width="222" height="80" rx="17"/>
+    <text class="small ink" x="42" y="280">已更新贷款事件</text>
+    <text class="small ink" x="42" y="307">已创建还款待办</text>
+  </g>
+  <path d="M330 345h40m270 0h40m270 0h40" stroke="#c7beb5" stroke-width="2" stroke-dasharray="7 7"/>
+  <rect x="60" y="600" width="1200" height="46" rx="16" fill="#fff"/>
+  <text class="small ink" x="82" y="629">超时：45 秒无首包 ｜ 30 秒无新流数据 ｜ 180 秒总上限　　重试：不自动二次请求，保留用户手动重试</text>
+</svg>
