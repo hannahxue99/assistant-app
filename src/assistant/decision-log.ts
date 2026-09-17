@@ -4,6 +4,7 @@ import type { AssistantEventDelta } from './event-delta-types';
 import type { AssistantMemoryDeltaProposal } from './memory-types';
 import type { AssistantProviderAttempt, AssistantProviderMetadata } from './provider';
 import type { AssistantProtocolWarning } from './protocol';
+import type { AssistantExecutionResult } from './execution-result';
 
 export interface AssistantDecisionContextRefs {
   recentMessageIds: string[];
@@ -28,6 +29,9 @@ export interface AssistantDecisionLog {
   providerAttemptCount: number;
   providerAttempts: AssistantProviderAttempt[];
   protocolWarnings: AssistantProtocolWarning[];
+  toolReadEventIds: string[];
+  toolReadTodoIds: string[];
+  executionOutcome: string;
 }
 
 function boundedErrorDetail(value: string | null | undefined): string | null {
@@ -70,7 +74,8 @@ export async function beginAssistantDecisionLog(input: {
          finish_reason=NULL, prompt_tokens=NULL, completion_tokens=NULL, total_tokens=NULL,
          error_code=NULL, error_detail=NULL, repair_count=0, repair_status='not_needed',
          provider_attempt_count=0, provider_attempts_json='[]',
-         protocol_warnings_json='[]', updated_at=excluded.updated_at`,
+         protocol_warnings_json='[]', tool_read_event_ids_json='[]', tool_read_todo_ids_json='[]',
+         execution_outcome='pending', updated_at=excluded.updated_at`,
       input.requestId, input.userMessageId, input.promptVersion, input.model,
       input.referenceAt, input.timeZone, JSON.stringify(input.contextRefs), createdAt, createdAt,
     );
@@ -89,6 +94,8 @@ export async function recordAssistantModelDecision(input: {
   eventDeltas?: AssistantEventDelta[];
   memoryDeltas?: AssistantMemoryDeltaProposal[];
   metadata?: AssistantProviderMetadata;
+  toolReadEventIds?: string[];
+  toolReadTodoIds?: string[];
   updatedAt?: number;
 }): Promise<void> {
   const updatedAt = input.updatedAt ?? Date.now();
@@ -97,7 +104,8 @@ export async function recordAssistantModelDecision(input: {
        proposed_operations_json=?, proposed_event_deltas_json=?, proposed_memory_deltas_json=?, status='model_received',
        provider_started_at=?, provider_completed_at=?, finish_reason=?,
        prompt_tokens=?, completion_tokens=?, total_tokens=?,
-       provider_attempt_count=?, provider_attempts_json=?, protocol_warnings_json=?, updated_at=?
+       provider_attempt_count=?, provider_attempts_json=?, protocol_warnings_json=?,
+       tool_read_event_ids_json=?, tool_read_todo_ids_json=?, updated_at=?
      WHERE request_id=?`,
     JSON.stringify(input.operations), JSON.stringify(input.eventDeltas ?? []), JSON.stringify(input.memoryDeltas ?? []),
     input.metadata?.startedAt ?? null,
@@ -106,6 +114,8 @@ export async function recordAssistantModelDecision(input: {
     input.metadata?.totalTokens ?? null, input.metadata?.attemptCount ?? 0,
     JSON.stringify(boundedAttempts(input.metadata?.attempts)),
     JSON.stringify(input.metadata?.protocolWarnings ?? []),
+    JSON.stringify(input.toolReadEventIds ?? []),
+    JSON.stringify(input.toolReadTodoIds ?? []),
     updatedAt, input.requestId,
   ));
 }
@@ -143,9 +153,25 @@ export async function recordAssistantDecisionCommit(input: {
 }): Promise<void> {
   const completedAt = input.completedAt ?? Date.now();
   await withDatabaseConnection(async database => database.runAsync(
-    `UPDATE assistant_decision_logs SET committed_operation_ids_json=?, status='committed',
+    `UPDATE assistant_decision_logs SET committed_operation_ids_json=?, status='committed', execution_outcome='committed',
        commit_completed_at=?, error_code=NULL, updated_at=? WHERE request_id=?`,
     JSON.stringify(input.operations.map(operation => operation.id)), completedAt, completedAt, input.requestId,
+  ));
+}
+
+export async function recordAssistantExecutionOutcome(input: {
+  requestId: string;
+  result: AssistantExecutionResult;
+  updatedAt?: number;
+}): Promise<void> {
+  const updatedAt = input.updatedAt ?? Date.now();
+  await withDatabaseConnection(async database => database.runAsync(
+    `UPDATE assistant_decision_logs SET execution_outcome=?, error_detail=COALESCE(error_detail, ?), updated_at=?
+     WHERE request_id=?`,
+    input.result.outcome,
+    input.result.error ? boundedErrorDetail(input.result.error) : null,
+    updatedAt,
+    input.requestId,
   ));
 }
 
@@ -191,6 +217,9 @@ export async function getAssistantDecisionLog(requestId: string): Promise<Assist
       providerAttemptCount: Number(row.provider_attempt_count ?? 0),
       providerAttempts: JSON.parse(row.provider_attempts_json || '[]'),
       protocolWarnings: JSON.parse(row.protocol_warnings_json || '[]'),
+      toolReadEventIds: JSON.parse(row.tool_read_event_ids_json || '[]'),
+      toolReadTodoIds: JSON.parse(row.tool_read_todo_ids_json || '[]'),
+      executionOutcome: row.execution_outcome ?? 'pending',
     };
   });
 }

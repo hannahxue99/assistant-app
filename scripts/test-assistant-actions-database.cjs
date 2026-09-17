@@ -76,6 +76,7 @@ async function main() {
   const actionStore = load('src/assistant/action-store.ts');
   const actionContext = load('src/assistant/action-context.ts');
   const actionUndo = load('src/assistant/action-undo.ts');
+  const decisionLog = load('src/assistant/decision-log.ts');
   await db.initDatabase();
 
   const expectedTables = [
@@ -95,6 +96,7 @@ async function main() {
     'error_detail', 'repair_count', 'repair_status',
     'provider_attempt_count', 'provider_attempts_json', 'protocol_warnings_json',
     'proposed_event_deltas_json',
+    'tool_read_event_ids_json', 'tool_read_todo_ids_json', 'execution_outcome',
   ]) {
     assert.ok(decisionLogColumns.has(column), `决策日志必须包含 ${column}`);
   }
@@ -125,6 +127,26 @@ async function main() {
     'operation-2', 'request-1', 'todo-1', 'create_todo', 'todo', 'entry-2',
     '{}', '重复操作', 1, 1001,
   ), /UNIQUE/, '同一请求内的操作键必须唯一');
+
+  await decisionLog.beginAssistantDecisionLog({
+    requestId: 'request-1', userMessageId: 'message-1', promptVersion: 'test', model: 'fixture',
+    referenceAt: 1000, timeZone: 'Asia/Shanghai',
+    contextRefs: {
+      recentMessageIds: ['message-1'], segmentIds: [], entryIds: [], eventCandidateIds: [],
+      todoCandidateIds: [], memoryIds: [], launchContextId: null,
+    },
+    createdAt: 1000,
+  });
+  await decisionLog.recordAssistantModelDecision({
+    requestId: 'request-1', operations: [], toolReadEventIds: ['event-trip'], toolReadTodoIds: ['todo-train'],
+  });
+  await decisionLog.recordAssistantExecutionOutcome({
+    requestId: 'request-1', result: { outcome: 'rejected', committed: [], rejected: [{ type: 'event', reason: 'revision_conflict' }] },
+  });
+  const groundedLog = await decisionLog.getAssistantDecisionLog('request-1');
+  assert.deepEqual([...groundedLog.toolReadEventIds], ['event-trip']);
+  assert.deepEqual([...groundedLog.toolReadTodoIds], ['todo-train']);
+  assert.equal(groundedLog.executionOutcome, 'rejected', '零写入拒绝不得记录为 committed');
 
   const firstEvent = await eventStore.createEvent({
     id: 'event-mortgage',

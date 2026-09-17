@@ -51,9 +51,6 @@ export function validateAssistantActions(input: {
     if (!eventIds.has(eventId)
       && eventId !== input.actionContext.explicitEventId
       && eventId !== input.actionContext.segmentEventId) return 'candidate_not_allowed' as const;
-    if (eventDecision.kind === 'ambiguous'
-      && eventId !== input.actionContext.explicitEventId
-      && eventId !== input.actionContext.segmentEventId) return 'ambiguous_candidate' as const;
     return null;
   };
   const refAllowed = (ref: AssistantObjectRef, kind: 'event' | 'todo') => {

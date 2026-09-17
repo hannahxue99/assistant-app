@@ -105,8 +105,12 @@ check(!isAssistantComposerDisabled('ready', [sending]), '有回复处理中时�
 check(!isAssistantComposerDisabled('ready', [latestFailure]), '回复失败后输入应恢复');
 check(formatAssistantRuntimeDuration(8_999) === '8 秒', '一分钟内运行时间应按整秒展示');
 check(formatAssistantRuntimeDuration(68_999) === '1 分 08 秒', '一分钟后应切换为分秒展示');
-check(assistantRuntimeLabel('thinking', 68_000) === '小知正在思考 · 1 分 08 秒',
+check(assistantRuntimeLabel('planning', 68_000) === '小知正在整理处理方案 · 1 分 08 秒',
   '思考状态应展示连续运行时间');
+check(assistantRuntimeLabel('reading', 9_000) === '小知正在读取事件和待办 · 9 秒',
+  '调用数据工具时应明确展示读取状态');
+check(assistantRuntimeLabel('updating', 70_000) === '小知正在更新 · 1 分 10 秒',
+  '本地事务执行时应明确展示更新状态');
 check(assistantRuntimeLabel('answering', 72_000) === '小知正在回答 · 1 分 12 秒',
   '开始流式回答后只切换阶段文案，不重置计时');
 check(assistantRuntimeLabel('finalizing', 80_000) === '小知正在整理 · 1 分 20 秒',

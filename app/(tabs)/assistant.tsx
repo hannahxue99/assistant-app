@@ -133,7 +133,7 @@ export default function AssistantScreen() {
           updatedAt: Date.now(),
           legacyEntryId: null,
           errorCode: null,
-          runtimeStage: input.stage ?? existing?.runtimeStage ?? 'thinking',
+          runtimeStage: input.stage ?? existing?.runtimeStage ?? 'planning',
           runtimeStartedAt: existing?.runtimeStartedAt ?? input.runtimeStartedAt ?? Date.now(),
           reasoningAvailable: Boolean(input.reasoningContent || existing?.reasoningAvailable),
           reasoningContent: input.reasoningContent ?? existing?.reasoningContent,
@@ -256,7 +256,7 @@ export default function AssistantScreen() {
         requestId,
         messageCreatedAt: userMessage.createdAt,
         runtimeStartedAt,
-        stage: 'thinking',
+        stage: 'planning',
       });
       followEndRef.current = true;
       scrollToLatest(true);
@@ -279,7 +279,7 @@ export default function AssistantScreen() {
         messageCreatedAt: userMessage.createdAt,
         runtimeStartedAt,
         reasoningContent: text,
-        stage: 'thinking',
+        stage: 'planning',
       }),
       onProgress: stage => updateStreamingReply({
         requestId,
@@ -338,7 +338,7 @@ export default function AssistantScreen() {
           requestId,
           messageCreatedAt: userMessage?.createdAt ?? runtimeStartedAt,
           runtimeStartedAt,
-          stage: 'thinking',
+          stage: 'planning',
         });
         const job = retryAssistantTurn({
           requestId,
@@ -356,7 +356,7 @@ export default function AssistantScreen() {
             messageCreatedAt: userMessage?.createdAt ?? runtimeStartedAt,
             runtimeStartedAt,
             reasoningContent: text,
-            stage: 'thinking',
+            stage: 'planning',
           }),
           onProgress: stage => updateStreamingReply({
             requestId,

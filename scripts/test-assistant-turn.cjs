@@ -21,6 +21,12 @@ const adapter = {
 
 let providerCalls = 0;
 let provider = async () => ({ reply: '默认回复', segment: { action: 'continue' }, operations: [] });
+let finalProvider = async input => ({
+  reply: input.executionResult.outcome === 'no_change'
+    ? input.draftReply
+    : input.executionResult.committed.map(item => item.receiptSummary).join('\n') || '没有完成更新',
+  providerMetadata: { attemptCount: 1, attempts: [], protocolWarnings: [] },
+});
 const cache = new Map();
 function load(file) {
   const normalized = path.posix.normalize(file);
@@ -43,7 +49,10 @@ function load(file) {
       if (target === 'src/engine/notifications.ts') return { syncEntryReminder: async () => {} };
       if (target === 'src/engine/llm.ts') return { understandWithLlm: async () => ({}) };
       if (target === 'src/assistant/provider.ts') {
-        return { requestAssistantTurn: async input => { providerCalls++; return provider(input); } };
+        return {
+          requestAssistantTurn: async input => { providerCalls++; return provider(input); },
+          requestAssistantFinalReply: async input => finalProvider(input),
+        };
       }
       return load(target);
     },
@@ -111,9 +120,9 @@ async function main() {
   await assert.rejects(cancelledJob, /取消/);
   const cancelledState = await store.getRequestState('request-cancelled');
   assert.equal(cancelledState.status, 'failed');
-  assert.equal(cancelledState.userMessage.status, 'saved', '已有部分回复时用户消息应保持正常历史状态');
-  assert.equal(cancelledState.assistantMessage.content, '我先帮你梳理到这里', '已显示的部分回复应保留');
-  assert.equal(cancelledState.assistantMessage.errorCode, 'cancelled', '部分回复应带主动停止标记');
+  assert.equal(cancelledState.userMessage.status, 'failed', '写库前停止时应保留可重试的用户原话');
+  assert.equal(cancelledState.assistantMessage, null,
+    '规划阶段的草稿回复不得展示或保存，避免把未执行计划误当结果');
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM assistant_operations WHERE request_id='request-cancelled'").get().count, 0,
     '停止请求不得写入任何对象操作');
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM entries WHERE summary='不应落库的停止待办'").get().count, 0,
@@ -175,8 +184,35 @@ async function main() {
     requestId: 'request-false-claim', content: '帮我记一下', source: 'text', settings, createdAt: 2600,
   });
   assert.equal(falseClaim.operations.length, 0);
-  assert.ok(falseClaim.assistantMessage.content.includes('没有形成可保存的操作'),
+  assert.ok(falseClaim.assistantMessage.content.includes('没有完成'),
     '没有任何合法操作时不得保存模型的虚假成功措辞');
+  const falseClaimLog = sqlite.prepare(
+    "SELECT status, execution_outcome FROM assistant_decision_logs WHERE request_id='request-false-claim'",
+  ).get();
+  assert.notEqual(falseClaimLog.status, 'committed', '零写入不得再把决策日志标为 committed');
+  assert.equal(falseClaimLog.execution_outcome, 'rejected', '虚假执行声称必须记录为 rejected');
+
+  provider = async () => ({
+    reply: '准备记录牙科复诊。',
+    segment: { action: 'continue' },
+    operations: [{
+      key: 'dentist', type: 'create_todo', todoRef: 'todo_1', text: '牙科复诊',
+      dateStatus: 'resolved', dateText: '后天', dueDate: '1970-01-03', timePrecision: 'date',
+    }],
+  });
+  finalProvider = async () => { throw Object.assign(new Error('final narration offline'), { code: 'network' }); };
+  const fallbackAfterCommit = await orchestrator.sendAssistantTurn({
+    requestId: 'request-final-fallback', content: '后天去牙科复诊', source: 'text', settings, createdAt: 2700,
+  });
+  assert.equal(fallbackAfterCommit.operations.length, 1, '最终表述失败不能回滚已经提交的数据');
+  assert.ok(fallbackAfterCommit.assistantMessage.content.includes('建立待办：牙科复诊'),
+    '最终表述失败时必须使用真实操作回执，而不是模型规划草稿');
+  finalProvider = async input => ({
+    reply: input.executionResult.outcome === 'no_change'
+      ? input.draftReply
+      : input.executionResult.committed.map(item => item.receiptSummary).join('\n') || '没有完成更新',
+    providerMetadata: { attemptCount: 1, attempts: [], protocolWarnings: [] },
+  });
 
   provider = async () => ({
     reply: '我们换到新话题。',

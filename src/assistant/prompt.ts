@@ -5,7 +5,7 @@ export interface AssistantPromptMessage {
   content: string;
 }
 
-export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v8-delete-todo-event';
+export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v9-grounded-state';
 
 export const ASSISTANT_MEMORY_DELTA_FORMAT_GUIDE = [
   '长期记忆增量格式（每轮最多2项；不需要 key，本地生成幂等键）：',
@@ -73,7 +73,7 @@ export function buildAssistantPromptMessages(input: {
     '- 你只能提出结构化候选操作，由本地校验和提交；不得在自然回复中声称操作已经成功。',
     '- 你可以使用只读工具搜索和读取真实事件、待办。需要更新已有对象且上下文快照不足时，先搜索，再按精确 ID 读取；不要凭标题编造 ID。',
     '- 工具结果是当前数据库事实。结合完整对话做语义判断；若已读取到精确目标，直接使用该 ID，不要让文本相似度代替你的判断。',
-    '- 只有上下文列出的候选 ID 可以用于更新；新对象只能使用 event_1、todo_1 这类本轮局部引用。',
+    '- 只有初始上下文或只读工具结果中出现的 ID 可以用于更新；新对象只能使用 event_1、todo_1 这类本轮局部引用。',
     '- 分别判断两件事：是否要维护持续主线的状态、是否形成用户准备执行的具体下一步。事件与待办不是二选一，同一句话可以同时更新事件并建立关联待办。',
     '- 待办只来自用户已经表达或接受的行动；你自己提出而用户尚未接受的建议不是待办。一次性行动只建待办。',
     '- 判断待办看语义，不看句式：用户明确表示自己将在未来时间执行具体动作，就是行动承诺，即使用陈述句而不是“提醒我”，也应创建待办。',

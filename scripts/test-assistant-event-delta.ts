@@ -151,9 +151,25 @@ const ambiguousResult = prepareAssistantActions({
   actionContext: ambiguousContext, currentMessage: '下个月11号再还10万',
   recentEvidence: [], referenceAt,
 });
-check(ambiguousResult.accepted.length === 0, '事件归属歧义时不得部分提交');
-check(ambiguousResult.rejected.some(item => item.reason === 'compiled_operation_rejected'),
-  '事件归属歧义必须进入可观测拒绝结果');
+check(ambiguousResult.accepted.length === 4,
+  '精确事件 ID 已进入本轮可读上下文后，本地不得用相似度再次否决整组增量');
+
+const recentTurnEvidence = prepareAssistantActions({
+  operations: [],
+  eventDeltas: [delta({
+    evidence: ['十一出行就是这个', '对，10月1日10:39，齐齐哈尔南到哈尔滨'],
+    target: { action: 'update_existing', eventId: 'event-loan' },
+    state: { action: 'keep' },
+    progress: [{ type: 'fact', content: '确认10月1日10:39齐齐哈尔南到哈尔滨' }],
+    todos: [],
+  })],
+  actionContext,
+  currentMessage: '对，10月1日10:39，齐齐哈尔南到哈尔滨',
+  recentEvidence: ['十一出行就是这个'],
+  referenceAt,
+});
+check(recentTurnEvidence.accepted.length === 1,
+  '连续对话中的证据可以来自当前消息和最近用户原话，不能只看单条短回复');
 
 const genericStillWorks = prepareAssistantActions({
   operations: [{

@@ -92,6 +92,8 @@ export async function loadAssistantActionContext(input: {
   query: string;
   launchContext?: AssistantLaunchContext | null;
   currentSegmentId?: string | null;
+  readEventIds?: string[];
+  readTodoIds?: string[];
 }): Promise<AssistantActionContext> {
   // 保持纯匹配函数可在 Node 测试中独立运行；仅实际读库时加载 Expo 数据层。
   const { withDatabaseConnection } = await import('../db');
@@ -173,6 +175,11 @@ export async function loadAssistantActionContext(input: {
     let events = rankEventCandidates(input.query, allEvents);
     events = forceCandidate(events, allEvents, segmentBinding?.event_id ?? null);
     events = forceCandidate(events, allEvents, explicitEventId);
+    const readEventIdSet = new Set(input.readEventIds ?? []);
+    events = [
+      ...allEvents.filter(event => readEventIdSet.has(event.id)),
+      ...events.filter(event => !readEventIdSet.has(event.id)),
+    ].slice(0, 12);
 
     const todoRows = await database.getAllAsync<any>(
       `SELECT id, summary, raw_text, due_at, done, revision_at, updated_at
@@ -202,6 +209,11 @@ export async function loadAssistantActionContext(input: {
     const explicitTodoId = input.launchContext?.kind === 'todo' ? input.launchContext.id : null;
     todos = forceCandidate(todos, allTodos, segmentTodoBinding?.todo_id ?? null);
     todos = forceCandidate(todos, allTodos, explicitTodoId);
+    const readTodoIdSet = new Set(input.readTodoIds ?? []);
+    todos = [
+      ...allTodos.filter(todo => readTodoIdSet.has(todo.id)),
+      ...todos.filter(todo => !readTodoIdSet.has(todo.id)),
+    ].slice(0, 20);
     const selectedLinkedTodoIds = new Set(events.flatMap(event => (
       event.linkedTodos ?? []
     )).map(todo => todo.id));
@@ -209,7 +221,7 @@ export async function loadAssistantActionContext(input: {
     todos = [
       ...selectedLinkedTodos,
       ...todos.filter(todo => !selectedLinkedTodoIds.has(todo.id)),
-    ].slice(0, 12);
+    ].slice(0, 20);
 
     return {
       events,

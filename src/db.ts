@@ -185,6 +185,15 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
   if (!decisionLogColumns.some(column => column.name === 'proposed_memory_deltas_json')) {
     await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN proposed_memory_deltas_json TEXT NOT NULL DEFAULT '[]';");
   }
+  if (!decisionLogColumns.some(column => column.name === 'tool_read_event_ids_json')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN tool_read_event_ids_json TEXT NOT NULL DEFAULT '[]';");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'tool_read_todo_ids_json')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN tool_read_todo_ids_json TEXT NOT NULL DEFAULT '[]';");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'execution_outcome')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN execution_outcome TEXT NOT NULL DEFAULT 'pending';");
+  }
 
   // 旧版本只有 created_at。先探测列再迁移，避免重复 ALTER 导致启动失败。
   const columns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(entries)');

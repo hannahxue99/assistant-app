@@ -34,11 +34,11 @@ function normalizedEvidence(value: string): string {
   return value.toLocaleLowerCase('zh-CN').replace(/[\s\p{P}\p{S}]+/gu, '');
 }
 
-function evidenceBelongsToMessage(evidence: string[], currentMessage: string): boolean {
-  const message = normalizedEvidence(currentMessage);
-  return Boolean(message) && evidence.every(item => {
+function evidenceBelongsToMessages(evidence: string[], messages: string[]): boolean {
+  const normalizedMessages = messages.map(normalizedEvidence).filter(Boolean);
+  return normalizedMessages.length > 0 && evidence.every(item => {
     const normalized = normalizedEvidence(item);
-    return Boolean(normalized) && message.includes(normalized);
+    return Boolean(normalized) && normalizedMessages.some(message => message.includes(normalized));
   });
 }
 
@@ -137,9 +137,10 @@ function compileDelta(delta: AssistantEventDelta, index: number): AssistantOpera
 function prevalidateDelta(
   delta: AssistantEventDelta,
   currentMessage: string,
+  recentEvidence: string[],
   actionContext: AssistantActionContext,
 ): AssistantEventDeltaRejection | null {
-  if (!evidenceBelongsToMessage(delta.evidence, currentMessage)) {
+  if (!evidenceBelongsToMessages(delta.evidence, [currentMessage, ...recentEvidence])) {
     return { key: delta.key, type: 'event_delta', reason: 'evidence_not_in_message' };
   }
   if (delta.target.action === 'none' || delta.target.action === 'clarify') return null;
@@ -209,7 +210,7 @@ export function prepareAssistantActions(input: {
   const activeDeltaIndexes = new Set<number>();
 
   input.eventDeltas.forEach((delta, index) => {
-    const rejection = prevalidateDelta(delta, input.currentMessage, input.actionContext);
+    const rejection = prevalidateDelta(delta, input.currentMessage, input.recentEvidence, input.actionContext);
     if (rejection) {
       rejected.push(rejection);
       return;

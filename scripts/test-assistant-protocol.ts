@@ -4,7 +4,11 @@ import {
   inspectAssistantReplyWarnings,
   parseAssistantTurnOutput,
 } from '../src/assistant/protocol';
-import { mergeProviderToolCallDelta, requestAssistantTurn } from '../src/assistant/provider';
+import {
+  mergeProviderToolCallDelta,
+  requestAssistantFinalReply,
+  requestAssistantTurn,
+} from '../src/assistant/provider';
 import { extractPartialJsonStringField } from '../src/assistant/streaming-json';
 
 function check(condition: unknown, message: string): asserts condition {
@@ -363,6 +367,36 @@ async function main() {
   check(toolBodies[1].messages.at(-1).role === 'tool', '第二轮必须带回真实工具结果');
   check(toolBodies[1].messages.at(-2).reasoning_content === '先读取真实事件',
     'DeepSeek 工具续轮必须保留上一轮 reasoning_content');
+
+  const finalChunks: string[] = [];
+  const finalReply = await requestAssistantFinalReply({
+    settings: {
+      llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model',
+    },
+    userMessage: '下个月11号还款10万',
+    draftReply: '我会帮你更新。',
+    executionResult: {
+      outcome: 'committed',
+      committed: [{ receiptSummary: '已更新贷款事件' }, { receiptSummary: '已创建11号还款待办' }],
+      rejected: [],
+    },
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      check(!body.response_format, '最终回复是自然文本，不应继续要求结构化 JSON');
+      check(body.messages[1].content.includes('已创建11号还款待办'),
+        '最终回复请求必须拿到本地真实执行回执');
+      const events = [
+        { choices: [{ delta: { content: '已更新贷款事件，' }, finish_reason: null }] },
+        { choices: [{ delta: { content: '也创建了11号还款待办。' }, finish_reason: 'stop' }] },
+      ];
+      const stream = `${events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('')}data: [DONE]\n\n`;
+      return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    },
+    onReplyText: text => finalChunks.push(text),
+  });
+  check(finalReply.reply === '已更新贷款事件，也创建了11号还款待办。',
+    '最终回复必须按普通文本流重组');
+  check(finalChunks.at(-1) === finalReply.reply, '最终真实回复必须流式展示到客户端');
 
   const modelJson = JSON.stringify({
     reply: '下个月10号继续还款。',

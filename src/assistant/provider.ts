@@ -72,7 +72,7 @@ export type AssistantProviderResult = AssistantTurnOutput & {
   grounding: AssistantReadSet;
 };
 
-export type AssistantProviderProgressStage = 'thinking' | 'answering';
+export type AssistantProviderProgressStage = 'thinking' | 'reading' | 'answering';
 
 export interface AssistantProviderTimeouts {
   firstByteMs: number;
@@ -126,6 +126,7 @@ async function readEventStream(
   onReasoningText?: (text: string) => void,
   onProgress?: (stage: AssistantProviderProgressStage) => void,
   onActivity?: () => void,
+  contentMode: 'json-reply' | 'raw' = 'json-reply',
 ): Promise<CompletionResponse> {
   if (!response.body) throw new AssistantProviderError('invalid-response', '理解引擎没有返回流式内容');
   const reader = response.body.getReader();
@@ -176,7 +177,7 @@ async function readEventStream(
     }
     if (typeof choice?.finish_reason === 'string') finishReason = choice.finish_reason;
     if (event?.usage && typeof event.usage === 'object') usage = event.usage;
-    const partial = extractPartialJsonStringField(content, 'reply');
+    const partial = contentMode === 'raw' ? content : extractPartialJsonStringField(content, 'reply');
     const now = Date.now();
     if (partial.length > displayed.length && (lastDisplayAt === 0 || now - lastDisplayAt >= 40)) {
       displayed = partial;
@@ -222,10 +223,11 @@ async function readCompletionResponse(
   onReasoningText?: (text: string) => void,
   onProgress?: (stage: AssistantProviderProgressStage) => void,
   onActivity?: () => void,
+  contentMode: 'json-reply' | 'raw' = 'json-reply',
 ): Promise<CompletionResponse> {
   const contentType = response.headers.get('content-type') ?? '';
   if (contentType.includes('text/event-stream')) {
-    return readEventStream(response, onReplyText, onReasoningText, onProgress, onActivity);
+    return readEventStream(response, onReplyText, onReasoningText, onProgress, onActivity, contentMode);
   }
   const raw = await response.text();
   onActivity?.();
@@ -273,6 +275,7 @@ async function requestCompletion(input: {
   onReasoningText?: (text: string) => void;
   onProgress?: (stage: AssistantProviderProgressStage) => void;
   timeouts: AssistantProviderTimeouts;
+  contentMode?: 'json-reply' | 'raw';
 }): Promise<CompletionResponse> {
   const controller = new AbortController();
   let timeoutReason: 'first-byte' | 'stream-idle' | 'total' | null = null;
@@ -336,6 +339,7 @@ async function requestCompletion(input: {
       input.onReasoningText,
       input.onProgress,
       markActivity,
+      input.contentMode,
     );
   } catch (error: any) {
     if (error instanceof AssistantProviderError) throw error;
@@ -450,6 +454,7 @@ export async function requestAssistantTurn(input: {
         })),
       });
       for (const call of completion.toolCalls) {
+        input.onProgress?.('reading');
         const execution = await input.executeReadTool(call);
         toolExecutions.push(execution);
         messages.push({
@@ -530,5 +535,94 @@ export async function requestAssistantTurn(input: {
       { attemptCount: attempts.length, attempts, protocolWarnings },
       false,
     );
+  }
+}
+
+export async function requestAssistantFinalReply(input: {
+  settings: Settings;
+  userMessage: string;
+  draftReply: string;
+  executionResult: unknown;
+  signal?: AbortSignal;
+  fetchImpl?: FetchLike;
+  onReplyText?: (text: string) => void;
+  onProgress?: (stage: AssistantProviderProgressStage) => void;
+  timeouts?: Partial<AssistantProviderTimeouts>;
+}): Promise<{ reply: string; providerMetadata: AssistantProviderMetadata }> {
+  if (!input.settings.llmEnabled || !input.settings.llmKey) {
+    throw new AssistantProviderError('missing-key', '理解引擎尚未开启或未配置 API Key');
+  }
+  const fetchImpl: FetchLike = input.fetchImpl ?? (fetch as FetchLike);
+  const startedAt = Date.now();
+  const attemptStartedAt = Date.now();
+  const timeouts = { ...DEFAULT_ASSISTANT_PROVIDER_TIMEOUTS, ...input.timeouts };
+  let completion: CompletionResponse | null = null;
+  try {
+    completion = await requestCompletion({
+      settings: input.settings,
+      body: JSON.stringify({
+        model: input.settings.llmModel,
+        messages: [
+          {
+            role: 'system',
+            content: [
+              '你是小知。请根据本地真实执行回执，给用户一句自然、简洁、连续的最终回复。',
+              '只有 execution_result.committed 中的事项可以说“已完成/已更新/已创建”。',
+              'rejected 或 failed 必须明确表示没有完成对应修改；no_change 可以沿用草稿对用户问题的回答。',
+              '不要提及 JSON、工具、校验器、数据库、模型或内部流程。只输出给用户看的正文。',
+            ].join('\n'),
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              user_message: input.userMessage,
+              draft_reply: input.draftReply,
+              execution_result: input.executionResult,
+            }),
+          },
+        ],
+        thinking: { type: 'enabled' },
+        reasoning_effort: 'high',
+        stream: true,
+        stream_options: { include_usage: true },
+      }),
+      callerSignal: input.signal,
+      fetchImpl,
+      onReplyText: input.onReplyText,
+      onProgress: input.onProgress,
+      timeouts,
+      contentMode: 'raw',
+    });
+    const reply = completion.content.trim();
+    if (!reply) throw new AssistantProviderError('invalid-response', '理解引擎没有返回最终回复');
+    input.onReplyText?.(reply);
+    const attempt: AssistantProviderAttempt = {
+      attempt: 1,
+      startedAt: attemptStartedAt,
+      completedAt: Date.now(),
+      errorCode: null,
+      errorDetail: null,
+      finishReason: completion.finishReason,
+      promptTokens: usageValue(completion.usage, 'prompt_tokens'),
+      completionTokens: usageValue(completion.usage, 'completion_tokens'),
+      totalTokens: usageValue(completion.usage, 'total_tokens'),
+    };
+    return {
+      reply,
+      providerMetadata: {
+        startedAt,
+        completedAt: Date.now(),
+        finishReason: completion.finishReason,
+        promptTokens: attempt.promptTokens,
+        completionTokens: attempt.completionTokens,
+        totalTokens: attempt.totalTokens,
+        attemptCount: 1,
+        attempts: [attempt],
+        protocolWarnings: [],
+      },
+    };
+  } catch (error: any) {
+    if (error instanceof AssistantProviderError) throw error;
+    throw new AssistantProviderError('invalid-response', error instanceof Error ? error.message : '最终回复生成失败');
   }
 }

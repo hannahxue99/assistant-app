@@ -4,7 +4,13 @@ import { buildAssistantContext, type AssistantLaunchContext } from './context';
 import { loadAssistantActionContext } from './action-context';
 import { completeAssistantTurnWithActions, listCommittedOperationsByRequest } from './action-store';
 import { prepareAssistantActions } from './event-delta';
-import { requestAssistantTurn, type AssistantProviderProgressStage } from './provider';
+import {
+  requestAssistantFinalReply,
+  requestAssistantTurn,
+  type AssistantProviderProgressStage,
+} from './provider';
+import { executeAssistantReadTool } from './data-tools';
+import { buildAssistantExecutionResult, fallbackReplyForExecution } from './execution-result';
 import type { AssistantRuntimeStage } from './runtime-state';
 import { getAssistantReasoning, type AssistantReasoning } from './reasoning-store';
 import { ASSISTANT_PROMPT_VERSION } from './prompt';
@@ -14,6 +20,7 @@ import {
   beginAssistantDecisionLog,
   recordAssistantDecisionCommit,
   recordAssistantDecisionFailure,
+  recordAssistantExecutionOutcome,
   recordAssistantModelDecision,
   recordAssistantValidation,
 } from './decision-log';
@@ -27,6 +34,7 @@ import {
   listClosedSegments,
   listMessages,
   saveUserTurn,
+  updateAssistantReply,
 } from './store';
 import type { AssistantMessage } from './types';
 import type { AssistantOperation } from './action-types';
@@ -199,12 +207,24 @@ async function runSavedTurn(input: {
       referenceAt: state.userMessage.createdAt,
       timeZone,
       signal: input.signal,
-      onReplyText: input.onReplyText,
       onReasoningText: input.onReasoningText,
-      onProgress: (stage: AssistantProviderProgressStage) => input.onProgress?.(stage),
+      onProgress: (stage: AssistantProviderProgressStage) => input.onProgress?.(
+        stage === 'reading' ? 'reading' : 'planning',
+      ),
+      executeReadTool: executeAssistantReadTool,
     });
     throwIfCancelled(input.signal);
-    input.onProgress?.('finalizing');
+    input.onProgress?.('planning');
+    const grounding = output.grounding ?? { eventIds: [], todoIds: [] };
+    const groundedActionContext = grounding.eventIds.length || grounding.todoIds.length
+      ? await loadAssistantActionContext({
+        query: state.userMessage.content,
+        launchContext: input.launchContext,
+        currentSegmentId: currentSegment?.id,
+        readEventIds: grounding.eventIds,
+        readTodoIds: grounding.todoIds,
+      })
+      : actionContext;
     const eventDeltas = output.eventDeltas ?? [];
     const memoryDeltas = output.memoryDeltas ?? [];
     await safelyLog(() => recordAssistantModelDecision({
@@ -213,6 +233,8 @@ async function runSavedTurn(input: {
       eventDeltas,
       memoryDeltas,
       metadata: output.providerMetadata,
+      toolReadEventIds: grounding.eventIds,
+      toolReadTodoIds: grounding.todoIds,
     }));
     const recentEvidence = messages
       .filter(message => message.role === 'user' && message.id !== state.userMessage.id)
@@ -221,7 +243,7 @@ async function runSavedTurn(input: {
     const validation = prepareAssistantActions({
       operations: output.operations ?? [],
       eventDeltas,
-      actionContext,
+      actionContext: groundedActionContext,
       currentMessage: state.userMessage.content,
       recentEvidence,
       referenceAt: state.userMessage.createdAt,
@@ -245,16 +267,12 @@ async function runSavedTurn(input: {
       rejectedMemoryDeltas: memoryValidation.rejected,
     }));
     throwIfCancelled(input.signal);
-    const replyForCommit = output.providerMetadata?.protocolWarnings.includes('reply_execution_claim')
-      && validation.accepted.length === 0
-      && memoryValidation.accepted.length === 0
-      ? '我理解了，但这次没有形成可保存的操作。请再告诉我一次要记录什么。'
-      : output.reply;
+    input.onProgress?.('updating');
     const completed = await completeAssistantTurnWithActions({
       requestId: input.requestId,
       userMessageId: state.userMessage.id,
       userSource: state.userMessage.source,
-      reply: replyForCommit,
+      reply: '我已经收到，正在确认这次处理结果。',
       segment: output.segment,
       operations: validation.accepted,
       memoryDeltas: memoryValidation.accepted,
@@ -267,12 +285,74 @@ async function runSavedTurn(input: {
           createdAt: Date.now(),
         }
         : null,
-      actionContext,
+      actionContext: groundedActionContext,
     });
-    await safelyLog(() => recordAssistantDecisionCommit({
-      requestId: input.requestId,
+    if (completed.operations.length > 0) {
+      await safelyLog(() => recordAssistantDecisionCommit({
+        requestId: input.requestId,
+        operations: completed.operations,
+      }));
+    }
+    const proposedWriteCount = validation.accepted.length + memoryValidation.accepted.length;
+    const executionRejected: Array<{ type: string; reason: string; detail?: string }> = [
+      ...validation.rejected.map(item => ({
+        type: item.type,
+        reason: item.reason,
+        ...('detail' in item && item.detail ? { detail: item.detail } : {}),
+      })),
+      ...memoryValidation.rejected.map(item => ({
+        type: item.action,
+        reason: item.reason,
+      })),
+    ];
+    if (proposedWriteCount > completed.operations.length) {
+      executionRejected.push({
+        type: 'execution',
+        reason: 'one_or_more_operations_not_committed',
+        detail: `planned=${proposedWriteCount}, committed=${completed.operations.length}`,
+      });
+    }
+    if (completed.operations.length === 0
+      && output.providerMetadata?.protocolWarnings.includes('reply_execution_claim')) {
+      executionRejected.push({
+        type: 'reply',
+        reason: 'unverified_execution_claim',
+      });
+    }
+    const executionResult = buildAssistantExecutionResult({
       operations: completed.operations,
+      rejected: executionRejected,
+    });
+    await safelyLog(() => recordAssistantExecutionOutcome({
+      requestId: input.requestId,
+      result: executionResult,
     }));
+    const fallbackReply = fallbackReplyForExecution(executionResult, output.reply);
+    let assistantMessage = await updateAssistantReply(input.requestId, fallbackReply);
+    input.onProgress?.('answering');
+    const needsGroundedNarration = completed.operations.length > 0
+      || proposedWriteCount > 0
+      || executionRejected.length > 0;
+    if (needsGroundedNarration) {
+      try {
+        const finalReply = await requestAssistantFinalReply({
+          settings,
+          userMessage: state.userMessage.content,
+          draftReply: output.reply,
+          executionResult,
+          signal: input.signal,
+          onReplyText: input.onReplyText,
+          onProgress: () => input.onProgress?.('answering'),
+        });
+        assistantMessage = await updateAssistantReply(input.requestId, finalReply.reply);
+      } catch (narrationError) {
+        console.warn('[assistant-final-reply] 使用本地真实回执文案', narrationError);
+        input.onReplyText?.(fallbackReply);
+      }
+    } else {
+      input.onReplyText?.(fallbackReply);
+    }
+    input.onProgress?.('finalizing');
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       console.log('[assistant-decision]', {
         requestId: input.requestId,
@@ -293,7 +373,7 @@ async function runSavedTurn(input: {
     }
     return {
       userMessage: (await getRequestState(input.requestId))?.userMessage ?? state.userMessage,
-      assistantMessage: completed.assistantMessage,
+      assistantMessage,
       operations: completed.operations,
       reasoning: output.reasoning
         ? {

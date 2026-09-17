@@ -35,13 +35,12 @@ export function buildAssistantExecutionResult(input: {
   return { outcome, committed, rejected, ...(input.error ? { error: input.error } : {}) };
 }
 
-export function fallbackReplyForExecution(result: AssistantExecutionResult): string {
+export function fallbackReplyForExecution(result: AssistantExecutionResult, draftReply?: string): string {
   if (result.outcome === 'committed') {
     const summaries = result.committed.map(item => item.receiptSummary).filter(Boolean);
     return summaries.length ? summaries.join('\n') : '已经按你的要求更新好了。';
   }
   if (result.outcome === 'rejected') return '我理解了你的意思，但这次更新没有通过数据校验，所以没有改动原记录。';
   if (result.outcome === 'failed') return '我理解了你的意思，但保存时出了问题，这次没有完成更新。';
-  return '明白了，这次没有需要改动的事件或待办。';
+  return draftReply?.trim() || '明白了，这次没有需要改动的事件或待办。';
 }
-
