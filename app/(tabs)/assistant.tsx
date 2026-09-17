@@ -557,6 +557,6 @@ const styles = StyleSheet.create({
   olderRetryText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
   dateSeparatorWrap: { alignItems: 'center', paddingTop: 7, paddingBottom: 3 },
   dateSeparatorText: { color: theme.colors.textDim, fontSize: 11, lineHeight: 17, paddingHorizontal: 9, paddingVertical: 2, borderRadius: 11, backgroundColor: theme.colors.card },
-  composerWrap: { paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6, borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.bg },
+  composerWrap: { paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6 },
   pressed: { opacity: 0.72 },
 });
