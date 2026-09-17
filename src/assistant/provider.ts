@@ -8,6 +8,12 @@ import {
   type AssistantTurnOutput,
 } from './protocol';
 import { extractPartialJsonStringField } from './streaming-json';
+import {
+  ASSISTANT_READ_TOOLS,
+  mergeAssistantReadSets,
+  type AssistantReadSet,
+  type AssistantReadToolExecution,
+} from './data-tools';
 
 export type AssistantProviderErrorCode = 'missing-key' | 'timeout' | 'network' | 'provider' | 'invalid-response' | 'cancelled';
 
@@ -63,6 +69,7 @@ export interface AssistantProviderReasoning {
 export type AssistantProviderResult = AssistantTurnOutput & {
   providerMetadata: AssistantProviderMetadata;
   reasoning: AssistantProviderReasoning | null;
+  grounding: AssistantReadSet;
 };
 
 export type AssistantProviderProgressStage = 'thinking' | 'answering';
@@ -88,7 +95,30 @@ type CompletionResponse = {
   reasoningCompletedAt: number | null;
   finishReason: string | null;
   usage: any | null;
+  toolCalls: ProviderToolCall[];
 };
+
+export interface ProviderToolCall {
+  id: string;
+  name: string;
+  argumentsJson: string;
+}
+
+type PendingToolCall = { id: string; name: string; argumentsJson: string };
+
+export function mergeProviderToolCallDelta(
+  pending: Map<number, PendingToolCall>,
+  deltas: any[],
+): void {
+  for (const delta of deltas) {
+    const index = Number.isInteger(delta?.index) ? Number(delta.index) : 0;
+    const current = pending.get(index) ?? { id: '', name: '', argumentsJson: '' };
+    if (typeof delta?.id === 'string') current.id += delta.id;
+    if (typeof delta?.function?.name === 'string') current.name += delta.function.name;
+    if (typeof delta?.function?.arguments === 'string') current.argumentsJson += delta.function.arguments;
+    pending.set(index, current);
+  }
+}
 
 async function readEventStream(
   response: Response,
@@ -111,6 +141,7 @@ async function readEventStream(
   let reasoningCompletedAt: number | null = null;
   let finishReason: string | null = null;
   let usage: any | null = null;
+  const pendingToolCalls = new Map<number, PendingToolCall>();
 
   const consumeLine = (line: string) => {
     const trimmed = line.trim();
@@ -124,6 +155,9 @@ async function readEventStream(
       throw new AssistantProviderError('invalid-response', '理解引擎返回了损坏的流式数据');
     }
     const choice = event?.choices?.[0];
+    if (Array.isArray(choice?.delta?.tool_calls)) {
+      mergeProviderToolCallDelta(pendingToolCalls, choice.delta.tool_calls);
+    }
     if (typeof choice?.delta?.reasoning_content === 'string' && choice.delta.reasoning_content.length > 0) {
       const now = Date.now();
       reasoningStartedAt ??= now;
@@ -175,6 +209,10 @@ async function readEventStream(
     reasoningCompletedAt,
     finishReason,
     usage,
+    toolCalls: [...pendingToolCalls.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([, call]) => call)
+      .filter(call => call.id && call.name),
   };
 }
 
@@ -212,6 +250,13 @@ async function readCompletionResponse(
       ? data.choices[0].finish_reason
       : null,
     usage: data?.usage ?? null,
+    toolCalls: Array.isArray(data?.choices?.[0]?.message?.tool_calls)
+      ? data.choices[0].message.tool_calls.map((call: any) => ({
+        id: String(call?.id ?? ''),
+        name: String(call?.function?.name ?? ''),
+        argumentsJson: String(call?.function?.arguments ?? '{}'),
+      })).filter((call: ProviderToolCall) => call.id && call.name)
+      : [],
   };
 }
 
@@ -331,6 +376,7 @@ export async function requestAssistantTurn(input: {
   onReasoningText?: (text: string) => void;
   onProgress?: (stage: AssistantProviderProgressStage) => void;
   timeouts?: Partial<AssistantProviderTimeouts>;
+  executeReadTool?: (call: ProviderToolCall) => Promise<AssistantReadToolExecution>;
 }): Promise<AssistantProviderResult> {
   if (!input.settings.llmEnabled || !input.settings.llmKey) {
     throw new AssistantProviderError('missing-key', '理解引擎尚未开启或未配置 API Key');
@@ -340,35 +386,79 @@ export async function requestAssistantTurn(input: {
   const attempts: AssistantProviderAttempt[] = [];
   let protocolWarnings: AssistantProtocolWarning[] = [];
   const timeouts = { ...DEFAULT_ASSISTANT_PROVIDER_TIMEOUTS, ...input.timeouts };
-  const requestBody = JSON.stringify({
-    model: input.settings.llmModel,
-    messages: buildAssistantPromptMessages({
+  const messages: any[] = buildAssistantPromptMessages({
       contextBlock: input.context.contextBlock,
       recentMessages: input.context.recentMessages,
       referenceAt: input.referenceAt,
       timeZone: input.timeZone,
-    }),
-    thinking: { type: 'enabled' },
-    reasoning_effort: 'high',
-    response_format: { type: 'json_object' },
-    stream: true,
-    stream_options: { include_usage: true },
   });
-
-  const attemptStartedAt = Date.now();
+  const toolExecutions: AssistantReadToolExecution[] = [];
+  const maxReadRounds = 2;
+  const maxToolCalls = 4;
+  let readRounds = 0;
   let completion: CompletionResponse | null = null;
   try {
-    input.onProgress?.('thinking');
-    completion = await requestCompletion({
-      settings: input.settings,
-      body: requestBody,
-      callerSignal: input.signal,
-      fetchImpl,
-      onReplyText: input.onReplyText,
-      onReasoningText: input.onReasoningText,
-      onProgress: input.onProgress,
-      timeouts,
-    });
+    while (true) {
+      const attemptStartedAt = Date.now();
+      input.onProgress?.('thinking');
+      completion = await requestCompletion({
+        settings: input.settings,
+        body: JSON.stringify({
+          model: input.settings.llmModel,
+          messages,
+          thinking: { type: 'enabled' },
+          reasoning_effort: 'high',
+          response_format: { type: 'json_object' },
+          ...(input.executeReadTool ? { tools: ASSISTANT_READ_TOOLS, tool_choice: 'auto' } : {}),
+          stream: true,
+          stream_options: { include_usage: true },
+        }),
+        callerSignal: input.signal,
+        fetchImpl,
+        onReplyText: input.onReplyText,
+        onReasoningText: input.onReasoningText,
+        onProgress: input.onProgress,
+        timeouts,
+      });
+      attempts.push({
+        attempt: attempts.length + 1,
+        startedAt: attemptStartedAt,
+        completedAt: Date.now(),
+        errorCode: null,
+        errorDetail: null,
+        finishReason: completion.finishReason,
+        promptTokens: usageValue(completion.usage, 'prompt_tokens'),
+        completionTokens: usageValue(completion.usage, 'completion_tokens'),
+        totalTokens: usageValue(completion.usage, 'total_tokens'),
+      });
+      if (completion.toolCalls.length === 0) break;
+      if (!input.executeReadTool) {
+        throw new AssistantProviderError('invalid-response', '理解引擎请求了未启用的数据工具');
+      }
+      readRounds += 1;
+      if (readRounds > maxReadRounds || toolExecutions.length + completion.toolCalls.length > maxToolCalls) {
+        throw new AssistantProviderError('invalid-response', '理解引擎读取数据次数过多');
+      }
+      messages.push({
+        role: 'assistant',
+        content: completion.content || null,
+        reasoning_content: completion.reasoningContent || undefined,
+        tool_calls: completion.toolCalls.map(call => ({
+          id: call.id,
+          type: 'function',
+          function: { name: call.name, arguments: call.argumentsJson },
+        })),
+      });
+      for (const call of completion.toolCalls) {
+        const execution = await input.executeReadTool(call);
+        toolExecutions.push(execution);
+        messages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: JSON.stringify(execution.result),
+        });
+      }
+    }
     if (typeof completion.content !== 'string' || !completion.content.trim()) {
       throw new AssistantProviderError('invalid-response', '理解引擎没有返回有效回复');
     }
@@ -383,20 +473,10 @@ export async function requestAssistantTurn(input: {
       );
     }
     protocolWarnings = inspectAssistantReplyWarnings(output.reply);
-    attempts.push({
-      attempt: 1,
-      startedAt: attemptStartedAt,
-      completedAt: Date.now(),
-      errorCode: null,
-      errorDetail: null,
-      finishReason: completion.finishReason,
-      promptTokens: usageValue(completion.usage, 'prompt_tokens'),
-      completionTokens: usageValue(completion.usage, 'completion_tokens'),
-      totalTokens: usageValue(completion.usage, 'total_tokens'),
-    });
     input.onReplyText?.(output.reply);
     return {
       ...output,
+      grounding: mergeAssistantReadSets(toolExecutions),
       reasoning: completion.reasoningContent.trim()
         ? {
           content: completion.reasoningContent,
@@ -423,17 +503,27 @@ export async function requestAssistantTurn(input: {
         'invalid-response',
         error instanceof Error ? error.message : '理解引擎返回格式异常',
       );
-    attempts.push({
-      attempt: 1,
-      startedAt: attemptStartedAt,
-      completedAt: Date.now(),
-      errorCode: providerError.code,
-      errorDetail: providerError.message,
-      finishReason: completion?.finishReason ?? null,
-      promptTokens: usageValue(completion?.usage, 'prompt_tokens'),
-      completionTokens: usageValue(completion?.usage, 'completion_tokens'),
-      totalTokens: usageValue(completion?.usage, 'total_tokens'),
-    });
+    const lastAttempt = attempts.at(-1);
+    if (lastAttempt?.errorCode === null) {
+      attempts[attempts.length - 1] = {
+        ...lastAttempt,
+        completedAt: Date.now(),
+        errorCode: providerError.code,
+        errorDetail: providerError.message,
+      };
+    } else if (!attempts.length) {
+      attempts.push({
+        attempt: 1,
+        startedAt: completion?.reasoningStartedAt ?? startedAt,
+        completedAt: Date.now(),
+        errorCode: providerError.code,
+        errorDetail: providerError.message,
+        finishReason: completion?.finishReason ?? null,
+        promptTokens: usageValue(completion?.usage, 'prompt_tokens'),
+        completionTokens: usageValue(completion?.usage, 'completion_tokens'),
+        totalTokens: usageValue(completion?.usage, 'total_tokens'),
+      });
+    }
     throw new AssistantProviderError(
       providerError.code,
       providerError.message,

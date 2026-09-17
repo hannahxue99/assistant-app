@@ -4,7 +4,7 @@ import {
   inspectAssistantReplyWarnings,
   parseAssistantTurnOutput,
 } from '../src/assistant/protocol';
-import { requestAssistantTurn } from '../src/assistant/provider';
+import { mergeProviderToolCallDelta, requestAssistantTurn } from '../src/assistant/provider';
 import { extractPartialJsonStringField } from '../src/assistant/streaming-json';
 
 function check(condition: unknown, message: string): asserts condition {
@@ -278,6 +278,18 @@ check(prompt.at(-1)?.content === '那继续梳理。', '最近原话必须保持
 check(extractPartialJsonStringField('{"reply":"第一行\\n第', 'reply') === '第一行\n第',
   '流式 JSON 应解码完整转义并保留未闭合回复');
 
+const fragmentedToolCalls = new Map();
+mergeProviderToolCallDelta(fragmentedToolCalls, [{
+  index: 0, id: 'call_', function: { name: 'search_', arguments: '{"query":"十' },
+}]);
+mergeProviderToolCallDelta(fragmentedToolCalls, [{
+  index: 0, id: '1', function: { name: 'events', arguments: '一出行"}' },
+}]);
+check(fragmentedToolCalls.get(0)?.id === 'call_1'
+  && fragmentedToolCalls.get(0)?.name === 'search_events'
+  && fragmentedToolCalls.get(0)?.argumentsJson === '{"query":"十一出行"}',
+'分片 tool_calls 必须按 index 正确重组');
+
 async function main() {
   let capturedBody = '';
   const providerResult = await requestAssistantTurn({
@@ -310,6 +322,47 @@ async function main() {
     && capturedBody.includes('"reasoning_effort":"high"'),
   'Provider 应显式开启 DeepSeek 思考并设置推理强度');
   check(providerResult.reasoning === null, '未返回思考内容时应保持空状态');
+  check(providerResult.grounding.eventIds.length === 0, '未启用数据工具时读取集合应为空');
+
+  const toolBodies: any[] = [];
+  let toolFetchIndex = 0;
+  const toolResult = await requestAssistantTurn({
+    settings: {
+      llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model',
+    },
+    context: { contextBlock: '上下文', recentMessages: [{ id: 'u', role: 'user', content: '十一怎么安排', createdAt: 1 }] },
+    fetchImpl: async (_url, init) => {
+      toolBodies.push(JSON.parse(String(init?.body)));
+      toolFetchIndex += 1;
+      if (toolFetchIndex === 1) {
+        return new Response(JSON.stringify({
+          choices: [{
+            message: {
+              content: '', reasoning_content: '先读取真实事件',
+              tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'get_event', arguments: '{"event_id":"event-trip"}' } }],
+            },
+            finish_reason: 'tool_calls',
+          }],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: '{"reply":"我看到了十一出行。","segment":{"action":"continue"}}' }, finish_reason: 'stop' }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+    executeReadTool: async call => ({
+      toolCallId: call.id,
+      name: 'get_event',
+      result: { found: true, event: { id: 'event-trip', title: '十一出行', revision: 4 } },
+      readEventIds: ['event-trip'],
+      readTodoIds: [],
+    }),
+  });
+  check(toolResult.grounding.eventIds[0] === 'event-trip', '工具读取到的事件 ID 必须回传给本地校验层');
+  check(toolResult.providerMetadata.attemptCount === 2, '一次工具读取和一次规划应记录两次 Provider 请求');
+  check(toolBodies[0].tools?.length === 4, '启用读取执行器时必须向模型暴露四个只读工具');
+  check(toolBodies[1].messages.at(-1).role === 'tool', '第二轮必须带回真实工具结果');
+  check(toolBodies[1].messages.at(-2).reasoning_content === '先读取真实事件',
+    'DeepSeek 工具续轮必须保留上一轮 reasoning_content');
 
   const modelJson = JSON.stringify({
     reply: '下个月10号继续还款。',
