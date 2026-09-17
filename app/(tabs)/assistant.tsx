@@ -33,6 +33,7 @@ import type {
   AssistantMessage,
   AssistantOlderLoadStatus,
 } from '../../src/assistant/types';
+import type { AssistantRuntimeStage } from '../../src/assistant/runtime-state';
 import { AssistantComposer } from '../../src/components/AssistantComposer';
 import { AssistantEmptyState } from '../../src/components/AssistantEmptyState';
 import { AssistantLoadErrorState } from '../../src/components/AssistantLoadErrorState';
@@ -83,6 +84,11 @@ export default function AssistantScreen() {
   const [streamingReplies, setStreamingReplies] = useState<Record<string, AssistantMessage>>({});
 
   const displayMessages = useMemo(() => mergeAssistantMessages(messages, Object.values(streamingReplies)), [messages, streamingReplies]);
+  const requestStartedAt = useMemo(() => new Map(
+    messages
+      .filter(message => message.role === 'user')
+      .map(message => [message.requestId, message.createdAt] as const),
+  ), [messages]);
 
   const scrollToLatest = useCallback((animated: boolean, keepPending = true) => {
     if (keepPending) pendingEndScrollRef.current = { animated };
@@ -96,24 +102,35 @@ export default function AssistantScreen() {
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: pending?.animated ?? false }));
   }, []);
 
-  const updateStreamingReply = useCallback((requestId: string, createdAt: number, content: string) => {
-    if (!mountedRef.current || !content) return;
-    setStreamingReplies(current => ({
-      ...current,
-      [requestId]: {
-        id: `streaming-${requestId}`,
-        requestId,
-        role: 'assistant',
-        content,
-        source: 'assistant',
-        status: 'streaming',
-        segmentId: 'streaming',
-        createdAt: createdAt + 1,
-        updatedAt: Date.now(),
-        legacyEntryId: null,
-        errorCode: null,
-      },
-    }));
+  const updateStreamingReply = useCallback((input: {
+    requestId: string;
+    messageCreatedAt: number;
+    runtimeStartedAt?: number;
+    content?: string;
+    stage?: AssistantRuntimeStage;
+  }) => {
+    if (!mountedRef.current) return;
+    setStreamingReplies((current) => {
+      const existing = current[input.requestId];
+      return {
+        ...current,
+        [input.requestId]: {
+          id: `streaming-${input.requestId}`,
+          requestId: input.requestId,
+          role: 'assistant',
+          content: input.content ?? existing?.content ?? '',
+          source: 'assistant',
+          status: 'streaming',
+          segmentId: 'streaming',
+          createdAt: input.messageCreatedAt + 1,
+          updatedAt: Date.now(),
+          legacyEntryId: null,
+          errorCode: null,
+          runtimeStage: input.stage ?? existing?.runtimeStage ?? 'thinking',
+          runtimeStartedAt: existing?.runtimeStartedAt ?? input.runtimeStartedAt ?? Date.now(),
+        },
+      };
+    });
     if (followEndRef.current) scrollToLatest(false, false);
   }, [scrollToLatest]);
 
@@ -219,8 +236,15 @@ export default function AssistantScreen() {
   async function send(content: string, source: 'text' | 'voice') {
     const requestId = makeRequestId();
     const userMessage = await saveUserTurn({ requestId, content, source });
+    const runtimeStartedAt = Date.now();
     if (mountedRef.current) {
       setMessages(current => mergeAssistantMessages(current, [userMessage]));
+      updateStreamingReply({
+        requestId,
+        messageCreatedAt: userMessage.createdAt,
+        runtimeStartedAt,
+        stage: 'thinking',
+      });
       followEndRef.current = true;
       scrollToLatest(true);
     }
@@ -229,14 +253,28 @@ export default function AssistantScreen() {
       content,
       source,
       launchContext,
-      onReplyText: text => updateStreamingReply(requestId, userMessage.createdAt, text),
+      onReplyText: text => updateStreamingReply({
+        requestId,
+        messageCreatedAt: userMessage.createdAt,
+        runtimeStartedAt,
+        content: text,
+        stage: 'answering',
+      }),
+      onProgress: stage => updateStreamingReply({
+        requestId,
+        messageCreatedAt: userMessage.createdAt,
+        runtimeStartedAt,
+        stage,
+      }),
     });
     void job
       .then((result) => {
         if (mountedRef.current) {
+          clearStreamingReply(requestId);
           setMessages(current => mergeAssistantMessages(current, [{
             ...result.assistantMessage,
             operations: result.operations,
+            runtimeStartedAt,
           }]));
         }
       })
@@ -262,6 +300,7 @@ export default function AssistantScreen() {
   }
 
   function retry(requestId: string) {
+    const runtimeStartedAt = Date.now();
     setMessages(current => current.map(item => (
       item.requestId === requestId && item.role === 'user'
         ? { ...item, status: 'sending', errorCode: null, updatedAt: Date.now() }
@@ -270,14 +309,40 @@ export default function AssistantScreen() {
     void (async () => {
       try {
         const userMessage = messages.find(item => item.requestId === requestId && item.role === 'user');
+        updateStreamingReply({
+          requestId,
+          messageCreatedAt: userMessage?.createdAt ?? runtimeStartedAt,
+          runtimeStartedAt,
+          stage: 'thinking',
+        });
         const job = retryAssistantTurn({
           requestId,
           launchContext,
-          onReplyText: text => updateStreamingReply(requestId, userMessage?.createdAt ?? Date.now(), text),
+          onReplyText: text => updateStreamingReply({
+            requestId,
+            messageCreatedAt: userMessage?.createdAt ?? runtimeStartedAt,
+            runtimeStartedAt,
+            content: text,
+            stage: 'answering',
+          }),
+          onProgress: stage => updateStreamingReply({
+            requestId,
+            messageCreatedAt: userMessage?.createdAt ?? runtimeStartedAt,
+            runtimeStartedAt,
+            stage,
+          }),
         });
         await Promise.resolve();
         await loadLatest(false);
-        await job;
+        const result = await job;
+        if (mountedRef.current) {
+          clearStreamingReply(requestId);
+          setMessages(current => mergeAssistantMessages(current, [{
+            ...result.assistantMessage,
+            operations: result.operations,
+            runtimeStartedAt,
+          }]));
+        }
       } catch {
         // 错误状态由对应消息承载，不再重复显示页面级错误。
       } finally {
@@ -372,6 +437,7 @@ export default function AssistantScreen() {
                 onUndo={undo}
                 undoing={undoingRequestId === item.requestId}
                 undoError={undoErrors[item.requestId]}
+                runtimeStartedAt={item.runtimeStartedAt ?? requestStartedAt.get(item.requestId)}
               />
             )}
             contentContainerStyle={[styles.listContent, messages.length === 0 && styles.emptyList]}

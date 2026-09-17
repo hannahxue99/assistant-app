@@ -4,7 +4,8 @@ import { buildAssistantContext, type AssistantLaunchContext } from './context';
 import { loadAssistantActionContext } from './action-context';
 import { completeAssistantTurnWithActions, listCommittedOperationsByRequest } from './action-store';
 import { prepareAssistantActions } from './event-delta';
-import { requestAssistantTurn } from './provider';
+import { requestAssistantTurn, type AssistantProviderProgressStage } from './provider';
+import type { AssistantRuntimeStage } from './runtime-state';
 import { ASSISTANT_PROMPT_VERSION } from './prompt';
 import { loadAssistantMemoryContext } from './memory-retrieval';
 import { validateAssistantMemoryDeltas } from './memory-validator';
@@ -49,6 +50,7 @@ type SendInput = {
   createdAt?: number;
   launchContext?: AssistantLaunchContext | null;
   onReplyText?: (text: string) => void;
+  onProgress?: (stage: AssistantRuntimeStage) => void;
 };
 
 type RetryInput = {
@@ -56,6 +58,7 @@ type RetryInput = {
   settings?: Settings;
   launchContext?: AssistantLaunchContext | null;
   onReplyText?: (text: string) => void;
+  onProgress?: (stage: AssistantRuntimeStage) => void;
 };
 
 type AssistantTurnJob = {
@@ -106,6 +109,7 @@ async function runSavedTurn(input: {
   settings?: Settings;
   launchContext?: AssistantLaunchContext | null;
   onReplyText?: (text: string) => void;
+  onProgress?: (stage: AssistantRuntimeStage) => void;
   signal?: AbortSignal;
   getPartialReply?: () => string;
 }): Promise<AssistantTurnResult> {
@@ -190,8 +194,10 @@ async function runSavedTurn(input: {
       timeZone,
       signal: input.signal,
       onReplyText: input.onReplyText,
+      onProgress: (stage: AssistantProviderProgressStage) => input.onProgress?.(stage),
     });
     throwIfCancelled(input.signal);
+    input.onProgress?.('finalizing');
     const eventDeltas = output.eventDeltas ?? [];
     const memoryDeltas = output.memoryDeltas ?? [];
     await safelyLog(() => recordAssistantModelDecision({

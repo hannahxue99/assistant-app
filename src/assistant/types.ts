@@ -1,4 +1,5 @@
 import type { AssistantOperation } from './action-types';
+import type { AssistantRuntimeStage } from './runtime-state';
 
 export type AssistantRole = 'user' | 'assistant';
 export type AssistantMessageStatus = 'saved' | 'sending' | 'failed' | 'streaming';
@@ -21,6 +22,10 @@ export interface AssistantMessage {
   legacyEntryId: string | null;
   errorCode: string | null;
   operations?: AssistantOperation[];
+  /** 仅用于当前进程内的流式展示，不写入数据库。 */
+  runtimeStage?: AssistantRuntimeStage;
+  /** 本轮用户发送时间，用于秒级运行计时。 */
+  runtimeStartedAt?: number;
 }
 
 export interface AssistantMessageCursor {
