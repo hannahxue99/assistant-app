@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1440" viewBox="0 0 1440 1440">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#5C4635" flood-opacity="0.10"/>
+    </filter>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFF3E7"/><stop offset="1" stop-color="#FFE4CD"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#C9A98F"/>
+    </marker>
+    <style>
+      .cn { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+      .title { font-size: 42px; font-weight: 800; fill: #302720; }
+      .subtitle { font-size: 22px; font-weight: 500; fill: #6E5E52; }
+      .eyebrow { font-size: 16px; font-weight: 700; letter-spacing: 2px; fill: #E8732D; }
+      .h2 { font-size: 24px; font-weight: 750; fill: #302720; }
+      .h3 { font-size: 19px; font-weight: 700; fill: #302720; }
+      .body { font-size: 16px; font-weight: 500; fill: #63564D; }
+      .small { font-size: 14px; font-weight: 500; fill: #81746A; }
+      .orange { fill: #E8732D; }
+      .line { stroke: #C9A98F; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .card { fill: #FFFFFF; stroke: #EADDD2; stroke-width: 1.5; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="1440" fill="#F8F4EF"/>
+  <text class="cn eyebrow" x="72" y="58">PRIVATE AI · V1 PRODUCT VISION</text>
+  <text class="cn title" x="72" y="112">一个长期懂你的私人 AI</text>
+  <text class="cn subtitle" x="72" y="151">像秘书一样帮你料理当下，像导师一样逐渐理解你、帮你看清方向</text>
+
+  <rect x="72" y="190" width="1296" height="138" rx="28" fill="url(#hero)" stroke="#F3C9A7"/>
+  <text class="cn h2" x="108" y="234">V1 是完整愿景：从“听懂并执行”，走到“长期理解并主动引导”</text>
+  <g class="cn body">
+    <circle cx="113" cy="276" r="6" class="orange"/><text x="131" y="282">统一输入：用户只需自然地说，不先区分记录、待办或困惑</text>
+    <circle cx="602" cy="276" r="6" class="orange"/><text x="620" y="282">持续理解：对话、待办、事件、长期记忆共同形成上下文</text>
+    <circle cx="1040" cy="276" r="6" class="orange"/><text x="1058" y="282">主动引导：复盘只在出现新价值时形成教练提醒</text>
+  </g>
+
+  <text class="cn h2" x="72" y="382">V1 的完整协助闭环</text>
+  <g filter="url(#shadow)">
+    <rect class="card" x="72" y="410" width="214" height="134" rx="22"/>
+    <rect class="card" x="342" y="410" width="214" height="134" rx="22"/>
+    <rect class="card" x="612" y="410" width="214" height="134" rx="22"/>
+    <rect class="card" x="882" y="410" width="214" height="134" rx="22"/>
+    <rect x="1152" y="410" width="216" height="134" rx="22" fill="#FFF0E3" stroke="#F2B987" stroke-width="2"/>
+  </g>
+  <g class="cn">
+    <text class="eyebrow" x="98" y="444">01 · 表达</text><text class="h3" x="98" y="478">文字或语音输入</text>
+    <text class="small" x="98" y="506">原话立即保存，不因</text><text class="small" x="98" y="527">模型失败而丢失</text>
+    <text class="eyebrow" x="368" y="444">02 · 理解</text><text class="h3" x="368" y="478">小知连续对话</text>
+    <text class="small" x="368" y="506">检索相关上下文，回复</text><text class="small" x="368" y="527">并提出结构化操作</text>
+    <text class="eyebrow" x="638" y="444">03 · 执行</text><text class="h3" x="638" y="478">本地校验与事务</text>
+    <text class="small" x="638" y="506">校验对象、日期和权限</text><text class="small" x="638" y="527">成功才显示已处理</text>
+    <text class="eyebrow" x="908" y="444">04 · 沉淀</text><text class="h3" x="908" y="478">四类长期数据</text>
+    <text class="small" x="908" y="506">消息 · 待办 · 事件</text><text class="small" x="908" y="527">长期记忆</text>
+    <text class="eyebrow" x="1178" y="444">05 · 引导</text><text class="h3" x="1178" y="478">复盘与教练提醒</text>
+    <text class="small" x="1178" y="506">发现遗漏、冲突、机会</text><text class="small" x="1178" y="527">再回到对话推进</text>
+  </g>
+  <path class="line" d="M286 477 H330"/><path class="line" d="M556 477 H600"/>
+  <path class="line" d="M826 477 H870"/><path class="line" d="M1096 477 H1140"/>
+
+  <text class="cn h2" x="72" y="610">用户只看到三个地方</text>
+  <g filter="url(#shadow)">
+    <rect class="card" x="72" y="638" width="396" height="188" rx="24"/>
+    <rect x="522" y="638" width="396" height="188" rx="24" fill="#FFF0E3" stroke="#F2B987" stroke-width="2"/>
+    <rect class="card" x="972" y="638" width="396" height="188" rx="24"/>
+  </g>
+  <g class="cn">
+    <text class="eyebrow" x="102" y="676">首页 · 料理当下</text><text class="h2" x="102" y="716">现在要做什么</text>
+    <text class="body" x="102" y="753">本周待办 / 全部待办</text><text class="body" x="102" y="781">教练提醒 / 持续事件</text>
+    <text class="small" x="102" y="806">首页不承担输入，保持清晰和克制</text>
+    <text class="eyebrow" x="552" y="676">小知 · 统一交互中心</text><text class="h2" x="552" y="716">说出来，一起理清</text>
+    <text class="body" x="552" y="753">连续对话 / 语音 / 统一搜索</text><text class="body" x="552" y="781">生成、更新、删除与本轮撤销</text>
+    <text class="small" x="552" y="806">秘书和导师是同一个助手的两种行为</text>
+    <text class="eyebrow" x="1002" y="676">我的 · 长期理解</text><text class="h2" x="1002" y="716">它已经懂我什么</text>
+    <text class="body" x="1002" y="753">可修改、可忘记的长期记忆</text><text class="body" x="1002" y="781">理解引擎 / 日历 / 数据管理</text>
+    <text class="small" x="1002" y="806">短期上下文留在后台，不占用页面</text>
+  </g>
+
+  <text class="cn h2" x="72" y="902">四类数据，各自回答一个问题</text>
+  <g filter="url(#shadow)">
+    <rect class="card" x="72" y="930" width="288" height="136" rx="20"/>
+    <rect class="card" x="392" y="930" width="288" height="136" rx="20"/>
+    <rect class="card" x="712" y="930" width="288" height="136" rx="20"/>
+    <rect class="card" x="1032" y="930" width="336" height="136" rx="20"/>
+  </g>
+  <g class="cn">
+    <text class="eyebrow" x="96" y="966">对话消息</text><text class="h3" x="96" y="999">当时说了什么</text>
+    <text class="small" x="96" y="1027">保存原话、时间和交流记录</text>
+    <text class="eyebrow" x="416" y="966">待办</text><text class="h3" x="416" y="999">接下来要做什么</text>
+    <text class="small" x="416" y="1027">行动、日期与完成状态</text>
+    <text class="eyebrow" x="736" y="966">事件</text><text class="h3" x="736" y="999">一件事进展如何</text>
+    <text class="small" x="736" y="1027">稳定标题、当前状态和增量历史</text>
+    <text class="eyebrow" x="1056" y="966">长期记忆</text><text class="h3" x="1056" y="999">未来应该怎样理解我</text>
+    <text class="small" x="1056" y="1027">跨事件仍成立的偏好、目标与约束</text>
+  </g>
+
+  <line x1="72" y1="1112" x2="1368" y2="1112" stroke="#E0D4CA" stroke-width="2"/>
+  <text class="cn h2" x="72" y="1160">当前进度：主要基础已完成，主动导师闭环仍待补齐</text>
+  <rect x="72" y="1190" width="622" height="92" rx="20" fill="#FFFFFF" stroke="#EADDD2"/>
+  <rect x="726" y="1190" width="642" height="92" rx="20" fill="#FFF0E3" stroke="#F2B987"/>
+  <text class="cn h3" x="98" y="1226">已经实现的主要功能</text>
+  <text class="cn small" x="98" y="1256">三 Tab · 连续对话 · 待办/事件/记忆 · 撤销 · 迁移 · 日历</text>
+  <text class="cn h3" x="752" y="1226">V1 尚待完成</text>
+  <text class="cn small" x="752" y="1256">当前状态快照 · 每日复盘 · 教练提醒 · 统一搜索 · 主动发现</text>
+
+  <rect x="72" y="1322" width="1296" height="62" rx="18" fill="#332A24"/>
+  <text class="cn" x="102" y="1361" font-size="16" font-weight="700" fill="#FFF7F0">V1 完成标准</text>
+  <text class="cn" x="252" y="1361" font-size="16" font-weight="500" fill="#DCCDC2">能听懂、能执行、能记住、能延续，也能在出现新价值时主动引导</text>
+</svg>
