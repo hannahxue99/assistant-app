@@ -38,6 +38,6 @@ Release 环境的 DeepSeek 请求曾在模型仍持续返回推理数据时被�
 - 运行状态提交：`517d1d5`
 - 思考、日期与复制提交：`2bef568`
 - 输入区单层提交：`c7b88d0`
-- PR：本分支发布 PR（创建后回填）。
+- PR：[#21](https://github.com/hannahxue99/assistant-app/pull/21)。
 - 合并前回滚点：`51c71b1`。发布后优先 revert 本 PR，不重写 `main`。
 - `assistant_reasoning` 是独立增量表，回滚代码时可保留，旧代码不会读取；回滚不主动删除已保存的思考数据。
