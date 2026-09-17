@@ -88,6 +88,10 @@ export function mergeAssistantMessages(
         ...item,
         runtimeStage: item.runtimeStage ?? existing.runtimeStage,
         runtimeStartedAt: item.runtimeStartedAt ?? existing.runtimeStartedAt,
+        reasoningAvailable: item.reasoningAvailable || existing.reasoningAvailable,
+        reasoningContent: item.reasoningContent ?? existing.reasoningContent,
+        reasoningStartedAt: item.reasoningStartedAt ?? existing.reasoningStartedAt,
+        reasoningCompletedAt: item.reasoningCompletedAt ?? existing.reasoningCompletedAt,
       });
     }
   }

@@ -34,6 +34,11 @@ import type {
   AssistantOlderLoadStatus,
 } from '../../src/assistant/types';
 import type { AssistantRuntimeStage } from '../../src/assistant/runtime-state';
+import { getAssistantReasoning } from '../../src/assistant/reasoning-store';
+import {
+  formatAssistantDateSeparator,
+  shouldShowAssistantDateSeparator,
+} from '../../src/assistant/message-time';
 import { AssistantComposer } from '../../src/components/AssistantComposer';
 import { AssistantEmptyState } from '../../src/components/AssistantEmptyState';
 import { AssistantLoadErrorState } from '../../src/components/AssistantLoadErrorState';
@@ -108,6 +113,8 @@ export default function AssistantScreen() {
     runtimeStartedAt?: number;
     content?: string;
     stage?: AssistantRuntimeStage;
+    reasoningContent?: string;
+    reasoningCompletedAt?: number;
   }) => {
     if (!mountedRef.current) return;
     setStreamingReplies((current) => {
@@ -128,6 +135,12 @@ export default function AssistantScreen() {
           errorCode: null,
           runtimeStage: input.stage ?? existing?.runtimeStage ?? 'thinking',
           runtimeStartedAt: existing?.runtimeStartedAt ?? input.runtimeStartedAt ?? Date.now(),
+          reasoningAvailable: Boolean(input.reasoningContent || existing?.reasoningAvailable),
+          reasoningContent: input.reasoningContent ?? existing?.reasoningContent,
+          reasoningStartedAt: input.reasoningContent
+            ? existing?.reasoningStartedAt ?? Date.now()
+            : existing?.reasoningStartedAt,
+          reasoningCompletedAt: input.reasoningCompletedAt ?? existing?.reasoningCompletedAt,
         },
       };
     });
@@ -259,6 +272,14 @@ export default function AssistantScreen() {
         runtimeStartedAt,
         content: text,
         stage: 'answering',
+        reasoningCompletedAt: Date.now(),
+      }),
+      onReasoningText: text => updateStreamingReply({
+        requestId,
+        messageCreatedAt: userMessage.createdAt,
+        runtimeStartedAt,
+        reasoningContent: text,
+        stage: 'thinking',
       }),
       onProgress: stage => updateStreamingReply({
         requestId,
@@ -275,6 +296,10 @@ export default function AssistantScreen() {
             ...result.assistantMessage,
             operations: result.operations,
             runtimeStartedAt,
+            reasoningAvailable: Boolean(result.reasoning),
+            reasoningContent: result.reasoning?.content,
+            reasoningStartedAt: result.reasoning?.startedAt,
+            reasoningCompletedAt: result.reasoning?.completedAt,
           }]));
         }
       })
@@ -324,6 +349,14 @@ export default function AssistantScreen() {
             runtimeStartedAt,
             content: text,
             stage: 'answering',
+            reasoningCompletedAt: Date.now(),
+          }),
+          onReasoningText: text => updateStreamingReply({
+            requestId,
+            messageCreatedAt: userMessage?.createdAt ?? runtimeStartedAt,
+            runtimeStartedAt,
+            reasoningContent: text,
+            stage: 'thinking',
           }),
           onProgress: stage => updateStreamingReply({
             requestId,
@@ -341,6 +374,10 @@ export default function AssistantScreen() {
             ...result.assistantMessage,
             operations: result.operations,
             runtimeStartedAt,
+            reasoningAvailable: Boolean(result.reasoning),
+            reasoningContent: result.reasoning?.content,
+            reasoningStartedAt: result.reasoning?.startedAt,
+            reasoningCompletedAt: result.reasoning?.completedAt,
           }]));
         }
       } catch {
@@ -428,17 +465,30 @@ export default function AssistantScreen() {
             ref={listRef}
             data={displayMessages}
             keyExtractor={item => item.id}
-            renderItem={({ item }) => (
-              <AssistantMessageBubble
-                message={item}
-                onRetry={retry}
-                canRetry={canRetryAssistantMessage(item, messages, engineStatus)}
-                onNavigate={navigateFromMessage}
-                onUndo={undo}
-                undoing={undoingRequestId === item.requestId}
-                undoError={undoErrors[item.requestId]}
-                runtimeStartedAt={item.runtimeStartedAt ?? requestStartedAt.get(item.requestId)}
-              />
+            renderItem={({ item, index }) => (
+              <View>
+                {shouldShowAssistantDateSeparator(
+                  item.createdAt,
+                  index > 0 ? displayMessages[index - 1]?.createdAt : undefined,
+                ) ? (
+                  <View style={styles.dateSeparatorWrap}>
+                    <Text style={styles.dateSeparatorText}>
+                      {formatAssistantDateSeparator(item.createdAt)}
+                    </Text>
+                  </View>
+                ) : null}
+                <AssistantMessageBubble
+                  message={item}
+                  onRetry={retry}
+                  canRetry={canRetryAssistantMessage(item, messages, engineStatus)}
+                  onNavigate={navigateFromMessage}
+                  onUndo={undo}
+                  undoing={undoingRequestId === item.requestId}
+                  undoError={undoErrors[item.requestId]}
+                  runtimeStartedAt={item.runtimeStartedAt ?? requestStartedAt.get(item.requestId)}
+                  onLoadReasoning={getAssistantReasoning}
+                />
+              </View>
             )}
             contentContainerStyle={[styles.listContent, messages.length === 0 && styles.emptyList]}
             ListEmptyComponent={<AssistantEmptyState />}
@@ -505,6 +555,8 @@ const styles = StyleSheet.create({
   olderError: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 },
   olderErrorText: { color: theme.colors.textDim, fontSize: theme.font.small },
   olderRetryText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
+  dateSeparatorWrap: { alignItems: 'center', paddingTop: 7, paddingBottom: 3 },
+  dateSeparatorText: { color: theme.colors.textDim, fontSize: 11, lineHeight: 17, paddingHorizontal: 9, paddingVertical: 2, borderRadius: 11, backgroundColor: theme.colors.card },
   composerWrap: { paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6, borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.bg },
   pressed: { opacity: 0.72 },
 });

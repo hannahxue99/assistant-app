@@ -36,6 +36,7 @@ import {
   updateEventState,
 } from './event-store';
 import { completeTurnWithDatabase } from './store';
+import { saveAssistantReasoningWithDatabase, type AssistantReasoning } from './reasoning-store';
 import type { AssistantMessage, AssistantMessageSource, AssistantSegmentDecision } from './types';
 
 function stableHash(value: string): string {
@@ -652,6 +653,7 @@ export async function completeAssistantTurnWithActions(input: {
   segment: AssistantSegmentDecision;
   operations: ValidatedAssistantOperation[];
   memoryDeltas?: ValidatedAssistantMemoryDelta[];
+  reasoning?: AssistantReasoning | null;
   actionContext: AssistantActionContext;
   createdAt?: number;
 }): Promise<{ assistantMessage: AssistantMessage; operations: AssistantOperation[] }> {
@@ -680,6 +682,7 @@ export async function completeAssistantTurnWithActions(input: {
       segment: input.segment,
       createdAt,
     });
+    if (input.reasoning) await saveAssistantReasoningWithDatabase(database, input.reasoning);
     return { assistantMessage, operations: [...operations, ...memoryOperations] };
   });
 }

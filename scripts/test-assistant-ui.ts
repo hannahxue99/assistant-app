@@ -20,6 +20,11 @@ import {
   assistantRuntimeLabel,
   formatAssistantRuntimeDuration,
 } from '../src/assistant/runtime-state';
+import {
+  formatAssistantDateSeparator,
+  formatAssistantMessageTime,
+  shouldShowAssistantDateSeparator,
+} from '../src/assistant/message-time';
 import type { AssistantMessage } from '../src/assistant/types';
 import type { AssistantOperation } from '../src/assistant/action-types';
 
@@ -108,6 +113,18 @@ check(assistantRuntimeLabel('finalizing', 80_000) === '小知正在整理 · 1 �
   '本地校验提交阶段应继续沿用同一运行时间');
 check(assistantCompletedRuntimeLabel(84_000) === '用时 1 分 24 秒',
   '完成后应弱化展示本轮总用时');
+const todayAtNoon = new Date(2026, 8, 15, 12, 0).getTime();
+const yesterdayAtNoon = new Date(2026, 8, 14, 12, 0).getTime();
+const sameYear = new Date(2026, 5, 8, 9, 5).getTime();
+const lastYear = new Date(2025, 11, 31, 23, 59).getTime();
+check(formatAssistantDateSeparator(todayAtNoon, NOW) === '今天', '当天消息应显示今天');
+check(formatAssistantDateSeparator(yesterdayAtNoon, NOW) === '昨天', '前一天消息应显示昨天');
+check(/^6月8日 周./.test(formatAssistantDateSeparator(sameYear, NOW)), '同年历史消息应显示月日和星期');
+check(formatAssistantDateSeparator(lastYear, NOW) === '2025年12月31日', '跨年消息应显示完整日期');
+check(shouldShowAssistantDateSeparator(todayAtNoon, undefined), '列表首条应显示日期分隔');
+check(!shouldShowAssistantDateSeparator(todayAtNoon, todayAtNoon - 60_000), '同一天的相邻消息不应重复显示日期');
+check(shouldShowAssistantDateSeparator(todayAtNoon, yesterdayAtNoon), '跨天时应显示日期分隔');
+check(/^[0-2]\d:[0-5]\d$/.test(formatAssistantMessageTime(todayAtNoon)), '气泡内只保留时分');
 const cancelled = { ...message('cancelled', 25), status: 'failed' as const, errorCode: 'cancelled' };
 check(!canRetryAssistantMessage(cancelled, [cancelled], 'configured'), '用户主动停止后不应显示重试');
 check(assistantFailureLabel(cancelled, false) === '已停止', '主动停止应显示独立状态而不是失败');

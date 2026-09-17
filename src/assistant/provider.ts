@@ -54,7 +54,16 @@ export interface AssistantProviderMetadata extends AssistantProviderDiagnostics 
   totalTokens: number | null;
 }
 
-export type AssistantProviderResult = AssistantTurnOutput & { providerMetadata: AssistantProviderMetadata };
+export interface AssistantProviderReasoning {
+  content: string;
+  startedAt: number;
+  completedAt: number;
+}
+
+export type AssistantProviderResult = AssistantTurnOutput & {
+  providerMetadata: AssistantProviderMetadata;
+  reasoning: AssistantProviderReasoning | null;
+};
 
 export type AssistantProviderProgressStage = 'thinking' | 'answering';
 
@@ -74,6 +83,9 @@ type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 type CompletionResponse = {
   content: string;
+  reasoningContent: string;
+  reasoningStartedAt: number | null;
+  reasoningCompletedAt: number | null;
   finishReason: string | null;
   usage: any | null;
 };
@@ -81,16 +93,22 @@ type CompletionResponse = {
 async function readEventStream(
   response: Response,
   onReplyText?: (text: string) => void,
+  onReasoningText?: (text: string) => void,
   onProgress?: (stage: AssistantProviderProgressStage) => void,
   onActivity?: () => void,
-): Promise<{ content: string; finishReason: string | null; usage: any | null }> {
+): Promise<CompletionResponse> {
   if (!response.body) throw new AssistantProviderError('invalid-response', '理解引擎没有返回流式内容');
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let pending = '';
   let content = '';
+  let reasoningContent = '';
+  let displayedReasoning = '';
   let displayed = '';
   let lastDisplayAt = 0;
+  let lastReasoningDisplayAt = 0;
+  let reasoningStartedAt: number | null = null;
+  let reasoningCompletedAt: number | null = null;
   let finishReason: string | null = null;
   let usage: any | null = null;
 
@@ -107,7 +125,15 @@ async function readEventStream(
     }
     const choice = event?.choices?.[0];
     if (typeof choice?.delta?.reasoning_content === 'string' && choice.delta.reasoning_content.length > 0) {
+      const now = Date.now();
+      reasoningStartedAt ??= now;
+      reasoningContent += choice.delta.reasoning_content;
       onProgress?.('thinking');
+      if (lastReasoningDisplayAt === 0 || now - lastReasoningDisplayAt >= 80) {
+        displayedReasoning = reasoningContent;
+        lastReasoningDisplayAt = now;
+        onReasoningText?.(reasoningContent);
+      }
     }
     let receivedContent = false;
     if (typeof choice?.delta?.content === 'string' && choice.delta.content.length > 0) {
@@ -121,6 +147,7 @@ async function readEventStream(
     if (partial.length > displayed.length && (lastDisplayAt === 0 || now - lastDisplayAt >= 40)) {
       displayed = partial;
       lastDisplayAt = now;
+      reasoningCompletedAt ??= now;
       onProgress?.('answering');
       onReplyText?.(partial);
     } else if (receivedContent && displayed.length === 0) {
@@ -139,18 +166,28 @@ async function readEventStream(
   }
   pending += decoder.decode();
   if (pending.trim()) consumeLine(pending);
-  return { content, finishReason, usage };
+  if (reasoningContent && displayedReasoning !== reasoningContent) onReasoningText?.(reasoningContent);
+  if (reasoningContent) reasoningCompletedAt ??= Date.now();
+  return {
+    content,
+    reasoningContent,
+    reasoningStartedAt,
+    reasoningCompletedAt,
+    finishReason,
+    usage,
+  };
 }
 
 async function readCompletionResponse(
   response: Response,
   onReplyText?: (text: string) => void,
+  onReasoningText?: (text: string) => void,
   onProgress?: (stage: AssistantProviderProgressStage) => void,
   onActivity?: () => void,
 ): Promise<CompletionResponse> {
   const contentType = response.headers.get('content-type') ?? '';
   if (contentType.includes('text/event-stream')) {
-    return readEventStream(response, onReplyText, onProgress, onActivity);
+    return readEventStream(response, onReplyText, onReasoningText, onProgress, onActivity);
   }
   const raw = await response.text();
   onActivity?.();
@@ -161,8 +198,16 @@ async function readCompletionResponse(
       return null;
     }
   })();
+  const reasoningContent = typeof data?.choices?.[0]?.message?.reasoning_content === 'string'
+    ? data.choices[0].message.reasoning_content
+    : '';
+  const completedAt = Date.now();
+  if (reasoningContent) onReasoningText?.(reasoningContent);
   return {
     content: data?.choices?.[0]?.message?.content,
+    reasoningContent,
+    reasoningStartedAt: reasoningContent ? completedAt : null,
+    reasoningCompletedAt: reasoningContent ? completedAt : null,
     finishReason: typeof data?.choices?.[0]?.finish_reason === 'string'
       ? data.choices[0].finish_reason
       : null,
@@ -180,6 +225,7 @@ async function requestCompletion(input: {
   callerSignal?: AbortSignal;
   fetchImpl: FetchLike;
   onReplyText?: (text: string) => void;
+  onReasoningText?: (text: string) => void;
   onProgress?: (stage: AssistantProviderProgressStage) => void;
   timeouts: AssistantProviderTimeouts;
 }): Promise<CompletionResponse> {
@@ -242,6 +288,7 @@ async function requestCompletion(input: {
     return await readCompletionResponse(
       response,
       input.onReplyText,
+      input.onReasoningText,
       input.onProgress,
       markActivity,
     );
@@ -281,6 +328,7 @@ export async function requestAssistantTurn(input: {
   signal?: AbortSignal;
   fetchImpl?: FetchLike;
   onReplyText?: (text: string) => void;
+  onReasoningText?: (text: string) => void;
   onProgress?: (stage: AssistantProviderProgressStage) => void;
   timeouts?: Partial<AssistantProviderTimeouts>;
 }): Promise<AssistantProviderResult> {
@@ -300,7 +348,8 @@ export async function requestAssistantTurn(input: {
       referenceAt: input.referenceAt,
       timeZone: input.timeZone,
     }),
-    temperature: 0.4,
+    thinking: { type: 'enabled' },
+    reasoning_effort: 'high',
     response_format: { type: 'json_object' },
     stream: true,
     stream_options: { include_usage: true },
@@ -316,6 +365,7 @@ export async function requestAssistantTurn(input: {
       callerSignal: input.signal,
       fetchImpl,
       onReplyText: input.onReplyText,
+      onReasoningText: input.onReasoningText,
       onProgress: input.onProgress,
       timeouts,
     });
@@ -347,6 +397,13 @@ export async function requestAssistantTurn(input: {
     input.onReplyText?.(output.reply);
     return {
       ...output,
+      reasoning: completion.reasoningContent.trim()
+        ? {
+          content: completion.reasoningContent,
+          startedAt: completion.reasoningStartedAt ?? startedAt,
+          completedAt: completion.reasoningCompletedAt ?? completion.reasoningStartedAt ?? Date.now(),
+        }
+        : null,
       providerMetadata: {
         startedAt,
         completedAt: Date.now(),

@@ -6,6 +6,7 @@ import { completeAssistantTurnWithActions, listCommittedOperationsByRequest } fr
 import { prepareAssistantActions } from './event-delta';
 import { requestAssistantTurn, type AssistantProviderProgressStage } from './provider';
 import type { AssistantRuntimeStage } from './runtime-state';
+import { getAssistantReasoning, type AssistantReasoning } from './reasoning-store';
 import { ASSISTANT_PROMPT_VERSION } from './prompt';
 import { loadAssistantMemoryContext } from './memory-retrieval';
 import { validateAssistantMemoryDeltas } from './memory-validator';
@@ -34,6 +35,7 @@ export interface AssistantTurnResult {
   userMessage: AssistantMessage;
   assistantMessage: AssistantMessage;
   operations: AssistantOperation[];
+  reasoning: AssistantReasoning | null;
   contextStats: {
     estimatedTokens: number;
     selectedSegments: number;
@@ -50,6 +52,7 @@ type SendInput = {
   createdAt?: number;
   launchContext?: AssistantLaunchContext | null;
   onReplyText?: (text: string) => void;
+  onReasoningText?: (text: string) => void;
   onProgress?: (stage: AssistantRuntimeStage) => void;
 };
 
@@ -58,6 +61,7 @@ type RetryInput = {
   settings?: Settings;
   launchContext?: AssistantLaunchContext | null;
   onReplyText?: (text: string) => void;
+  onReasoningText?: (text: string) => void;
   onProgress?: (stage: AssistantRuntimeStage) => void;
 };
 
@@ -109,6 +113,7 @@ async function runSavedTurn(input: {
   settings?: Settings;
   launchContext?: AssistantLaunchContext | null;
   onReplyText?: (text: string) => void;
+  onReasoningText?: (text: string) => void;
   onProgress?: (stage: AssistantRuntimeStage) => void;
   signal?: AbortSignal;
   getPartialReply?: () => string;
@@ -124,6 +129,7 @@ async function runSavedTurn(input: {
       userMessage: state.userMessage,
       assistantMessage: state.assistantMessage,
       operations: await listCommittedOperationsByRequest(input.requestId),
+      reasoning: await getAssistantReasoning(input.requestId),
       contextStats: { estimatedTokens: 0, selectedSegments: 0, selectedEntries: 0, selectedMemories: 0 },
     };
   }
@@ -194,6 +200,7 @@ async function runSavedTurn(input: {
       timeZone,
       signal: input.signal,
       onReplyText: input.onReplyText,
+      onReasoningText: input.onReasoningText,
       onProgress: (stage: AssistantProviderProgressStage) => input.onProgress?.(stage),
     });
     throwIfCancelled(input.signal);
@@ -251,6 +258,15 @@ async function runSavedTurn(input: {
       segment: output.segment,
       operations: validation.accepted,
       memoryDeltas: memoryValidation.accepted,
+      reasoning: output.reasoning
+        ? {
+          requestId: input.requestId,
+          content: output.reasoning.content,
+          startedAt: output.reasoning.startedAt,
+          completedAt: output.reasoning.completedAt,
+          createdAt: Date.now(),
+        }
+        : null,
       actionContext,
     });
     await safelyLog(() => recordAssistantDecisionCommit({
@@ -279,6 +295,15 @@ async function runSavedTurn(input: {
       userMessage: (await getRequestState(input.requestId))?.userMessage ?? state.userMessage,
       assistantMessage: completed.assistantMessage,
       operations: completed.operations,
+      reasoning: output.reasoning
+        ? {
+          requestId: input.requestId,
+          content: output.reasoning.content,
+          startedAt: output.reasoning.startedAt,
+          completedAt: output.reasoning.completedAt,
+          createdAt: completed.assistantMessage.createdAt,
+        }
+        : null,
       contextStats: {
         estimatedTokens: context.estimatedTokens,
         selectedSegments: context.selectedSegmentIds.length,

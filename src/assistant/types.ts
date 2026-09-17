@@ -26,6 +26,12 @@ export interface AssistantMessage {
   runtimeStage?: AssistantRuntimeStage;
   /** 本轮用户发送时间，用于秒级运行计时。 */
   runtimeStartedAt?: number;
+  /** 是否存在可按需展开的 DeepSeek 思考过程。 */
+  reasoningAvailable?: boolean;
+  /** 流式阶段临时携带，落库后列表只读取元数据。 */
+  reasoningContent?: string;
+  reasoningStartedAt?: number;
+  reasoningCompletedAt?: number;
 }
 
 export interface AssistantMessageCursor {

@@ -306,6 +306,10 @@ async function main() {
   check(!capturedBody.includes('secret'), 'API Key 不得进入请求 body');
   check(capturedBody.includes('fixture-model'), '请求应使用当前模型设置');
   check(capturedBody.includes('"stream":true'), 'Provider 必须启用流式返回');
+  check(capturedBody.includes('"thinking":{"type":"enabled"}')
+    && capturedBody.includes('"reasoning_effort":"high"'),
+  'Provider 应显式开启 DeepSeek 思考并设置推理强度');
+  check(providerResult.reasoning === null, '未返回思考内容时应保持空状态');
 
   const modelJson = JSON.stringify({
     reply: '下个月10号继续还款。',
@@ -325,6 +329,7 @@ async function main() {
   })}\n\n`).join('')}data: [DONE]\n\n`;
   const bytes = new TextEncoder().encode(sse);
   const streamedText: string[] = [];
+  const streamedReasoning: string[] = [];
   const progressStages: string[] = [];
   const streamed = await requestAssistantTurn({
     settings: {
@@ -344,6 +349,7 @@ async function main() {
       },
     }), { status: 200, headers: { 'content-type': 'text/event-stream' } }),
     onReplyText: text => streamedText.push(text),
+    onReasoningText: text => streamedReasoning.push(text),
     onProgress: stage => progressStages.push(stage),
   });
   check(streamed.reply === '下个月10号继续还款。', '流式 Provider 必须重组完整 JSON');
@@ -354,6 +360,9 @@ async function main() {
     '推理内容到达时应保持思考状态，reply 到达后应切换回答状态');
   check(!streamed.reply.includes('先判断是否需要建立待办'),
     '原始 reasoning_content 不得进入用户回复');
+  check(streamed.reasoning?.content === '先判断是否需要建立待办。'
+    && streamedReasoning.at(-1) === streamed.reasoning.content,
+  '思考内容应流式更新并在完成后完整返回');
 
   let invalidResponseCalls = 0;
   let invalidResponseError: any = null;

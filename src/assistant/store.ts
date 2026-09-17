@@ -50,6 +50,9 @@ function rowToMessage(row: any): AssistantMessage {
     updatedAt: row.updated_at,
     legacyEntryId: row.legacy_entry_id ?? null,
     errorCode: row.request_error_code ?? row.error_code ?? null,
+    reasoningAvailable: Boolean(row.reasoning_available),
+    reasoningStartedAt: row.reasoning_started_at ?? undefined,
+    reasoningCompletedAt: row.reasoning_completed_at ?? undefined,
   };
 }
 
@@ -307,9 +310,13 @@ export async function recoverInterruptedAssistantRequests(updatedAt = Date.now()
 export async function getMessage(id: string): Promise<AssistantMessage | null> {
   return withDatabaseConnection(async (database) => {
     const row = await database.getFirstAsync<any>(
-      `SELECT m.*, r.error_code AS request_error_code
+      `SELECT m.*, r.error_code AS request_error_code,
+              CASE WHEN ar.request_id IS NULL THEN 0 ELSE 1 END AS reasoning_available,
+              ar.started_at AS reasoning_started_at,
+              ar.completed_at AS reasoning_completed_at
        FROM assistant_messages m
        LEFT JOIN assistant_requests r ON r.id=m.request_id
+       LEFT JOIN assistant_reasoning ar ON ar.request_id=m.request_id
        WHERE m.id=?`,
       id,
     );
@@ -349,17 +356,25 @@ export async function listMessages(options: {
   return withDatabaseConnection(async (database) => {
     const rows = options.before
       ? await database.getAllAsync<any>(
-        `SELECT m.*, r.error_code AS request_error_code
+        `SELECT m.*, r.error_code AS request_error_code,
+                CASE WHEN ar.request_id IS NULL THEN 0 ELSE 1 END AS reasoning_available,
+                ar.started_at AS reasoning_started_at,
+                ar.completed_at AS reasoning_completed_at
          FROM assistant_messages m
          LEFT JOIN assistant_requests r ON r.id=m.request_id
+         LEFT JOIN assistant_reasoning ar ON ar.request_id=m.request_id
          WHERE m.created_at < ? OR (m.created_at = ? AND m.id < ?)
          ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
         options.before.createdAt, options.before.createdAt, options.before.id, limit,
       )
       : await database.getAllAsync<any>(
-        `SELECT m.*, r.error_code AS request_error_code
+        `SELECT m.*, r.error_code AS request_error_code,
+                CASE WHEN ar.request_id IS NULL THEN 0 ELSE 1 END AS reasoning_available,
+                ar.started_at AS reasoning_started_at,
+                ar.completed_at AS reasoning_completed_at
          FROM assistant_messages m
          LEFT JOIN assistant_requests r ON r.id=m.request_id
+         LEFT JOIN assistant_reasoning ar ON ar.request_id=m.request_id
          ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
         limit,
       );
