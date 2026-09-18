@@ -1,4 +1,4 @@
-export type AssistantRuntimeStage = 'thinking' | 'answering' | 'finalizing';
+export type AssistantRuntimeStage = 'reading' | 'planning' | 'updating' | 'answering' | 'finalizing';
 
 export function formatAssistantRuntimeDuration(elapsedMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
@@ -9,11 +9,15 @@ export function formatAssistantRuntimeDuration(elapsedMs: number): string {
 }
 
 export function assistantRuntimeLabel(stage: AssistantRuntimeStage, elapsedMs: number): string {
-  const action = stage === 'answering'
-    ? '小知正在回答'
-    : stage === 'finalizing'
-      ? '小知正在整理'
-      : '小知正在思考';
+  const action = stage === 'reading'
+    ? '小知正在读取事件和待办'
+    : stage === 'planning'
+      ? '小知正在整理处理方案'
+      : stage === 'updating'
+        ? '小知正在更新'
+        : stage === 'answering'
+          ? '小知正在回答'
+          : '小知正在整理';
   return `${action} · ${formatAssistantRuntimeDuration(elapsedMs)}`;
 }
 

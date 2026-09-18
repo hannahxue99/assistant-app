@@ -50,13 +50,14 @@ check(many.recentMessages.length <= 12, '长历史仍只能保留最近 6 轮原
 check(many.recentMessages.at(-1)?.id === 'm599', '最新消息不得被长历史挤掉');
 check(many.estimatedTokens <= 6000, '长历史输入必须受硬预算约束');
 
-// 5. 上下文入口：从事件进入时，显式事件状态优先于模糊检索。
+// 5. 上下文入口：从事件进入时只给 ID 指针，由模型按需读取真实状态。
 const launched = buildAssistantContext({
   recentMessages: [message(1, '现在处理吧')],
   launchContext: { kind: 'event', id: 'photo', label: '照片整理', state: '周四先筛废片' },
 });
-check(launched.contextBlock.includes('正在处理的事件：照片整理'), '事件入口必须携带明确主线');
-check(launched.contextBlock.includes('周四先筛废片'), '事件当前状态必须进入上下文');
+check(launched.contextBlock.includes('正在处理的事件 ID：photo'), '事件入口必须携带精确 ID 指针');
+check(!launched.contextBlock.includes('照片整理') && !launched.contextBlock.includes('周四先筛废片'),
+  '事件入口不得预注入标题和当前状态');
 
 // 6. 已有主线中的未来行动承诺：模型必须被明确要求同时建立关联待办。
 const repaymentContext = buildAssistantContext({

@@ -141,6 +141,30 @@ export async function completeTurn(input: CompleteTurnInput): Promise<AssistantM
   return withExclusiveDatabaseTransaction(txn => completeTurnWithDatabase(txn, input));
 }
 
+export async function updateAssistantReply(
+  requestId: string,
+  reply: string,
+  updatedAt = Date.now(),
+): Promise<AssistantMessage> {
+  const content = reply.trim();
+  if (!content) throw new Error('助手回复不能为空');
+  return withExclusiveDatabaseTransaction(async (txn) => {
+    const existing = await txn.getFirstAsync<any>(
+      "SELECT * FROM assistant_messages WHERE request_id=? AND role='assistant'",
+      requestId,
+    );
+    if (!existing) throw new Error('找不到助手回复');
+    await txn.runAsync(
+      "UPDATE assistant_messages SET content=?, updated_at=? WHERE request_id=? AND role='assistant'",
+      content, updatedAt, requestId,
+    );
+    return rowToMessage(await txn.getFirstAsync<any>(
+      "SELECT * FROM assistant_messages WHERE request_id=? AND role='assistant'",
+      requestId,
+    ));
+  });
+}
+
 /** 在调用方事务内完成分段和回复，用于把对象操作与成功回执原子提交。 */
 export async function completeTurnWithDatabase(
   txn: SQLiteDatabase,

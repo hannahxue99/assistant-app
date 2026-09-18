@@ -8,6 +8,12 @@ import {
   type AssistantTurnOutput,
 } from './protocol';
 import { extractPartialJsonStringField } from './streaming-json';
+import {
+  ASSISTANT_READ_TOOLS,
+  mergeAssistantReadSets,
+  type AssistantReadSet,
+  type AssistantReadToolExecution,
+} from './data-tools';
 
 export type AssistantProviderErrorCode = 'missing-key' | 'timeout' | 'network' | 'provider' | 'invalid-response' | 'cancelled';
 
@@ -63,9 +69,10 @@ export interface AssistantProviderReasoning {
 export type AssistantProviderResult = AssistantTurnOutput & {
   providerMetadata: AssistantProviderMetadata;
   reasoning: AssistantProviderReasoning | null;
+  grounding: AssistantReadSet;
 };
 
-export type AssistantProviderProgressStage = 'thinking' | 'answering';
+export type AssistantProviderProgressStage = 'thinking' | 'reading' | 'answering';
 
 export interface AssistantProviderTimeouts {
   firstByteMs: number;
@@ -88,7 +95,30 @@ type CompletionResponse = {
   reasoningCompletedAt: number | null;
   finishReason: string | null;
   usage: any | null;
+  toolCalls: ProviderToolCall[];
 };
+
+export interface ProviderToolCall {
+  id: string;
+  name: string;
+  argumentsJson: string;
+}
+
+type PendingToolCall = { id: string; name: string; argumentsJson: string };
+
+export function mergeProviderToolCallDelta(
+  pending: Map<number, PendingToolCall>,
+  deltas: any[],
+): void {
+  for (const delta of deltas) {
+    const index = Number.isInteger(delta?.index) ? Number(delta.index) : 0;
+    const current = pending.get(index) ?? { id: '', name: '', argumentsJson: '' };
+    if (typeof delta?.id === 'string') current.id += delta.id;
+    if (typeof delta?.function?.name === 'string') current.name += delta.function.name;
+    if (typeof delta?.function?.arguments === 'string') current.argumentsJson += delta.function.arguments;
+    pending.set(index, current);
+  }
+}
 
 async function readEventStream(
   response: Response,
@@ -96,6 +126,7 @@ async function readEventStream(
   onReasoningText?: (text: string) => void,
   onProgress?: (stage: AssistantProviderProgressStage) => void,
   onActivity?: () => void,
+  contentMode: 'json-reply' | 'raw' = 'json-reply',
 ): Promise<CompletionResponse> {
   if (!response.body) throw new AssistantProviderError('invalid-response', '理解引擎没有返回流式内容');
   const reader = response.body.getReader();
@@ -111,6 +142,7 @@ async function readEventStream(
   let reasoningCompletedAt: number | null = null;
   let finishReason: string | null = null;
   let usage: any | null = null;
+  const pendingToolCalls = new Map<number, PendingToolCall>();
 
   const consumeLine = (line: string) => {
     const trimmed = line.trim();
@@ -124,6 +156,9 @@ async function readEventStream(
       throw new AssistantProviderError('invalid-response', '理解引擎返回了损坏的流式数据');
     }
     const choice = event?.choices?.[0];
+    if (Array.isArray(choice?.delta?.tool_calls)) {
+      mergeProviderToolCallDelta(pendingToolCalls, choice.delta.tool_calls);
+    }
     if (typeof choice?.delta?.reasoning_content === 'string' && choice.delta.reasoning_content.length > 0) {
       const now = Date.now();
       reasoningStartedAt ??= now;
@@ -142,7 +177,7 @@ async function readEventStream(
     }
     if (typeof choice?.finish_reason === 'string') finishReason = choice.finish_reason;
     if (event?.usage && typeof event.usage === 'object') usage = event.usage;
-    const partial = extractPartialJsonStringField(content, 'reply');
+    const partial = contentMode === 'raw' ? content : extractPartialJsonStringField(content, 'reply');
     const now = Date.now();
     if (partial.length > displayed.length && (lastDisplayAt === 0 || now - lastDisplayAt >= 40)) {
       displayed = partial;
@@ -175,6 +210,10 @@ async function readEventStream(
     reasoningCompletedAt,
     finishReason,
     usage,
+    toolCalls: [...pendingToolCalls.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([, call]) => call)
+      .filter(call => call.id && call.name),
   };
 }
 
@@ -184,10 +223,11 @@ async function readCompletionResponse(
   onReasoningText?: (text: string) => void,
   onProgress?: (stage: AssistantProviderProgressStage) => void,
   onActivity?: () => void,
+  contentMode: 'json-reply' | 'raw' = 'json-reply',
 ): Promise<CompletionResponse> {
   const contentType = response.headers.get('content-type') ?? '';
   if (contentType.includes('text/event-stream')) {
-    return readEventStream(response, onReplyText, onReasoningText, onProgress, onActivity);
+    return readEventStream(response, onReplyText, onReasoningText, onProgress, onActivity, contentMode);
   }
   const raw = await response.text();
   onActivity?.();
@@ -212,6 +252,13 @@ async function readCompletionResponse(
       ? data.choices[0].finish_reason
       : null,
     usage: data?.usage ?? null,
+    toolCalls: Array.isArray(data?.choices?.[0]?.message?.tool_calls)
+      ? data.choices[0].message.tool_calls.map((call: any) => ({
+        id: String(call?.id ?? ''),
+        name: String(call?.function?.name ?? ''),
+        argumentsJson: String(call?.function?.arguments ?? '{}'),
+      })).filter((call: ProviderToolCall) => call.id && call.name)
+      : [],
   };
 }
 
@@ -228,6 +275,7 @@ async function requestCompletion(input: {
   onReasoningText?: (text: string) => void;
   onProgress?: (stage: AssistantProviderProgressStage) => void;
   timeouts: AssistantProviderTimeouts;
+  contentMode?: 'json-reply' | 'raw';
 }): Promise<CompletionResponse> {
   const controller = new AbortController();
   let timeoutReason: 'first-byte' | 'stream-idle' | 'total' | null = null;
@@ -291,6 +339,7 @@ async function requestCompletion(input: {
       input.onReasoningText,
       input.onProgress,
       markActivity,
+      input.contentMode,
     );
   } catch (error: any) {
     if (error instanceof AssistantProviderError) throw error;
@@ -331,6 +380,7 @@ export async function requestAssistantTurn(input: {
   onReasoningText?: (text: string) => void;
   onProgress?: (stage: AssistantProviderProgressStage) => void;
   timeouts?: Partial<AssistantProviderTimeouts>;
+  executeReadTool?: (call: ProviderToolCall) => Promise<AssistantReadToolExecution>;
 }): Promise<AssistantProviderResult> {
   if (!input.settings.llmEnabled || !input.settings.llmKey) {
     throw new AssistantProviderError('missing-key', '理解引擎尚未开启或未配置 API Key');
@@ -340,35 +390,80 @@ export async function requestAssistantTurn(input: {
   const attempts: AssistantProviderAttempt[] = [];
   let protocolWarnings: AssistantProtocolWarning[] = [];
   const timeouts = { ...DEFAULT_ASSISTANT_PROVIDER_TIMEOUTS, ...input.timeouts };
-  const requestBody = JSON.stringify({
-    model: input.settings.llmModel,
-    messages: buildAssistantPromptMessages({
+  const messages: any[] = buildAssistantPromptMessages({
       contextBlock: input.context.contextBlock,
       recentMessages: input.context.recentMessages,
       referenceAt: input.referenceAt,
       timeZone: input.timeZone,
-    }),
-    thinking: { type: 'enabled' },
-    reasoning_effort: 'high',
-    response_format: { type: 'json_object' },
-    stream: true,
-    stream_options: { include_usage: true },
   });
-
-  const attemptStartedAt = Date.now();
+  const toolExecutions: AssistantReadToolExecution[] = [];
+  const maxReadRounds = 4;
+  const maxToolCalls = 8;
+  let readRounds = 0;
   let completion: CompletionResponse | null = null;
   try {
-    input.onProgress?.('thinking');
-    completion = await requestCompletion({
-      settings: input.settings,
-      body: requestBody,
-      callerSignal: input.signal,
-      fetchImpl,
-      onReplyText: input.onReplyText,
-      onReasoningText: input.onReasoningText,
-      onProgress: input.onProgress,
-      timeouts,
-    });
+    while (true) {
+      const attemptStartedAt = Date.now();
+      input.onProgress?.('thinking');
+      completion = await requestCompletion({
+        settings: input.settings,
+        body: JSON.stringify({
+          model: input.settings.llmModel,
+          messages,
+          thinking: { type: 'enabled' },
+          reasoning_effort: 'high',
+          response_format: { type: 'json_object' },
+          ...(input.executeReadTool ? { tools: ASSISTANT_READ_TOOLS, tool_choice: 'auto' } : {}),
+          stream: true,
+          stream_options: { include_usage: true },
+        }),
+        callerSignal: input.signal,
+        fetchImpl,
+        onReplyText: input.onReplyText,
+        onReasoningText: input.onReasoningText,
+        onProgress: input.onProgress,
+        timeouts,
+      });
+      attempts.push({
+        attempt: attempts.length + 1,
+        startedAt: attemptStartedAt,
+        completedAt: Date.now(),
+        errorCode: null,
+        errorDetail: null,
+        finishReason: completion.finishReason,
+        promptTokens: usageValue(completion.usage, 'prompt_tokens'),
+        completionTokens: usageValue(completion.usage, 'completion_tokens'),
+        totalTokens: usageValue(completion.usage, 'total_tokens'),
+      });
+      if (completion.toolCalls.length === 0) break;
+      if (!input.executeReadTool) {
+        throw new AssistantProviderError('invalid-response', '理解引擎请求了未启用的数据工具');
+      }
+      readRounds += 1;
+      if (readRounds > maxReadRounds || toolExecutions.length + completion.toolCalls.length > maxToolCalls) {
+        throw new AssistantProviderError('invalid-response', '理解引擎读取数据次数过多');
+      }
+      messages.push({
+        role: 'assistant',
+        content: completion.content || null,
+        reasoning_content: completion.reasoningContent || undefined,
+        tool_calls: completion.toolCalls.map(call => ({
+          id: call.id,
+          type: 'function',
+          function: { name: call.name, arguments: call.argumentsJson },
+        })),
+      });
+      for (const call of completion.toolCalls) {
+        input.onProgress?.('reading');
+        const execution = await input.executeReadTool(call);
+        toolExecutions.push(execution);
+        messages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: JSON.stringify(execution.result),
+        });
+      }
+    }
     if (typeof completion.content !== 'string' || !completion.content.trim()) {
       throw new AssistantProviderError('invalid-response', '理解引擎没有返回有效回复');
     }
@@ -383,20 +478,10 @@ export async function requestAssistantTurn(input: {
       );
     }
     protocolWarnings = inspectAssistantReplyWarnings(output.reply);
-    attempts.push({
-      attempt: 1,
-      startedAt: attemptStartedAt,
-      completedAt: Date.now(),
-      errorCode: null,
-      errorDetail: null,
-      finishReason: completion.finishReason,
-      promptTokens: usageValue(completion.usage, 'prompt_tokens'),
-      completionTokens: usageValue(completion.usage, 'completion_tokens'),
-      totalTokens: usageValue(completion.usage, 'total_tokens'),
-    });
     input.onReplyText?.(output.reply);
     return {
       ...output,
+      grounding: mergeAssistantReadSets(toolExecutions),
       reasoning: completion.reasoningContent.trim()
         ? {
           content: completion.reasoningContent,
@@ -423,22 +508,121 @@ export async function requestAssistantTurn(input: {
         'invalid-response',
         error instanceof Error ? error.message : '理解引擎返回格式异常',
       );
-    attempts.push({
-      attempt: 1,
-      startedAt: attemptStartedAt,
-      completedAt: Date.now(),
-      errorCode: providerError.code,
-      errorDetail: providerError.message,
-      finishReason: completion?.finishReason ?? null,
-      promptTokens: usageValue(completion?.usage, 'prompt_tokens'),
-      completionTokens: usageValue(completion?.usage, 'completion_tokens'),
-      totalTokens: usageValue(completion?.usage, 'total_tokens'),
-    });
+    const lastAttempt = attempts.at(-1);
+    if (lastAttempt?.errorCode === null) {
+      attempts[attempts.length - 1] = {
+        ...lastAttempt,
+        completedAt: Date.now(),
+        errorCode: providerError.code,
+        errorDetail: providerError.message,
+      };
+    } else if (!attempts.length) {
+      attempts.push({
+        attempt: 1,
+        startedAt: completion?.reasoningStartedAt ?? startedAt,
+        completedAt: Date.now(),
+        errorCode: providerError.code,
+        errorDetail: providerError.message,
+        finishReason: completion?.finishReason ?? null,
+        promptTokens: usageValue(completion?.usage, 'prompt_tokens'),
+        completionTokens: usageValue(completion?.usage, 'completion_tokens'),
+        totalTokens: usageValue(completion?.usage, 'total_tokens'),
+      });
+    }
     throw new AssistantProviderError(
       providerError.code,
       providerError.message,
       { attemptCount: attempts.length, attempts, protocolWarnings },
       false,
     );
+  }
+}
+
+export async function requestAssistantFinalReply(input: {
+  settings: Settings;
+  userMessage: string;
+  draftReply: string;
+  executionResult: unknown;
+  signal?: AbortSignal;
+  fetchImpl?: FetchLike;
+  onReplyText?: (text: string) => void;
+  onProgress?: (stage: AssistantProviderProgressStage) => void;
+  timeouts?: Partial<AssistantProviderTimeouts>;
+}): Promise<{ reply: string; providerMetadata: AssistantProviderMetadata }> {
+  if (!input.settings.llmEnabled || !input.settings.llmKey) {
+    throw new AssistantProviderError('missing-key', '理解引擎尚未开启或未配置 API Key');
+  }
+  const fetchImpl: FetchLike = input.fetchImpl ?? (fetch as FetchLike);
+  const startedAt = Date.now();
+  const attemptStartedAt = Date.now();
+  const timeouts = { ...DEFAULT_ASSISTANT_PROVIDER_TIMEOUTS, ...input.timeouts };
+  let completion: CompletionResponse | null = null;
+  try {
+    completion = await requestCompletion({
+      settings: input.settings,
+      body: JSON.stringify({
+        model: input.settings.llmModel,
+        messages: [
+          {
+            role: 'system',
+            content: [
+              '你是小知。请根据本地真实执行回执，给用户一句自然、简洁、连续的最终回复。',
+              '只有 execution_result.committed 中的事项可以说“已完成/已更新/已创建”。',
+              'rejected 或 failed 必须明确表示没有完成对应修改；no_change 可以沿用草稿对用户问题的回答。',
+              '不要提及 JSON、工具、校验器、数据库、模型或内部流程。只输出给用户看的正文。',
+            ].join('\n'),
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              user_message: input.userMessage,
+              draft_reply: input.draftReply,
+              execution_result: input.executionResult,
+            }),
+          },
+        ],
+        thinking: { type: 'enabled' },
+        reasoning_effort: 'high',
+        stream: true,
+        stream_options: { include_usage: true },
+      }),
+      callerSignal: input.signal,
+      fetchImpl,
+      onReplyText: input.onReplyText,
+      onProgress: input.onProgress,
+      timeouts,
+      contentMode: 'raw',
+    });
+    const reply = completion.content.trim();
+    if (!reply) throw new AssistantProviderError('invalid-response', '理解引擎没有返回最终回复');
+    input.onReplyText?.(reply);
+    const attempt: AssistantProviderAttempt = {
+      attempt: 1,
+      startedAt: attemptStartedAt,
+      completedAt: Date.now(),
+      errorCode: null,
+      errorDetail: null,
+      finishReason: completion.finishReason,
+      promptTokens: usageValue(completion.usage, 'prompt_tokens'),
+      completionTokens: usageValue(completion.usage, 'completion_tokens'),
+      totalTokens: usageValue(completion.usage, 'total_tokens'),
+    };
+    return {
+      reply,
+      providerMetadata: {
+        startedAt,
+        completedAt: Date.now(),
+        finishReason: completion.finishReason,
+        promptTokens: attempt.promptTokens,
+        completionTokens: attempt.completionTokens,
+        totalTokens: attempt.totalTokens,
+        attemptCount: 1,
+        attempts: [attempt],
+        protocolWarnings: [],
+      },
+    };
+  } catch (error: any) {
+    if (error instanceof AssistantProviderError) throw error;
+    throw new AssistantProviderError('invalid-response', error instanceof Error ? error.message : '最终回复生成失败');
   }
 }

@@ -60,6 +60,22 @@ const ambiguous = classifyEventCandidates([
 ]);
 check(ambiguous.kind === 'ambiguous', '两个相近强候选必须要求澄清');
 
+const groundedAmbiguousUpdate = validateAssistantActions({
+  operations: [{ key: 'update-trip', type: 'update_event', eventId: 'event-trip', currentState: '10月1日10:39齐齐哈尔南到哈尔滨' }],
+  actionContext: {
+    events: [
+      eventCandidate({ id: 'event-trip', title: '十一出行', currentState: '已有演出安排', score: 0.82 }),
+      eventCandidate({ id: 'event-other', title: '十一家庭安排', currentState: '待确认', score: 0.78 }),
+    ],
+    todos: [], explicitEventId: null, segmentEventId: null,
+  },
+  currentMessage: '对，10月1日10:39，齐齐哈尔南到哈尔滨',
+  recentEvidence: ['十一出行就是这个'],
+  referenceAt: now,
+});
+check(groundedAmbiguousUpdate.accepted.length === 1,
+  '模型已读取并返回精确事件 ID 时，本地不得再用候选相似度二次否决');
+
 const ambiguousCreate = validateAssistantActions({
   operations: [{
     key: 'event', type: 'create_event', eventRef: 'event_1',

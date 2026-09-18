@@ -84,7 +84,7 @@ export function AssistantMessageBubble({
     }
   }
 
-  const runtimeStage = message.runtimeStage ?? 'thinking';
+  const runtimeStage = message.runtimeStage ?? 'planning';
   return (
     <View style={[styles.row, isUser ? styles.userRow : styles.assistantRow]}>
       {hasReasoning ? (
@@ -95,12 +95,12 @@ export function AssistantMessageBubble({
           onPress={() => { void toggleReasoning(); }}
           style={({ pressed }) => [styles.reasoningHeader, pressed && styles.retryPressed]}
         >
-          {isStreaming && runtimeStage === 'thinking' ? (
+          {isStreaming && runtimeStage === 'planning' ? (
             <ActivityIndicator size="small" color={theme.colors.accent} />
           ) : null}
           <Text style={styles.reasoningHeaderText}>
-            {isStreaming && runtimeStage === 'thinking' && startedAt !== undefined
-              ? assistantRuntimeLabel('thinking', elapsedMs)
+            {isStreaming && runtimeStage === 'planning' && startedAt !== undefined
+              ? assistantRuntimeLabel('planning', elapsedMs)
               : `思考了 ${reasoningDuration ?? formatAssistantRuntimeDuration(elapsedMs)}`}
           </Text>
           <Text style={styles.reasoningChevron}>{reasoningExpanded ? '⌃' : '›'}</Text>
@@ -119,7 +119,7 @@ export function AssistantMessageBubble({
           {reasoningText ? <Text style={styles.reasoningNote}>模型生成的思考过程，仅供参考</Text> : null}
         </View>
       ) : null}
-      {isStreaming && hasReasoning && runtimeStage !== 'thinking' && startedAt !== undefined ? (
+      {isStreaming && hasReasoning && runtimeStage !== 'planning' && startedAt !== undefined ? (
         <View style={styles.answeringStatus}>
           <ActivityIndicator size="small" color={theme.colors.accent} />
           <Text style={styles.runtimeText}>{assistantRuntimeLabel(runtimeStage, elapsedMs)}</Text>

@@ -4,7 +4,11 @@ import {
   inspectAssistantReplyWarnings,
   parseAssistantTurnOutput,
 } from '../src/assistant/protocol';
-import { requestAssistantTurn } from '../src/assistant/provider';
+import {
+  mergeProviderToolCallDelta,
+  requestAssistantFinalReply,
+  requestAssistantTurn,
+} from '../src/assistant/provider';
 import { extractPartialJsonStringField } from '../src/assistant/streaming-json';
 
 function check(condition: unknown, message: string): asserts condition {
@@ -270,6 +274,9 @@ check(prompt[0].content.includes('下个月11号还款10万'), '提示词必须�
 check(prompt[0].content.includes('银行说下个月可能调整利率'), '提示词必须包含非用户承诺的反例');
 check(prompt[0].content.includes('due_date'), '提示词必须要求模型解析日期');
 check(prompt[0].content.includes('memory_deltas'), '提示词必须要求模型独立判断长期记忆');
+check(prompt[0].content.includes('已有有效快照'), '提示词必须要求优先复用当前上下文中的有效快照');
+check(prompt[0].content.includes('搜索结果只用于发现候选'), '提示词必须区分搜索发现与精确详情读取');
+check(prompt[0].content.includes('更新已有对象前必须获得完整详情'), '提示词必须要求写入前读取完整真实状态');
 check(prompt[0].content.includes('临时状态'), '提示词必须区分临时状态与长期记忆');
 check(prompt[0].content.includes('关联的 N 条待办也一起删除吗'), '删除含待办事件时必须先确认级联范围');
 check(prompt[0].content.includes('用户没有回答前什么都不删除'), '删除确认未答时不得提交操作');
@@ -277,6 +284,18 @@ check(prompt[0].content.includes('包括已完成和未完成'), '级联删除�
 check(prompt.at(-1)?.content === '那继续梳理。', '最近原话必须保持角色与顺序');
 check(extractPartialJsonStringField('{"reply":"第一行\\n第', 'reply') === '第一行\n第',
   '流式 JSON 应解码完整转义并保留未闭合回复');
+
+const fragmentedToolCalls = new Map();
+mergeProviderToolCallDelta(fragmentedToolCalls, [{
+  index: 0, id: 'call_', function: { name: 'search_', arguments: '{"query":"十' },
+}]);
+mergeProviderToolCallDelta(fragmentedToolCalls, [{
+  index: 0, id: '1', function: { name: 'events', arguments: '一出行"}' },
+}]);
+check(fragmentedToolCalls.get(0)?.id === 'call_1'
+  && fragmentedToolCalls.get(0)?.name === 'search_events'
+  && fragmentedToolCalls.get(0)?.argumentsJson === '{"query":"十一出行"}',
+'分片 tool_calls 必须按 index 正确重组');
 
 async function main() {
   let capturedBody = '';
@@ -310,6 +329,78 @@ async function main() {
     && capturedBody.includes('"reasoning_effort":"high"'),
   'Provider 应显式开启 DeepSeek 思考并设置推理强度');
   check(providerResult.reasoning === null, '未返回思考内容时应保持空状态');
+  check(providerResult.grounding.eventIds.length === 0, '未启用数据工具时读取集合应为空');
+
+  const toolBodies: any[] = [];
+  let toolFetchIndex = 0;
+  const toolResult = await requestAssistantTurn({
+    settings: {
+      llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model',
+    },
+    context: { contextBlock: '上下文', recentMessages: [{ id: 'u', role: 'user', content: '十一怎么安排', createdAt: 1 }] },
+    fetchImpl: async (_url, init) => {
+      toolBodies.push(JSON.parse(String(init?.body)));
+      toolFetchIndex += 1;
+      if (toolFetchIndex === 1) {
+        return new Response(JSON.stringify({
+          choices: [{
+            message: {
+              content: '', reasoning_content: '先读取真实事件',
+              tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'get_event', arguments: '{"event_id":"event-trip"}' } }],
+            },
+            finish_reason: 'tool_calls',
+          }],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: '{"reply":"我看到了十一出行。","segment":{"action":"continue"}}' }, finish_reason: 'stop' }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+    executeReadTool: async call => ({
+      toolCallId: call.id,
+      name: 'get_event',
+      result: { found: true, event: { id: 'event-trip', title: '十一出行', revision: 4 } },
+      readEventIds: ['event-trip'],
+      readTodoIds: [],
+      readMemoryIds: [],
+    }),
+  });
+  check(toolResult.grounding.eventIds[0] === 'event-trip', '工具读取到的事件 ID 必须回传给本地校验层');
+  check(toolResult.providerMetadata.attemptCount === 2, '一次工具读取和一次规划应记录两次 Provider 请求');
+  check(toolBodies[0].tools?.length === 6, '启用读取执行器时必须向模型暴露事件、待办和记忆六个只读工具');
+  check(toolBodies[1].messages.at(-1).role === 'tool', '第二轮必须带回真实工具结果');
+  check(toolBodies[1].messages.at(-2).reasoning_content === '先读取真实事件',
+    'DeepSeek 工具续轮必须保留上一轮 reasoning_content');
+
+  const finalChunks: string[] = [];
+  const finalReply = await requestAssistantFinalReply({
+    settings: {
+      llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model',
+    },
+    userMessage: '下个月11号还款10万',
+    draftReply: '我会帮你更新。',
+    executionResult: {
+      outcome: 'committed',
+      committed: [{ receiptSummary: '已更新贷款事件' }, { receiptSummary: '已创建11号还款待办' }],
+      rejected: [],
+    },
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      check(!body.response_format, '最终回复是自然文本，不应继续要求结构化 JSON');
+      check(body.messages[1].content.includes('已创建11号还款待办'),
+        '最终回复请求必须拿到本地真实执行回执');
+      const events = [
+        { choices: [{ delta: { content: '已更新贷款事件，' }, finish_reason: null }] },
+        { choices: [{ delta: { content: '也创建了11号还款待办。' }, finish_reason: 'stop' }] },
+      ];
+      const stream = `${events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('')}data: [DONE]\n\n`;
+      return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    },
+    onReplyText: text => finalChunks.push(text),
+  });
+  check(finalReply.reply === '已更新贷款事件，也创建了11号还款待办。',
+    '最终回复必须按普通文本流重组');
+  check(finalChunks.at(-1) === finalReply.reply, '最终真实回复必须流式展示到客户端');
 
   const modelJson = JSON.stringify({
     reply: '下个月10号继续还款。',
