@@ -160,7 +160,15 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
   await ensureAssistantOperationSchema(database);
   await database.execAsync(assistantMemorySchema);
 
+  const requestColumns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(assistant_requests)');
+  if (!requestColumns.some(column => column.name === 'error_code')) {
+    await database.execAsync('ALTER TABLE assistant_requests ADD COLUMN error_code TEXT;');
+  }
+
   const decisionLogColumns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(assistant_decision_logs)');
+  if (!decisionLogColumns.some(column => column.name === 'error_code')) {
+    await database.execAsync('ALTER TABLE assistant_decision_logs ADD COLUMN error_code TEXT;');
+  }
   if (!decisionLogColumns.some(column => column.name === 'error_detail')) {
     await database.execAsync('ALTER TABLE assistant_decision_logs ADD COLUMN error_detail TEXT;');
   }

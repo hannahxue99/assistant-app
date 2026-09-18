@@ -93,13 +93,15 @@ async function main() {
   }
   const decisionLogColumns = new Set(sqlite.prepare('PRAGMA table_info(assistant_decision_logs)').all().map(row => row.name));
   for (const column of [
-    'error_detail', 'repair_count', 'repair_status',
+    'error_code', 'error_detail', 'repair_count', 'repair_status',
     'provider_attempt_count', 'provider_attempts_json', 'protocol_warnings_json',
     'proposed_event_deltas_json',
     'tool_read_event_ids_json', 'tool_read_todo_ids_json', 'tool_read_memory_ids_json', 'execution_outcome',
   ]) {
     assert.ok(decisionLogColumns.has(column), `决策日志必须包含 ${column}`);
   }
+  const requestColumns = new Set(sqlite.prepare('PRAGMA table_info(assistant_requests)').all().map(row => row.name));
+  assert.ok(requestColumns.has('error_code'), '历史助手请求表升级后必须补齐 error_code');
 
   sqlite.prepare(`INSERT INTO conversation_segments (
     id, summary, status, started_at, ended_at, updated_at
