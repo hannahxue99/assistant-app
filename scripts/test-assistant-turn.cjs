@@ -388,6 +388,80 @@ async function main() {
     createdAt: new Date('2026-09-15T12:03:00+08:00').getTime(),
   });
 
+  sqlite.prepare(`INSERT INTO assistant_memories
+    (id,category,content,normalized_content,status,sensitivity,admission_basis,
+     superseded_by_id,revision,created_at,updated_at,activated_at,superseded_at,forgotten_at)
+    VALUES ('memory-office','preference','用户偏好安静办公','用户偏好安静办公',
+      'active','ordinary','explicit',NULL,2,5000,5000,5000,NULL,NULL)`).run();
+  provider = async input => {
+    const execution = await input.executeReadTool({
+      id: 'get-office-memory', name: 'get_memory', argumentsJson: '{"memory_id":"memory-office"}',
+    });
+    assert.equal(execution.result.memory.revision, 2);
+    return { reply: '我已经看到了。', segment: { action: 'continue' }, operations: [] };
+  };
+  await orchestrator.sendAssistantTurn({
+    requestId: 'request-memory-read', content: '看一下第二条记忆', source: 'text', settings, createdAt: 5050,
+  });
+  provider = async input => {
+    assert.ok(input.context.contextBlock.includes('get_memory:memory-office'),
+      '同一分段内版本未变化的记忆详情应通过短期快照复用');
+    return { reply: '刚才那条仍然有效。', segment: { action: 'continue' }, operations: [] };
+  };
+  await orchestrator.sendAssistantTurn({
+    requestId: 'request-memory-reuse', content: '刚才那条呢', source: 'text', settings, createdAt: 5075,
+  });
+
+  sqlite.prepare(`INSERT INTO assistant_memories
+    (id,category,content,normalized_content,status,sensitivity,admission_basis,
+     superseded_by_id,revision,created_at,updated_at,activated_at,superseded_at,forgotten_at)
+    VALUES ('memory-cycle','recurring_pattern','最近一次9月18日来例假','最近一次9月18日来例假',
+      'active','sensitive','explicit',NULL,3,5100,5100,5100,NULL,NULL)`).run();
+  provider = async input => {
+    const execution = await input.executeReadTool({
+      id: 'search-cycle-memory', name: 'search_memories', argumentsJson: '{"query":"例假"}',
+    });
+    assert.equal(execution.result.memories[0].id, 'memory-cycle');
+    return {
+      reply: '先尝试删除。', segment: { action: 'continue' }, operations: [],
+      memoryDeltas: [{
+        key: 'forget-cycle-search-only', action: 'forget_memory', memoryId: 'memory-cycle',
+        expectedRevision: 3, evidence: '把那条长期记忆删除',
+      }],
+    };
+  };
+  const searchOnlyMemoryTurn = await orchestrator.sendAssistantTurn({
+    requestId: 'request-memory-search-only', content: '把那条长期记忆删除', source: 'text', settings,
+    createdAt: 5200,
+  });
+  assert.equal(searchOnlyMemoryTurn.operations.length, 0, '只搜索候选不得授权删除长期记忆');
+  assert.equal(sqlite.prepare("SELECT status FROM assistant_memories WHERE id='memory-cycle'").get().status, 'active');
+
+  provider = async input => {
+    const execution = await input.executeReadTool({
+      id: 'get-cycle-memory', name: 'get_memory', argumentsJson: '{"memory_id":"memory-cycle"}',
+    });
+    assert.equal(execution.result.memory.revision, 3, '精确读取必须返回长期记忆的真实版本');
+    return {
+      reply: '已经删除。', segment: { action: 'continue' }, operations: [],
+      memoryDeltas: [{
+        key: 'forget-cycle-after-get', action: 'forget_memory', memoryId: 'memory-cycle',
+        expectedRevision: 3, evidence: '把那条长期记忆删除',
+      }],
+    };
+  };
+  const exactMemoryTurn = await orchestrator.sendAssistantTurn({
+    requestId: 'request-memory-exact-get', content: '把那条长期记忆删除', source: 'text', settings,
+    createdAt: 5300,
+  });
+  assert.equal(exactMemoryTurn.operations.length, 1, '精确读取后的合法删除应提交');
+  assert.equal(sqlite.prepare("SELECT status FROM assistant_memories WHERE id='memory-cycle'").get().status, 'forgotten');
+  const memoryReadLog = sqlite.prepare(
+    "SELECT tool_read_memory_ids_json FROM assistant_decision_logs WHERE request_id='request-memory-exact-get'",
+  ).get();
+  assert.ok(JSON.parse(memoryReadLog.tool_read_memory_ids_json).includes('memory-cycle'),
+    '决策日志必须记录本轮精确读取并用于校验的记忆 ID');
+
   sqlite.exec(`CREATE TRIGGER fail_assistant_operation
     BEFORE INSERT ON assistant_operations BEGIN SELECT RAISE(ABORT, 'forced operation failure'); END;`);
   provider = async () => ({

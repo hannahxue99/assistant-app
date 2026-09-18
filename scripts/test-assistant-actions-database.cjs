@@ -96,7 +96,7 @@ async function main() {
     'error_detail', 'repair_count', 'repair_status',
     'provider_attempt_count', 'provider_attempts_json', 'protocol_warnings_json',
     'proposed_event_deltas_json',
-    'tool_read_event_ids_json', 'tool_read_todo_ids_json', 'execution_outcome',
+    'tool_read_event_ids_json', 'tool_read_todo_ids_json', 'tool_read_memory_ids_json', 'execution_outcome',
   ]) {
     assert.ok(decisionLogColumns.has(column), `决策日志必须包含 ${column}`);
   }
@@ -138,7 +138,8 @@ async function main() {
     createdAt: 1000,
   });
   await decisionLog.recordAssistantModelDecision({
-    requestId: 'request-1', operations: [], toolReadEventIds: ['event-trip'], toolReadTodoIds: ['todo-train'],
+    requestId: 'request-1', operations: [], toolReadEventIds: ['event-trip'],
+    toolReadTodoIds: ['todo-train'], toolReadMemoryIds: ['memory-cycle'],
   });
   await decisionLog.recordAssistantExecutionOutcome({
     requestId: 'request-1', result: { outcome: 'rejected', committed: [], rejected: [{ type: 'event', reason: 'revision_conflict' }] },
@@ -146,6 +147,7 @@ async function main() {
   const groundedLog = await decisionLog.getAssistantDecisionLog('request-1');
   assert.deepEqual([...groundedLog.toolReadEventIds], ['event-trip']);
   assert.deepEqual([...groundedLog.toolReadTodoIds], ['todo-train']);
+  assert.deepEqual([...groundedLog.toolReadMemoryIds], ['memory-cycle']);
   assert.equal(groundedLog.executionOutcome, 'rejected', '零写入拒绝不得记录为 committed');
 
   const firstEvent = await eventStore.createEvent({

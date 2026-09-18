@@ -3,6 +3,8 @@ export const ASSISTANT_READ_TOOL_NAMES = [
   'get_event',
   'search_todos',
   'get_todo',
+  'search_memories',
+  'get_memory',
 ] as const;
 
 export type AssistantReadToolName = typeof ASSISTANT_READ_TOOL_NAMES[number];
@@ -19,11 +21,13 @@ export interface AssistantReadToolExecution {
   result: Record<string, unknown>;
   readEventIds: string[];
   readTodoIds: string[];
+  readMemoryIds: string[];
 }
 
 export interface AssistantReadSet {
   eventIds: string[];
   todoIds: string[];
+  memoryIds: string[];
 }
 
 type DatabaseLike = {
@@ -89,6 +93,39 @@ export const ASSISTANT_READ_TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'search_memories',
+      description: '按内容搜索用户的真实长期记忆。需要确认记忆 ID 时先调用；搜索结果本身不能授权修改或删除。',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: '从对话提炼的记忆关键词' },
+          status: {
+            type: 'string',
+            enum: ['active', 'candidate'],
+            description: '可选；只搜索已生效或待确认记忆，默认两者都搜索',
+          },
+        },
+        required: ['query'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_memory',
+      description: '按精确 ID 读取长期记忆的真实内容、状态和版本。激活、更新或删除既有记忆前调用。',
+      parameters: {
+        type: 'object',
+        properties: { memory_id: { type: 'string' } },
+        required: ['memory_id'],
+        additionalProperties: false,
+      },
+    },
+  },
 ] as const;
 
 function isReadToolName(value: unknown): value is AssistantReadToolName {
@@ -142,10 +179,29 @@ function eventSnapshot(row: any) {
   };
 }
 
+function memorySnapshot(row: any) {
+  return {
+    id: row.id,
+    content: row.content,
+    category: row.category,
+    status: row.status,
+    sensitivity: row.sensitivity,
+    admissionBasis: row.admission_basis,
+    revision: Number(row.revision),
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+    activatedAt: row.activated_at ?? null,
+    supersededAt: row.superseded_at ?? null,
+    forgottenAt: row.forgotten_at ?? null,
+    supersededById: row.superseded_by_id ?? null,
+  };
+}
+
 export function mergeAssistantReadSets(executions: AssistantReadToolExecution[]): AssistantReadSet {
   return {
     eventIds: [...new Set(executions.flatMap(item => item.readEventIds))],
     todoIds: [...new Set(executions.flatMap(item => item.readTodoIds))],
+    memoryIds: [...new Set(executions.flatMap(item => item.readMemoryIds))],
   };
 }
 
@@ -182,6 +238,7 @@ export async function executeAssistantReadToolWithDatabase(
       result: { query, events },
       readEventIds: [],
       readTodoIds: [],
+      readMemoryIds: [],
     };
   }
 
@@ -195,6 +252,7 @@ export async function executeAssistantReadToolWithDatabase(
         result: { eventId, found: false },
         readEventIds: [],
         readTodoIds: [],
+        readMemoryIds: [],
       };
     }
     const [updates, todos, aliases] = await Promise.all([
@@ -229,6 +287,7 @@ export async function executeAssistantReadToolWithDatabase(
       },
       readEventIds: [eventId],
       readTodoIds: todos.map(todo => todo.id),
+      readMemoryIds: [],
     };
   }
 
@@ -249,7 +308,73 @@ export async function executeAssistantReadToolWithDatabase(
       result: { query, includeDone, todos },
       readEventIds: [],
       readTodoIds: [],
+      readMemoryIds: [],
     };
+  }
+
+  if (call.name === 'search_memories') {
+    const query = requiredString(args, 'query');
+    const status = args.status;
+    if (status !== undefined && status !== 'active' && status !== 'candidate') {
+      throw Object.assign(new Error('数据工具的 status 无效'), { code: 'invalid_tool_arguments' });
+    }
+    const like = escapedLike(query);
+    const rows = status
+      ? await database.getAllAsync<any>(
+        `SELECT * FROM assistant_memories WHERE status=?
+         AND (content LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\')
+         ORDER BY updated_at DESC, id DESC LIMIT ?`,
+        status, like, like, MAX_SEARCH_RESULTS,
+      )
+      : await database.getAllAsync<any>(
+        `SELECT * FROM assistant_memories WHERE status IN ('active','candidate')
+         AND (content LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\')
+         ORDER BY updated_at DESC, id DESC LIMIT ?`,
+        like, like, MAX_SEARCH_RESULTS,
+      );
+    return {
+      toolCallId: call.id,
+      name: call.name,
+      result: {
+        query,
+        status: status ?? null,
+        memories: rows.map(row => {
+          const memory = memorySnapshot(row);
+          return {
+            id: memory.id,
+            content: memory.content,
+            category: memory.category,
+            status: memory.status,
+            revision: memory.revision,
+          };
+        }),
+      },
+      readEventIds: [],
+      readTodoIds: [],
+      readMemoryIds: [],
+    };
+  }
+
+  if (call.name === 'get_memory') {
+    const memoryId = requiredString(args, 'memory_id');
+    const row = await database.getFirstAsync<any>('SELECT * FROM assistant_memories WHERE id=?', memoryId);
+    return row
+      ? {
+        toolCallId: call.id,
+        name: call.name,
+        result: { found: true, memory: memorySnapshot(row) },
+        readEventIds: [],
+        readTodoIds: [],
+        readMemoryIds: [memoryId],
+      }
+      : {
+        toolCallId: call.id,
+        name: call.name,
+        result: { memoryId, found: false },
+        readEventIds: [],
+        readTodoIds: [],
+        readMemoryIds: [],
+      };
   }
 
   const todoId = requiredString(args, 'todo_id');
@@ -261,6 +386,7 @@ export async function executeAssistantReadToolWithDatabase(
       result: { todoId, found: false },
       readEventIds: [],
       readTodoIds: [],
+      readMemoryIds: [],
     };
   }
   const eventRows = await database.getAllAsync<any>(
@@ -277,6 +403,7 @@ export async function executeAssistantReadToolWithDatabase(
     result: { found: true, todo: todoSnapshot(row), events },
     readEventIds: events.map(event => event.id),
     readTodoIds: [todoId],
+    readMemoryIds: [],
   };
 }
 

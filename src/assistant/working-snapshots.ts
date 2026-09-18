@@ -3,20 +3,22 @@ import type { AssistantReadToolExecution, AssistantReadToolName, AssistantReadSe
 export interface AssistantWorkingSnapshot {
   id: string;
   segmentId: string;
-  toolName: Extract<AssistantReadToolName, 'get_event' | 'get_todo'>;
+  toolName: Extract<AssistantReadToolName, 'get_event' | 'get_todo' | 'get_memory'>;
   objectId: string;
   result: Record<string, unknown>;
   readEventIds: string[];
   readTodoIds: string[];
+  readMemoryIds: string[];
   eventRevisions: Record<string, number>;
   todoRevisions: Record<string, number>;
+  memoryRevisions: Record<string, number>;
   readAt: number;
 }
 
 const runtime = globalThis as typeof globalThis & {
-  __assistantWorkingSnapshotsV1?: Map<string, Map<string, AssistantWorkingSnapshot>>;
+  __assistantWorkingSnapshotsV2?: Map<string, Map<string, AssistantWorkingSnapshot>>;
 };
-const snapshotsBySegment = runtime.__assistantWorkingSnapshotsV1 ??= new Map();
+const snapshotsBySegment = runtime.__assistantWorkingSnapshotsV2 ??= new Map();
 
 function objectValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -38,14 +40,16 @@ function snapshotFromExecution(
   execution: AssistantReadToolExecution,
   readAt: number,
 ): AssistantWorkingSnapshot | null {
-  if (execution.name !== 'get_event' && execution.name !== 'get_todo') return null;
+  if (execution.name !== 'get_event' && execution.name !== 'get_todo' && execution.name !== 'get_memory') return null;
   if (execution.result.found !== true) return null;
 
   const eventRevisions: Record<string, number> = {};
   const todoRevisions: Record<string, number> = {};
+  const memoryRevisions: Record<string, number> = {};
   const event = objectValue(execution.result.event);
   const todo = objectValue(execution.result.todo);
-  const primary = execution.name === 'get_event' ? event : todo;
+  const memory = objectValue(execution.result.memory);
+  const primary = execution.name === 'get_event' ? event : execution.name === 'get_todo' ? todo : memory;
   const primaryId = primary?.id;
   if (typeof primaryId !== 'string' || !primaryId) return null;
 
@@ -59,7 +63,14 @@ function snapshotFromExecution(
     const revision = revisionOf(candidate);
     if (typeof id === 'string' && revision !== null) todoRevisions[id] = revision;
   }
-  if (!Object.keys(eventRevisions).length && !Object.keys(todoRevisions).length) return null;
+  for (const candidate of [memory]) {
+    const id = candidate?.id;
+    const revision = revisionOf(candidate);
+    if (typeof id === 'string' && revision !== null) memoryRevisions[id] = revision;
+  }
+  if (!Object.keys(eventRevisions).length
+    && !Object.keys(todoRevisions).length
+    && !Object.keys(memoryRevisions).length) return null;
 
   return {
     id: `${execution.name}:${primaryId}`,
@@ -69,8 +80,10 @@ function snapshotFromExecution(
     result: execution.result,
     readEventIds: [...execution.readEventIds],
     readTodoIds: [...execution.readTodoIds],
+    readMemoryIds: [...execution.readMemoryIds],
     eventRevisions,
     todoRevisions,
+    memoryRevisions,
     readAt,
   };
 }
@@ -99,6 +112,7 @@ async function validSnapshotsWithDatabase(
 ): Promise<AssistantWorkingSnapshot[]> {
   const eventIds = [...new Set(snapshots.flatMap(snapshot => Object.keys(snapshot.eventRevisions)))];
   const todoIds = [...new Set(snapshots.flatMap(snapshot => Object.keys(snapshot.todoRevisions)))];
+  const memoryIds = [...new Set(snapshots.flatMap(snapshot => Object.keys(snapshot.memoryRevisions)))];
   const eventRows = eventIds.length
     ? await database.getAllAsync<{ id: string; revision: number; status: string }>(
       `SELECT id, revision, status FROM assistant_events WHERE id IN (${eventIds.map(() => '?').join(',')})`,
@@ -111,16 +125,24 @@ async function validSnapshotsWithDatabase(
       ...todoIds,
     )
     : [];
+  const memoryRows = memoryIds.length
+    ? await database.getAllAsync<{ id: string; revision: number }>(
+      `SELECT id, revision FROM assistant_memories WHERE id IN (${memoryIds.map(() => '?').join(',')})`,
+      ...memoryIds,
+    )
+    : [];
   const currentEvents = new Map(eventRows.map(row => [row.id, {
     revision: Number(row.revision), status: row.status,
   }]));
   const currentTodos = new Map(todoRows.map(row => [row.id, Number(row.revision_at)]));
+  const currentMemories = new Map(memoryRows.map(row => [row.id, Number(row.revision)]));
   return snapshots.filter(snapshot => (
     Object.entries(snapshot.eventRevisions).every(([id, revision]) => {
       const current = currentEvents.get(id);
       return current?.status === 'active' && current.revision === revision;
     })
     && Object.entries(snapshot.todoRevisions).every(([id, revision]) => currentTodos.get(id) === revision)
+    && Object.entries(snapshot.memoryRevisions).every(([id, revision]) => currentMemories.get(id) === revision)
   ));
 }
 
@@ -148,6 +170,7 @@ export function readSetFromAssistantWorkingSnapshots(
   return {
     eventIds: [...new Set(snapshots.flatMap(snapshot => snapshot.readEventIds))],
     todoIds: [...new Set(snapshots.flatMap(snapshot => snapshot.readTodoIds))],
+    memoryIds: [...new Set(snapshots.flatMap(snapshot => snapshot.readMemoryIds))],
   };
 }
 

@@ -59,6 +59,11 @@ async function main() {
   sqlite.prepare(`INSERT INTO assistant_object_relations
     (id,from_type,from_id,relation_type,to_type,to_id,source_message_id,created_at,undone_at)
     VALUES ('relation-trip','todo','todo-train','belongs_to','event','event-trip',NULL,200,NULL)`).run();
+  sqlite.prepare(`INSERT INTO assistant_memories
+    (id,category,content,normalized_content,status,sensitivity,admission_basis,
+     superseded_by_id,revision,created_at,updated_at,activated_at,superseded_at,forgotten_at)
+    VALUES ('memory-cycle','recurring_pattern','最近一次9月18日来例假','最近一次9月18日来例假',
+      'active','sensitive','explicit',NULL,3,150,450,150,NULL,NULL)`).run();
 
   const searched = await tools.executeAssistantReadToolWithDatabase(adapter, {
     id: 'call-search', name: 'search_events', argumentsJson: '{"query":"哈尔滨"}',
@@ -79,6 +84,19 @@ async function main() {
   });
   assert.equal(todo.result.todo.done, false);
   assert.equal(todo.result.events[0].id, 'event-trip');
+
+  const memorySearch = await tools.executeAssistantReadToolWithDatabase(adapter, {
+    id: 'call-memory-search', name: 'search_memories', argumentsJson: '{"query":"例假"}',
+  });
+  assert.equal(memorySearch.result.memories[0].id, 'memory-cycle');
+  assert.deepEqual([...memorySearch.readMemoryIds], [], '搜索记忆不得授权修改');
+
+  const memory = await tools.executeAssistantReadToolWithDatabase(adapter, {
+    id: 'call-memory', name: 'get_memory', argumentsJson: '{"memory_id":"memory-cycle"}',
+  });
+  assert.equal(memory.result.memory.revision, 3);
+  assert.equal(memory.result.memory.sensitivity, 'sensitive');
+  assert.deepEqual([...memory.readMemoryIds], ['memory-cycle']);
 
   const missing = await tools.executeAssistantReadToolWithDatabase(adapter, {
     id: 'call-missing', name: 'get_event', argumentsJson: '{"event_id":"missing"}',

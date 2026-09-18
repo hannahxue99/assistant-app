@@ -191,6 +191,9 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
   if (!decisionLogColumns.some(column => column.name === 'tool_read_todo_ids_json')) {
     await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN tool_read_todo_ids_json TEXT NOT NULL DEFAULT '[]';");
   }
+  if (!decisionLogColumns.some(column => column.name === 'tool_read_memory_ids_json')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN tool_read_memory_ids_json TEXT NOT NULL DEFAULT '[]';");
+  }
   if (!decisionLogColumns.some(column => column.name === 'execution_outcome')) {
     await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN execution_outcome TEXT NOT NULL DEFAULT 'pending';");
   }

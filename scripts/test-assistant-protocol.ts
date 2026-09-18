@@ -362,11 +362,12 @@ async function main() {
       result: { found: true, event: { id: 'event-trip', title: '十一出行', revision: 4 } },
       readEventIds: ['event-trip'],
       readTodoIds: [],
+      readMemoryIds: [],
     }),
   });
   check(toolResult.grounding.eventIds[0] === 'event-trip', '工具读取到的事件 ID 必须回传给本地校验层');
   check(toolResult.providerMetadata.attemptCount === 2, '一次工具读取和一次规划应记录两次 Provider 请求');
-  check(toolBodies[0].tools?.length === 4, '启用读取执行器时必须向模型暴露四个只读工具');
+  check(toolBodies[0].tools?.length === 6, '启用读取执行器时必须向模型暴露事件、待办和记忆六个只读工具');
   check(toolBodies[1].messages.at(-1).role === 'tool', '第二轮必须带回真实工具结果');
   check(toolBodies[1].messages.at(-2).reasoning_content === '先读取真实事件',
     'DeepSeek 工具续轮必须保留上一轮 reasoning_content');

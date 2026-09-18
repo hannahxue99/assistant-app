@@ -397,8 +397,8 @@ export async function requestAssistantTurn(input: {
       timeZone: input.timeZone,
   });
   const toolExecutions: AssistantReadToolExecution[] = [];
-  const maxReadRounds = 2;
-  const maxToolCalls = 4;
+  const maxReadRounds = 4;
+  const maxToolCalls = 8;
   let readRounds = 0;
   let completion: CompletionResponse | null = null;
   try {

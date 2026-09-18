@@ -88,6 +88,20 @@ export function listMemoryCandidates(limit = 100): Promise<AssistantMemory[]> {
   });
 }
 
+export function listMemoriesByIds(ids: string[]): Promise<AssistantMemory[]> {
+  const uniqueIds = [...new Set(ids.filter(Boolean))];
+  if (!uniqueIds.length) return Promise.resolve([]);
+  return withDatabaseConnection(async (database) => {
+    const placeholders = uniqueIds.map(() => '?').join(',');
+    const rows = await database.getAllAsync<any>(
+      `SELECT * FROM assistant_memories WHERE id IN (${placeholders})`,
+      ...uniqueIds,
+    );
+    const byId = new Map(rows.map(row => [row.id, rowToMemory(row)]));
+    return uniqueIds.map(id => byId.get(id)).filter((memory): memory is AssistantMemory => Boolean(memory));
+  });
+}
+
 export function listMemorySources(memoryId: string, database?: SQLiteDatabase): Promise<AssistantMemorySource[]> {
   const read = async (connection: SQLiteDatabase) => {
     const rows = await connection.getAllAsync<any>(

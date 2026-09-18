@@ -19,6 +19,7 @@ import type { AssistantRuntimeStage } from './runtime-state';
 import { getAssistantReasoning, type AssistantReasoning } from './reasoning-store';
 import { ASSISTANT_PROMPT_VERSION } from './prompt';
 import { loadAssistantMemoryContext } from './memory-retrieval';
+import { listMemoriesByIds } from './memory-store';
 import { validateAssistantMemoryDeltas } from './memory-validator';
 import {
   beginAssistantDecisionLog,
@@ -243,12 +244,15 @@ async function runSavedTurn(input: {
     input.onProgress?.('planning');
     const cachedReadSet = readSetFromAssistantWorkingSnapshots(selectedWorkingSnapshots);
     const executedReadSet = mergeAssistantReadSets(readExecutions);
-    const grounding = output.grounding ?? { eventIds: [], todoIds: [] };
+    const grounding = output.grounding ?? { eventIds: [], todoIds: [], memoryIds: [] };
     const readEventIds = [...new Set([
       ...cachedReadSet.eventIds, ...executedReadSet.eventIds, ...grounding.eventIds,
     ])];
     const readTodoIds = [...new Set([
       ...cachedReadSet.todoIds, ...executedReadSet.todoIds, ...grounding.todoIds,
+    ])];
+    const readMemoryIds = [...new Set([
+      ...cachedReadSet.memoryIds, ...executedReadSet.memoryIds, ...grounding.memoryIds,
     ])];
     const groundedActionContext = await loadAssistantActionContext({
       query: '',
@@ -266,6 +270,7 @@ async function runSavedTurn(input: {
       metadata: output.providerMetadata,
       toolReadEventIds: readEventIds,
       toolReadTodoIds: readTodoIds,
+      toolReadMemoryIds: readMemoryIds,
     }));
     const recentEvidence = messages
       .filter(message => message.role === 'user' && message.id !== state.userMessage.id)
@@ -279,12 +284,20 @@ async function runSavedTurn(input: {
       recentEvidence,
       referenceAt: state.userMessage.createdAt,
     });
-    const selectedMemoryIdSet = new Set(context.selectedMemoryIds);
+    const selectedMemoryIdSet = new Set([...context.selectedMemoryIds, ...readMemoryIds]);
+    const toolReadMemories = await listMemoriesByIds(readMemoryIds);
+    const memoryById = new Map([
+      ...memoryContext.active,
+      ...memoryContext.candidates,
+      ...toolReadMemories,
+    ].map(memory => [memory.id, memory]));
     const memoryValidation = await validateAssistantMemoryDeltas({
       deltas: memoryDeltas,
       context: {
-        active: memoryContext.active.filter(memory => selectedMemoryIdSet.has(memory.id)),
-        candidates: memoryContext.candidates.filter(memory => selectedMemoryIdSet.has(memory.id)),
+        active: [...memoryById.values()]
+          .filter(memory => memory.status === 'active' && selectedMemoryIdSet.has(memory.id)),
+        candidates: [...memoryById.values()]
+          .filter(memory => memory.status === 'candidate' && selectedMemoryIdSet.has(memory.id)),
       },
       userMessage: state.userMessage.content,
       userMessageId: state.userMessage.id,

@@ -136,6 +136,7 @@ export const assistantActionSchema = `
     protocol_warnings_json TEXT NOT NULL DEFAULT '[]',
     tool_read_event_ids_json TEXT NOT NULL DEFAULT '[]',
     tool_read_todo_ids_json TEXT NOT NULL DEFAULT '[]',
+    tool_read_memory_ids_json TEXT NOT NULL DEFAULT '[]',
     execution_outcome TEXT NOT NULL DEFAULT 'pending',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,

@@ -27,9 +27,17 @@ async function main() {
 
   const merged = mergeAssistantReadSets([
     search,
-    { toolCallId: 'call-2', name: 'get_todo', result: {}, readEventIds: ['event-trip'], readTodoIds: ['todo-train'] },
+    {
+      toolCallId: 'call-2', name: 'get_todo', result: {},
+      readEventIds: ['event-trip'], readTodoIds: ['todo-train'], readMemoryIds: [],
+    },
   ]);
   check(merged.eventIds.length === 1 && merged.todoIds[0] === 'todo-train', '读取集合只能合并精确详情读取并去重');
+
+  const memorySearch = await executeAssistantReadToolWithDatabase(fakeDb, {
+    id: 'call-memory-search', name: 'search_memories', argumentsJson: '{"query":"例假"}',
+  });
+  check(memorySearch.readMemoryIds.length === 0, '记忆搜索只能发现候选，不能授权修改');
 
   await executeAssistantReadToolWithDatabase(fakeDb, {
     id: 'call-3', name: 'search_events', argumentsJson: '{"query":"火车"}',
