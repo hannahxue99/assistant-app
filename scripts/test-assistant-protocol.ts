@@ -274,6 +274,9 @@ check(prompt[0].content.includes('下个月11号还款10万'), '提示词必须�
 check(prompt[0].content.includes('银行说下个月可能调整利率'), '提示词必须包含非用户承诺的反例');
 check(prompt[0].content.includes('due_date'), '提示词必须要求模型解析日期');
 check(prompt[0].content.includes('memory_deltas'), '提示词必须要求模型独立判断长期记忆');
+check(prompt[0].content.includes('已有有效快照'), '提示词必须要求优先复用当前上下文中的有效快照');
+check(prompt[0].content.includes('搜索结果只用于发现候选'), '提示词必须区分搜索发现与精确详情读取');
+check(prompt[0].content.includes('更新已有对象前必须获得完整详情'), '提示词必须要求写入前读取完整真实状态');
 check(prompt[0].content.includes('临时状态'), '提示词必须区分临时状态与长期记忆');
 check(prompt[0].content.includes('关联的 N 条待办也一起删除吗'), '删除含待办事件时必须先确认级联范围');
 check(prompt[0].content.includes('用户没有回答前什么都不删除'), '删除确认未答时不得提交操作');

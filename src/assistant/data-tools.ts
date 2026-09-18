@@ -180,7 +180,7 @@ export async function executeAssistantReadToolWithDatabase(
       toolCallId: call.id,
       name: call.name,
       result: { query, events },
-      readEventIds: events.map(event => event.id),
+      readEventIds: [],
       readTodoIds: [],
     };
   }
@@ -248,7 +248,7 @@ export async function executeAssistantReadToolWithDatabase(
       name: call.name,
       result: { query, includeDone, todos },
       readEventIds: [],
-      readTodoIds: todos.map(todo => todo.id),
+      readTodoIds: [],
     };
   }
 
@@ -286,4 +286,3 @@ export async function executeAssistantReadTool(
   const { withDatabaseConnection } = await import('../db');
   return withDatabaseConnection(database => executeAssistantReadToolWithDatabase(database, call));
 }
-

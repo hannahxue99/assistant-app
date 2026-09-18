@@ -22,14 +22,14 @@ async function main() {
   const search = await executeAssistantReadToolWithDatabase(fakeDb, {
     id: 'call-1', name: 'search_events', argumentsJson: '{"query":"十一出行"}',
   });
-  check(search.readEventIds[0] === 'event-trip', '搜索结果必须形成可读事件 ID');
+  check(search.readEventIds.length === 0, '搜索结果只能发现候选，不能视为完整读取并授权写入');
   check((search.result.events as any[])[0].revision === 3, '工具结果必须返回真实 revision');
 
   const merged = mergeAssistantReadSets([
     search,
     { toolCallId: 'call-2', name: 'get_todo', result: {}, readEventIds: ['event-trip'], readTodoIds: ['todo-train'] },
   ]);
-  check(merged.eventIds.length === 1 && merged.todoIds[0] === 'todo-train', '读取集合必须去重合并');
+  check(merged.eventIds.length === 1 && merged.todoIds[0] === 'todo-train', '读取集合只能合并精确详情读取并去重');
 
   await executeAssistantReadToolWithDatabase(fakeDb, {
     id: 'call-3', name: 'search_events', argumentsJson: '{"query":"火车"}',
@@ -63,4 +63,3 @@ async function main() {
 }
 
 void main();
-

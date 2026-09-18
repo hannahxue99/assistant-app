@@ -55,7 +55,7 @@ const result = buildAssistantContext({
     updatedAt: 200 - index,
     dedupeKey: index === 6 ? 'same-source' : undefined,
   })),
-  launchContext: { kind: 'event', id: 'photo', label: '照片整理', state: '周四先筛废片' },
+  launchContext: { kind: 'event', id: 'photo', label: '不应注入的入口标题', state: '不应注入的入口状态' },
   inputBudget: 6000,
 });
 
@@ -66,6 +66,9 @@ check(result.selectedEntryIds.length === 5, '相关旧记录最多 5 条');
 check(result.contextBlock.includes('最近原话为准'), '必须明确最近事实优先规则');
 check(result.contextBlock.indexOf('当前分段摘要') < result.contextBlock.indexOf('相关历史分段'), '当前摘要必须先于旧段');
 check(result.contextBlock.indexOf('正在处理的事件') < result.contextBlock.indexOf('当前分段摘要'), '显式启动上下文优先');
+check(result.contextBlock.includes('正在处理的事件 ID：photo'), '事件入口只应提供精确 ID 指针');
+check(!result.contextBlock.includes('不应注入的入口标题') && !result.contextBlock.includes('不应注入的入口状态'),
+  '事件入口不得预注入标题或状态正文');
 
 const deduped = buildAssistantContext({
   recentMessages: [message(1), message(2)],
@@ -126,11 +129,10 @@ const linkedTodoContext = buildAssistantContext({
     todos: [], explicitEventId: 'event-loan', segmentEventId: null,
   },
 });
-check(linkedTodoContext.contextBlock.includes('todo-open'), '事件上下文必须提供相关待办 ID');
-check(linkedTodoContext.contextBlock.includes('未完成'), '事件上下文必须提供相关待办状态');
-check(linkedTodoContext.contextBlock.includes('todo-done'), '最近完成的相关待办必须进入上下文');
-check(linkedTodoContext.contextBlock.includes('2026'), '事件上下文必须提供相关待办日期');
-check(linkedTodoContext.contextBlock.includes('共4条（未完成3条）'), '事件上下文必须提供完整关联待办数量');
+check(!linkedTodoContext.contextBlock.includes('event-loan'), '基础上下文不得预注入事件 ID');
+check(!linkedTodoContext.contextBlock.includes('公积金贷款还款'), '基础上下文不得预注入事件标题');
+check(!linkedTodoContext.contextBlock.includes('todo-open'), '基础上下文不得预注入关联待办');
+check(!linkedTodoContext.contextBlock.includes('未完成'), '基础上下文不得预注入待办状态');
 
 const crowdedEventContext = buildAssistantContext({
   recentMessages: Array.from({ length: 12 }, (_, index) => ({

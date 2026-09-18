@@ -77,7 +77,6 @@ function renderContextBlock(input: {
   currentSummary: string;
   segments: RetrievedSegment[];
   entries: RelevantEntry[];
-  actionContext?: AssistantActionContext;
   memoryContext?: AssistantMemoryContext;
 }): string {
   const sections = [
@@ -87,10 +86,14 @@ function renderContextBlock(input: {
     const kindLabel = input.launchContext.kind === 'event'
       ? '事件'
       : input.launchContext.kind === 'reminder' ? '提醒' : '待办';
-    sections.push([
-      `正在处理的${kindLabel}：${input.launchContext.label}`,
-      input.launchContext.state ? `当前状态：${input.launchContext.state}` : '',
-    ].filter(Boolean).join('\n'));
+    if (input.launchContext.kind === 'reminder') {
+      sections.push([
+        `正在处理的${kindLabel}：${input.launchContext.label}`,
+        input.launchContext.state ? `当前状态：${input.launchContext.state}` : '',
+      ].filter(Boolean).join('\n'));
+    } else {
+      sections.push(`正在处理的${kindLabel} ID：${input.launchContext.id}\n需要真实状态时调用对应 get 工具读取。`);
+    }
   }
   if (input.currentSummary) sections.push(`当前分段摘要：\n${input.currentSummary}`);
   if (input.memoryContext?.active.length) {
@@ -108,37 +111,6 @@ function renderContextBlock(input: {
   }
   if (input.entries.length) {
     sections.push(`相关旧记录：\n${input.entries.map(item => `- ${item.text}`).join('\n')}`);
-  }
-  if (input.actionContext?.events.length) {
-    const focusedEventIds = new Set([
-      input.actionContext.explicitEventId,
-      input.actionContext.segmentEventId,
-    ].filter(Boolean));
-    sections.push(`可更新的事件候选（只能使用这些 ID）：\n${input.actionContext.events.map(item => {
-      const linkedTodos = item.linkedTodos ?? [];
-      const openLimit = focusedEventIds.has(item.id) ? 8 : 2;
-      const doneLimit = focusedEventIds.has(item.id) ? 3 : 1;
-      const shownTodos = [
-        ...linkedTodos.filter(todo => !todo.done).slice(0, openLimit),
-        ...linkedTodos.filter(todo => todo.done).slice(0, doneLimit),
-      ];
-      const todoLines = shownTodos.map(todo => (
-        `  - ${todo.id}｜${todo.text.slice(0, 120)}｜${todo.done ? '已完成' : '未完成'}${todo.dueAt ? `｜日期：${new Date(todo.dueAt).toLocaleString('zh-CN')}` : '｜暂无日期'}｜版本：${todo.revisionAt}`
-      ));
-      return [
-        `- ${item.id}｜${item.title}｜当前：${item.currentState || '暂无状态'}｜事件版本：${item.revision}｜关联待办：共${item.linkedTodoCount ?? linkedTodos.length}条（未完成${item.openLinkedTodoCount ?? linkedTodos.filter(todo => !todo.done).length}条）`,
-        ...(todoLines.length ? ['  相关待办：', ...todoLines] : []),
-      ].join('\n');
-    }).join('\n')}`);
-  }
-  const eventLinkedTodoIds = new Set(input.actionContext?.events.flatMap(event => (
-    event.linkedTodos ?? []
-  )).map(todo => todo.id) ?? []);
-  const standaloneTodos = input.actionContext?.todos.filter(todo => !eventLinkedTodoIds.has(todo.id)) ?? [];
-  if (standaloneTodos.length) {
-    sections.push(`其他可更新的待办候选（只能使用这些 ID）：\n${standaloneTodos.map(item => (
-      `- ${item.id}｜${item.text}｜${item.done ? '已完成' : '未完成'}${item.dueAt ? `｜日期：${new Date(item.dueAt).toLocaleString('zh-CN')}` : '｜暂无日期'}`
-    )).join('\n')}`);
   }
   return sections.join('\n\n');
 }
@@ -186,25 +158,24 @@ export function buildAssistantContext(input: AssistantContextInput): AssistantCo
     currentSummary,
     segments,
     entries,
-    actionContext: input.actionContext,
     memoryContext,
   });
 
   while (totalTokens(contextBlock, recentMessages) > inputBudget && entries.length) {
     entries = entries.slice(0, -1);
-    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, actionContext: input.actionContext, memoryContext });
+    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext });
   }
   while (totalTokens(contextBlock, recentMessages) > inputBudget && segments.length) {
     segments = segments.slice(0, -1);
-    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, actionContext: input.actionContext, memoryContext });
+    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext });
   }
   while (totalTokens(contextBlock, recentMessages) > inputBudget && memoryContext.candidates.length) {
     memoryContext = { ...memoryContext, candidates: memoryContext.candidates.slice(0, -1) };
-    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, actionContext: input.actionContext, memoryContext });
+    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext });
   }
   while (totalTokens(contextBlock, recentMessages) > inputBudget && memoryContext.active.length) {
     memoryContext = { ...memoryContext, active: memoryContext.active.slice(0, -1) };
-    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, actionContext: input.actionContext, memoryContext });
+    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext });
   }
   while (totalTokens(contextBlock, recentMessages) > inputBudget && recentMessages.length > 1) {
     recentMessages = recentMessages.slice(1);
@@ -217,12 +188,11 @@ export function buildAssistantContext(input: AssistantContextInput): AssistantCo
       currentSummary: '',
       segments: [],
       entries: [],
-      actionContext: input.actionContext,
       memoryContext,
     });
     const summaryBudget = Math.max(0, inputBudget - messagesCost - estimateAssistantTokens(fixedBlock) - 8);
     currentSummary = truncateToAssistantTokenBudget(currentSummary, summaryBudget);
-    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, actionContext: input.actionContext, memoryContext });
+    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext });
   }
 
   if (totalTokens(contextBlock, recentMessages) > inputBudget && recentMessages.length) {
