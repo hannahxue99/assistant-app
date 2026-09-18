@@ -1,6 +1,7 @@
 import { estimateAssistantTokens, truncateToAssistantTokenBudget } from './token-budget';
 import type { AssistantActionContext } from './action-types';
 import type { AssistantMemoryContext } from './memory-types';
+import type { AssistantWorkingSnapshot } from './working-snapshots';
 
 export { estimateAssistantTokens } from './token-budget';
 
@@ -40,8 +41,10 @@ export interface AssistantContextInput {
   retrievedSegments?: RetrievedSegment[];
   relevantEntries?: RelevantEntry[];
   launchContext?: AssistantLaunchContext | null;
+  /** 兼容旧调用；事件与待办正文不会再从这里进入模型上下文。 */
   actionContext?: AssistantActionContext;
   memoryContext?: AssistantMemoryContext;
+  workingSnapshots?: AssistantWorkingSnapshot[];
   inputBudget?: number;
 }
 
@@ -51,6 +54,7 @@ export interface AssistantContextResult {
   selectedSegmentIds: string[];
   selectedEntryIds: string[];
   selectedMemoryIds: string[];
+  selectedWorkingSnapshotIds: string[];
   estimatedTokens: number;
   stats: {
     inputBudget: number;
@@ -58,6 +62,7 @@ export interface AssistantContextResult {
     trimmedSegments: number;
     trimmedEntries: number;
     trimmedMemories: number;
+    trimmedWorkingSnapshots: number;
   };
 }
 
@@ -78,6 +83,7 @@ function renderContextBlock(input: {
   segments: RetrievedSegment[];
   entries: RelevantEntry[];
   memoryContext?: AssistantMemoryContext;
+  workingSnapshots: AssistantWorkingSnapshot[];
 }): string {
   const sections = [
     '上下文使用规则：历史摘要或旧记录与最近原话冲突时，以最近原话为准；不要把未提及的旧内容强行带入当前回答。',
@@ -96,6 +102,11 @@ function renderContextBlock(input: {
     }
   }
   if (input.currentSummary) sections.push(`当前分段摘要：\n${input.currentSummary}`);
+  if (input.workingSnapshots.length) {
+    sections.push(`已有有效快照（版本仍有效，可直接复用；字段不足时再调用 get 工具）：\n${input.workingSnapshots.map(snapshot => (
+      `- ${snapshot.id}｜读取于 ${snapshot.readAt}\n${JSON.stringify(snapshot.result)}`
+    )).join('\n')}`);
+  }
   if (input.memoryContext?.active.length) {
     sections.push(`已生效的长期记忆（可作为用户事实）：\n${input.memoryContext.active.map(item => (
       `- ${item.id}｜${item.category}｜${item.content}｜版本：${item.revision}`
@@ -130,6 +141,8 @@ export function buildAssistantContext(input: AssistantContextInput): AssistantCo
     active: [...(input.memoryContext?.active ?? [])],
     candidates: [...(input.memoryContext?.candidates ?? [])],
   };
+  let workingSnapshots = [...(input.workingSnapshots ?? [])].sort((left, right) => right.readAt - left.readAt).slice(0, 4);
+  const initialWorkingSnapshotCount = workingSnapshots.length;
 
   const seen = new Set<string>();
   let segments = rankByRelevance(input.retrievedSegments ?? [])
@@ -159,23 +172,28 @@ export function buildAssistantContext(input: AssistantContextInput): AssistantCo
     segments,
     entries,
     memoryContext,
+    workingSnapshots,
   });
 
   while (totalTokens(contextBlock, recentMessages) > inputBudget && entries.length) {
     entries = entries.slice(0, -1);
-    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext });
+    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext, workingSnapshots });
   }
   while (totalTokens(contextBlock, recentMessages) > inputBudget && segments.length) {
     segments = segments.slice(0, -1);
-    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext });
+    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext, workingSnapshots });
   }
   while (totalTokens(contextBlock, recentMessages) > inputBudget && memoryContext.candidates.length) {
     memoryContext = { ...memoryContext, candidates: memoryContext.candidates.slice(0, -1) };
-    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext });
+    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext, workingSnapshots });
   }
   while (totalTokens(contextBlock, recentMessages) > inputBudget && memoryContext.active.length) {
     memoryContext = { ...memoryContext, active: memoryContext.active.slice(0, -1) };
-    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext });
+    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext, workingSnapshots });
+  }
+  while (totalTokens(contextBlock, recentMessages) > inputBudget && workingSnapshots.length) {
+    workingSnapshots = workingSnapshots.slice(0, -1);
+    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext, workingSnapshots });
   }
   while (totalTokens(contextBlock, recentMessages) > inputBudget && recentMessages.length > 1) {
     recentMessages = recentMessages.slice(1);
@@ -189,10 +207,11 @@ export function buildAssistantContext(input: AssistantContextInput): AssistantCo
       segments: [],
       entries: [],
       memoryContext,
+      workingSnapshots,
     });
     const summaryBudget = Math.max(0, inputBudget - messagesCost - estimateAssistantTokens(fixedBlock) - 8);
     currentSummary = truncateToAssistantTokenBudget(currentSummary, summaryBudget);
-    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext });
+    contextBlock = renderContextBlock({ launchContext: input.launchContext, currentSummary, segments, entries, memoryContext, workingSnapshots });
   }
 
   if (totalTokens(contextBlock, recentMessages) > inputBudget && recentMessages.length) {
@@ -210,6 +229,7 @@ export function buildAssistantContext(input: AssistantContextInput): AssistantCo
     selectedSegmentIds: segments.map(item => item.id),
     selectedEntryIds: entries.map(item => item.id),
     selectedMemoryIds: [...memoryContext.active, ...memoryContext.candidates].map(item => item.id),
+    selectedWorkingSnapshotIds: workingSnapshots.map(item => item.id),
     estimatedTokens: totalTokens(contextBlock, recentMessages),
     stats: {
       inputBudget,
@@ -217,6 +237,7 @@ export function buildAssistantContext(input: AssistantContextInput): AssistantCo
       trimmedSegments: initialSegmentCount - segments.length,
       trimmedEntries: initialEntryCount - entries.length,
       trimmedMemories: initialMemoryCount - memoryContext.active.length - memoryContext.candidates.length,
+      trimmedWorkingSnapshots: initialWorkingSnapshotCount - workingSnapshots.length,
     },
   };
 }

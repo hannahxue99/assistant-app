@@ -9,7 +9,11 @@ import {
   requestAssistantTurn,
   type AssistantProviderProgressStage,
 } from './provider';
-import { executeAssistantReadTool } from './data-tools';
+import {
+  executeAssistantReadTool,
+  mergeAssistantReadSets,
+  type AssistantReadToolExecution,
+} from './data-tools';
 import { buildAssistantExecutionResult, fallbackReplyForExecution } from './execution-result';
 import type { AssistantRuntimeStage } from './runtime-state';
 import { getAssistantReasoning, type AssistantReasoning } from './reasoning-store';
@@ -38,6 +42,11 @@ import {
 } from './store';
 import type { AssistantMessage } from './types';
 import type { AssistantOperation } from './action-types';
+import {
+  loadValidAssistantWorkingSnapshots,
+  readSetFromAssistantWorkingSnapshots,
+  rememberAssistantWorkingSnapshots,
+} from './working-snapshots';
 
 export interface AssistantTurnResult {
   userMessage: AssistantMessage;
@@ -109,7 +118,9 @@ async function findRelatedEntries(query: string) {
       listByKeyword(keyword, 20).catch(() => []),
       listEntries({ query: '', kind: 'all', showDone: true }, 500),
     ]);
-    const unique = new Map([...fts, ...fallback, ...recent].map(entry => [entry.id, entry]));
+    const unique = new Map([...fts, ...fallback, ...recent]
+      .filter(entry => entry.kind !== 'task')
+      .map(entry => [entry.id, entry]));
     return rankRelevantEntries(keyword, [...unique.values()]);
   } catch {
     return [];
@@ -142,19 +153,15 @@ async function runSavedTurn(input: {
     };
   }
 
-  const [messages, currentSegment, closedSegments, relevantEntries, settings, memoryContext] = await Promise.all([
+  const currentSegment = await getCurrentSegment();
+  const [messages, closedSegments, relevantEntries, settings, memoryContext, validWorkingSnapshots] = await Promise.all([
     listMessages({ limit: 12 }),
-    getCurrentSegment(),
     listClosedSegments(100),
     findRelatedEntries(state.userMessage.content),
     input.settings ? Promise.resolve(input.settings) : getSettings(),
     loadAssistantMemoryContext(state.userMessage.content),
+    loadValidAssistantWorkingSnapshots(currentSegment?.id),
   ]);
-  const actionContext = await loadAssistantActionContext({
-    query: state.userMessage.content,
-    launchContext: input.launchContext,
-    currentSegmentId: currentSegment?.id,
-  });
   const recentLegacyIds = new Set(messages.map(item => item.legacyEntryId).filter(Boolean));
   const context = buildAssistantContext({
     recentMessages: messages.map(item => ({
@@ -167,10 +174,12 @@ async function runSavedTurn(input: {
     retrievedSegments: rankRelevantSegments(state.userMessage.content, closedSegments),
     relevantEntries: relevantEntries.filter(item => !recentLegacyIds.has(item.id)),
     launchContext: input.launchContext,
-    actionContext,
     memoryContext,
+    workingSnapshots: validWorkingSnapshots,
     inputBudget: 6000,
   });
+  const selectedSnapshotIdSet = new Set(context.selectedWorkingSnapshotIds);
+  const selectedWorkingSnapshots = validWorkingSnapshots.filter(snapshot => selectedSnapshotIdSet.has(snapshot.id));
   console.log('[assistant-context]', {
     estimatedTokens: context.estimatedTokens,
     recentMessages: context.recentMessages.length,
@@ -191,8 +200,8 @@ async function runSavedTurn(input: {
       recentMessageIds: context.recentMessages.map(message => message.id),
       segmentIds: context.selectedSegmentIds,
       entryIds: context.selectedEntryIds,
-      eventCandidateIds: actionContext.events.map(event => event.id),
-      todoCandidateIds: actionContext.todos.map(todo => todo.id),
+      eventCandidateIds: selectedWorkingSnapshots.flatMap(snapshot => snapshot.readEventIds),
+      todoCandidateIds: selectedWorkingSnapshots.flatMap(snapshot => snapshot.readTodoIds),
       memoryIds: context.selectedMemoryIds,
       launchContextId: input.launchContext?.id ?? null,
     },
@@ -201,6 +210,23 @@ async function runSavedTurn(input: {
 
   try {
     throwIfCancelled(input.signal);
+    const readExecutions: AssistantReadToolExecution[] = [];
+    const readExecutionCache = new Map<string, Promise<AssistantReadToolExecution>>();
+    const executeReadTool = async (call: {
+      id: string;
+      name: string;
+      argumentsJson: string;
+    }): Promise<AssistantReadToolExecution> => {
+      const cacheKey = `${call.name}:${call.argumentsJson}`;
+      let pending = readExecutionCache.get(cacheKey);
+      if (!pending) {
+        pending = executeAssistantReadTool(call);
+        readExecutionCache.set(cacheKey, pending);
+        readExecutions.push(await pending);
+      }
+      const execution = await pending;
+      return execution.toolCallId === call.id ? execution : { ...execution, toolCallId: call.id };
+    };
     const output = await requestAssistantTurn({
       settings,
       context,
@@ -211,20 +237,25 @@ async function runSavedTurn(input: {
       onProgress: (stage: AssistantProviderProgressStage) => input.onProgress?.(
         stage === 'reading' ? 'reading' : 'planning',
       ),
-      executeReadTool: executeAssistantReadTool,
+      executeReadTool,
     });
     throwIfCancelled(input.signal);
     input.onProgress?.('planning');
+    const cachedReadSet = readSetFromAssistantWorkingSnapshots(selectedWorkingSnapshots);
+    const executedReadSet = mergeAssistantReadSets(readExecutions);
     const grounding = output.grounding ?? { eventIds: [], todoIds: [] };
-    const groundedActionContext = grounding.eventIds.length || grounding.todoIds.length
-      ? await loadAssistantActionContext({
-        query: state.userMessage.content,
-        launchContext: input.launchContext,
-        currentSegmentId: currentSegment?.id,
-        readEventIds: grounding.eventIds,
-        readTodoIds: grounding.todoIds,
-      })
-      : actionContext;
+    const readEventIds = [...new Set([
+      ...cachedReadSet.eventIds, ...executedReadSet.eventIds, ...grounding.eventIds,
+    ])];
+    const readTodoIds = [...new Set([
+      ...cachedReadSet.todoIds, ...executedReadSet.todoIds, ...grounding.todoIds,
+    ])];
+    const groundedActionContext = await loadAssistantActionContext({
+      query: '',
+      readEventIds,
+      readTodoIds,
+      selectionMode: 'read-set',
+    });
     const eventDeltas = output.eventDeltas ?? [];
     const memoryDeltas = output.memoryDeltas ?? [];
     await safelyLog(() => recordAssistantModelDecision({
@@ -233,8 +264,8 @@ async function runSavedTurn(input: {
       eventDeltas,
       memoryDeltas,
       metadata: output.providerMetadata,
-      toolReadEventIds: grounding.eventIds,
-      toolReadTodoIds: grounding.todoIds,
+      toolReadEventIds: readEventIds,
+      toolReadTodoIds: readTodoIds,
     }));
     const recentEvidence = messages
       .filter(message => message.role === 'user' && message.id !== state.userMessage.id)
@@ -287,6 +318,11 @@ async function runSavedTurn(input: {
         : null,
       actionContext: groundedActionContext,
     });
+    const completedState = await getRequestState(input.requestId);
+    rememberAssistantWorkingSnapshots(
+      completedState?.userMessage.segmentId ?? currentSegment?.id ?? '',
+      readExecutions,
+    );
     if (completed.operations.length > 0) {
       await safelyLog(() => recordAssistantDecisionCommit({
         requestId: input.requestId,

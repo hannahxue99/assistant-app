@@ -63,7 +63,8 @@ async function main() {
   const searched = await tools.executeAssistantReadToolWithDatabase(adapter, {
     id: 'call-search', name: 'search_events', argumentsJson: '{"query":"哈尔滨"}',
   });
-  assert.deepEqual([...searched.readEventIds], ['event-trip']);
+  assert.equal(searched.result.events[0].id, 'event-trip', '搜索仍应返回真实候选');
+  assert.deepEqual([...searched.readEventIds], [], '搜索候选不得直接授权修改事件');
 
   const event = await tools.executeAssistantReadToolWithDatabase(adapter, {
     id: 'call-event', name: 'get_event', argumentsJson: '{"event_id":"event-trip"}',
@@ -88,4 +89,3 @@ async function main() {
 }
 
 void main();
-

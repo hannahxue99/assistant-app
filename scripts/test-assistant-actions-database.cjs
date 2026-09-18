@@ -292,6 +292,27 @@ async function main() {
     '显式事件上下文必须带入最近完成的相关待办');
   assert.ok(loadedActionContext.todos.some(todo => todo.id === hiddenRelatedTodo.id),
     '事件关联的未完成待办必须进入可修改候选');
+  const strictEmptyContext = await actionContext.loadAssistantActionContext({
+    query: '住房贷款',
+    launchContext: { kind: 'event', id: firstEvent.id, label: '住房贷款' },
+    selectionMode: 'read-set',
+  });
+  assert.equal(strictEmptyContext.events.length, 0,
+    '只读授权模式不得把搜索命中或显式入口自动视为已读取事件');
+  assert.equal(strictEmptyContext.todos.length, 0,
+    '只读授权模式不得把关联待办自动视为已读取待办');
+  assert.equal(strictEmptyContext.explicitEventId, null,
+    '显式入口只提供模型读取指针，不能绕过精确读取授权写入');
+  const strictReadContext = await actionContext.loadAssistantActionContext({
+    query: '',
+    readEventIds: [firstEvent.id],
+    readTodoIds: [hiddenRelatedTodo.id],
+    selectionMode: 'read-set',
+  });
+  assert.deepEqual(strictReadContext.events.map(event => event.id), [firstEvent.id],
+    '只读授权模式只能装载精确读取过的事件');
+  assert.ok(strictReadContext.todos.some(todo => todo.id === hiddenRelatedTodo.id),
+    '精确读取过的待办必须进入版本校验上下文');
   const relink = await eventStore.linkObjects({
     fromType: 'todo', fromId: hiddenRelatedTodo.id, relationType: 'related',
     toType: 'event', toId: firstEvent.id, createdAt: 3500,

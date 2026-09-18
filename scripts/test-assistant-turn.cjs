@@ -64,6 +64,7 @@ async function main() {
   const db = load('src/db.ts');
   const store = load('src/assistant/store.ts');
   const orchestrator = load('src/assistant/orchestrator.ts');
+  const workingSnapshots = load('src/assistant/working-snapshots.ts');
   await db.initDatabase();
   const settings = {
     llmEnabled: true,
@@ -273,22 +274,28 @@ async function main() {
   assert.equal(sqlite.prepare(`SELECT COUNT(*) AS count FROM assistant_object_relations
     WHERE from_type='todo' AND relation_type='belongs_to' AND to_id=?`).get(houseEvent.id).count, 1);
 
-  provider = async () => ({
-    reply: '还款计划继续沿用这条主线。',
-    segment: { action: 'continue' },
-    operations: [],
-    eventDeltas: [{
-      key: 'repay-plan',
-      target: { action: 'update_existing', eventId: houseEvent.id },
-      evidence: ['下个月10号还'],
-      state: { action: 'replace', changeType: 'plan', value: '已开始看房；下个月10号继续还款' },
-      progress: [{ type: 'decision', content: '确定下个月10号继续还款' }],
-      todos: [{
-        action: 'create', todoRef: 'todo_1', text: '继续还款',
-        dateStatus: 'resolved', dateText: '下个月10号', dueDate: '2026-10-10', timePrecision: 'date',
+  provider = async input => {
+    const execution = await input.executeReadTool({
+      id: 'read-house-event', name: 'get_event', argumentsJson: JSON.stringify({ event_id: houseEvent.id }),
+    });
+    assert.equal(execution.result.found, true, '更新已有事件前必须精确读取真实状态');
+    return {
+      reply: '还款计划继续沿用这条主线。',
+      segment: { action: 'continue' },
+      operations: [],
+      eventDeltas: [{
+        key: 'repay-plan',
+        target: { action: 'update_existing', eventId: houseEvent.id },
+        evidence: ['下个月10号还'],
+        state: { action: 'replace', changeType: 'plan', value: '已开始看房；下个月10号继续还款' },
+        progress: [{ type: 'decision', content: '确定下个月10号继续还款' }],
+        todos: [{
+          action: 'create', todoRef: 'todo_1', text: '继续还款',
+          dateStatus: 'resolved', dateText: '下个月10号', dueDate: '2026-10-10', timePrecision: 'date',
+        }],
       }],
-    }],
-  });
+    };
+  };
   const modelOnlyEvent = await orchestrator.sendAssistantTurn({
     requestId: 'request-model-only-event', content: '下个月10号还', source: 'text', settings,
     createdAt: new Date('2026-09-15T11:30:00+08:00').getTime(),
@@ -319,7 +326,43 @@ async function main() {
   const hiddenTodo = sqlite.prepare("SELECT * FROM entries WHERE kind='task' AND summary='整理照片'").get();
   assert.equal(hiddenTodo.due_at, null, '首次无日期行动应保存为隐藏待办');
   provider = async input => {
-    assert.ok(input.context.contextBlock.includes(hiddenTodo.id), '当前分段最近待办必须进入补日期上下文');
+    assert.ok(!input.context.contextBlock.includes(`\"id\":\"${hiddenTodo.id}\"`),
+      '未精确读取的分段关联待办不得自动进入模型上下文');
+    return {
+      reply: '先尝试直接修改。',
+      segment: { action: 'continue' },
+      operations: [{ key: 'date', type: 'update_todo', todoId: hiddenTodo.id, dateStatus: 'resolved', dateText: '周五', dueDate: '2026-09-18', timePrecision: 'date' }],
+    };
+  };
+  const unreadUpdate = await orchestrator.sendAssistantTurn({
+    requestId: 'request-hidden-todo-unread', content: '那就周五吧', source: 'text', settings,
+    createdAt: new Date('2026-09-15T12:00:00+08:00').getTime(),
+  });
+  assert.equal(unreadUpdate.operations.length, 0, '未读取详情的已有待办修改必须被本地拒绝');
+  assert.equal(sqlite.prepare('SELECT due_at FROM entries WHERE id=?').get(hiddenTodo.id).due_at, null);
+
+  provider = async input => {
+    assert.ok(!input.context.contextBlock.includes(`\"id\":\"${hiddenTodo.id}\"`),
+      '尚无快照时模型必须通过工具读取待办');
+    const execution = await input.executeReadTool({
+      id: 'read-hidden-todo', name: 'get_todo', argumentsJson: JSON.stringify({ todo_id: hiddenTodo.id }),
+    });
+    assert.equal(execution.result.found, true, '精确读取必须拿到待办真实状态');
+    return { reply: '这条待办目前还没有日期。', segment: { action: 'continue' }, operations: [] };
+  };
+  await orchestrator.sendAssistantTurn({
+    requestId: 'request-hidden-todo-read', content: '先看一下整理照片这条待办', source: 'text', settings,
+    createdAt: new Date('2026-09-15T12:01:00+08:00').getTime(),
+  });
+  const snapshotSegmentId = (await store.getRequestState('request-hidden-todo-read')).userMessage.segmentId;
+  assert.equal((await workingSnapshots.loadValidAssistantWorkingSnapshots(`${snapshotSegmentId}-other`)).length, 0,
+    '短期工作快照必须按分段隔离，不能泄漏到其他话题');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM assistant_memories').get().count, 0,
+    '工作快照只存在于当前进程，不能升级成“我的”长期记忆');
+
+  provider = async input => {
+    assert.ok(input.context.contextBlock.includes(`\"id\":\"${hiddenTodo.id}\"`),
+      '同一分段中版本未变化的精确读取结果必须作为有效快照复用');
     return {
       reply: '时间按周六继续安排。',
       segment: { action: 'continue' },
@@ -328,12 +371,22 @@ async function main() {
   };
   await orchestrator.sendAssistantTurn({
     requestId: 'request-hidden-todo-date', content: '那就周六吧', source: 'text', settings,
-    createdAt: new Date('2026-09-15T12:00:00+08:00').getTime(),
+    createdAt: new Date('2026-09-15T12:02:00+08:00').getTime(),
   });
   assert.ok(sqlite.prepare('SELECT due_at FROM entries WHERE id=?').get(hiddenTodo.id).due_at,
     '日期补充应更新同一条隐藏待办');
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM entries WHERE kind='task' AND summary='整理照片'").get().count, 1,
     '补日期不得创建重复待办');
+
+  provider = async input => {
+    assert.ok(!input.context.contextBlock.includes(`\"id\":\"${hiddenTodo.id}\"`),
+      '待办 revision 变化后旧快照必须自动失效');
+    return { reply: '需要时我会重新读取。', segment: { action: 'continue' }, operations: [] };
+  };
+  await orchestrator.sendAssistantTurn({
+    requestId: 'request-hidden-todo-stale', content: '刚才那条待办现在是什么状态', source: 'text', settings,
+    createdAt: new Date('2026-09-15T12:03:00+08:00').getTime(),
+  });
 
   sqlite.exec(`CREATE TRIGGER fail_assistant_operation
     BEFORE INSERT ON assistant_operations BEGIN SELECT RAISE(ABORT, 'forced operation failure'); END;`);
