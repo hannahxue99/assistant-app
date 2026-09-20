@@ -44,7 +44,7 @@
 - Test: `scripts/test-assistant-protocol.ts`
 
 1. Add failing SSE fixtures for fragmented `tool_calls`, multi-round messages, reasoning content, tool limit, and cancellation.
-2. Parse streamed tool-call deltas; do NOT resend assistant `reasoning_content` in follow-up DeepSeek requests (the API rejects it).
+2. Parse streamed tool-call deltas and resend assistant `reasoning_content` in the next DeepSeek request (thinking mode requires it; omitting it returns 400).
 3. Execute only the read tools, append tool results, and cap the loop at 4 read rounds/8 tool calls; on exhaustion degrade to one tool-free convergence round instead of failing.
 4. After tools finish, request the existing strict JSON plan; do not stream its provisional reply to the UI.
 5. Return read event/todo IDs and aggregated provider diagnostics.

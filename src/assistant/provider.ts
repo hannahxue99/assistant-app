@@ -462,6 +462,7 @@ export async function requestAssistantTurn(input: {
         messages.push({
           role: 'assistant',
           content: completion.content || null,
+          reasoning_content: completion.reasoningContent || undefined,
           tool_calls: completion.toolCalls.map(call => ({
             id: call.id,
             type: 'function',
@@ -488,7 +489,8 @@ export async function requestAssistantTurn(input: {
       messages.push({
         role: 'assistant',
         content: completion.content || null,
-        // DeepSeek 明确禁止把上一轮 reasoning_content 回传后续请求，服务端会直接拒绝。
+        // 实测（deepseek-flash + thinking）：续轮必须回传上一轮 reasoning_content，缺失会被 400 拒绝。
+        reasoning_content: completion.reasoningContent || undefined,
         tool_calls: completion.toolCalls.map(call => ({
           id: call.id,
           type: 'function',
