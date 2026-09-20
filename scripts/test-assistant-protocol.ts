@@ -444,6 +444,63 @@ async function main() {
     && message.content.includes('工具额度已用尽')),
     '收敛轮必须明确指示模型基于已读信息回答并声明未核实部分');
 
+  // 回归：模型把全部输出放进思考、content 为空时，应追加提示重试一次而不是直接失败。
+  const emptyContentBodies: any[] = [];
+  let emptyContentFetchIndex = 0;
+  const emptyContentResult = await requestAssistantTurn({
+    settings: {
+      llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model',
+    },
+    context: { contextBlock: '上下文', recentMessages: [{ id: 'u', role: 'user', content: '为什么上面这个思考过程这么啰嗦', createdAt: 1 }] },
+    fetchImpl: async (_url, init) => {
+      emptyContentBodies.push(JSON.parse(String(init?.body)));
+      emptyContentFetchIndex += 1;
+      if (emptyContentFetchIndex === 1) {
+        return new Response(JSON.stringify({
+          choices: [{
+            message: { content: '', reasoning_content: '用户在问我的思考过程为什么啰嗦。这个问题涉及我自身的推理行为。' },
+            finish_reason: 'stop',
+          }],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: '{"reply":"因为要先确认目标对象，我会先读数据库再回答。","segment":{"action":"continue"}}' }, finish_reason: 'stop' }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+  });
+  check(emptyContentResult.reply.includes('数据库'),
+    '空 content 重试后应拿到模型正文回复');
+  check(emptyContentResult.providerMetadata.attemptCount === 2,
+    '空 content 应恰好自动重试一次');
+  check(emptyContentResult.providerMetadata.protocolWarnings.includes('empty_content_retried'),
+    '空 content 重试必须记录协议警告');
+  check(emptyContentBodies[1].messages.at(-1).content.includes('回复正文'),
+    '重试请求必须追加指示模型把答复写进正文');
+
+  // 二次仍空：失败且错误信息带思考尾部，便于日志回溯。
+  let doubleEmptyError: any = null;
+  try {
+    await requestAssistantTurn({
+      settings: {
+        llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model',
+      },
+      context: { contextBlock: '上下文', recentMessages: [{ id: 'u', role: 'user', content: '继续', createdAt: 1 }] },
+      fetchImpl: async () => new Response(JSON.stringify({
+        choices: [{
+          message: { content: '', reasoning_content: '全部输出都在思考里，无法生成正文。' },
+          finish_reason: 'stop',
+        }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    });
+  } catch (error) {
+    doubleEmptyError = error;
+  }
+  check(doubleEmptyError?.code === 'invalid-response'
+    && doubleEmptyError?.message.includes('模型仅在思考中输出'),
+    '二次空 content 失败时错误信息必须带思考尾部辅助回溯');
+  check(doubleEmptyError?.diagnostics?.attemptCount === 2,
+    '二次空 content 只允许共两次请求，不得无限重试');
+
   const finalChunks: string[] = [];
   const finalReply = await requestAssistantFinalReply({
     settings: {

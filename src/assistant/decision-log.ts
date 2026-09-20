@@ -229,6 +229,7 @@ export async function recordAssistantDecisionFailure(input: {
   providerAttemptCount?: number;
   providerAttempts?: AssistantProviderAttempt[];
   protocolWarnings?: AssistantProtocolWarning[];
+  toolCalls?: Array<Record<string, unknown>>;
   updatedAt?: number;
 }): Promise<void> {
   const updatedAt = input.updatedAt ?? Date.now();
@@ -236,12 +237,15 @@ export async function recordAssistantDecisionFailure(input: {
     `UPDATE assistant_decision_logs SET status='failed', error_code=?, error_detail=?,
        provider_attempt_count=COALESCE(?, provider_attempt_count),
        provider_attempts_json=COALESCE(?, provider_attempts_json),
-       protocol_warnings_json=COALESCE(?, protocol_warnings_json), updated_at=? WHERE request_id=?`,
+       protocol_warnings_json=COALESCE(?, protocol_warnings_json),
+       tool_calls_json=CASE WHEN ? THEN tool_calls_json ELSE ? END, updated_at=? WHERE request_id=?`,
     input.errorCode,
     boundedErrorDetail(input.errorDetail),
     input.providerAttemptCount ?? null,
     input.providerAttempts ? JSON.stringify(boundedAttempts(input.providerAttempts)) : null,
     input.protocolWarnings ? JSON.stringify(input.protocolWarnings) : null,
+    input.toolCalls ? 0 : 1,
+    input.toolCalls ? JSON.stringify(boundedToolCalls(input.toolCalls)) : null,
     updatedAt,
     input.requestId,
   ));

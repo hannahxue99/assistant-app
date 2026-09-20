@@ -402,6 +402,8 @@ export async function requestAssistantTurn(input: {
   let readRounds = 0;
   // 收敛轮不再携带 tools：超限后迫使模型基于已读信息直接产出计划，而不是整轮失败。
   let toolsDisabled = false;
+  // DeepSeek 偶发把全部输出放进 reasoning_content 而 content 为空；追加提示重试一次。
+  let emptyContentRetried = false;
   let completion: CompletionResponse | null = null;
   try {
     while (true) {
@@ -437,7 +439,19 @@ export async function requestAssistantTurn(input: {
         completionTokens: usageValue(completion.usage, 'completion_tokens'),
         totalTokens: usageValue(completion.usage, 'total_tokens'),
       });
-      if (completion.toolCalls.length === 0) break;
+      if (completion.toolCalls.length === 0) {
+        const hasEmptyContent = typeof completion.content !== 'string' || !completion.content.trim();
+        if (hasEmptyContent && completion.reasoningContent.trim() && !emptyContentRetried) {
+          emptyContentRetried = true;
+          protocolWarnings = [...new Set([...protocolWarnings, 'empty_content_retried' as const])];
+          messages.push({
+            role: 'user',
+            content: '请把最终答复直接写进回复正文，不要只放在思考过程里；按既定 JSON 格式输出。',
+          });
+          continue;
+        }
+        break;
+      }
       if (!input.executeReadTool) {
         throw new AssistantProviderError('invalid-response', '理解引擎请求了未启用的数据工具');
       }
@@ -493,7 +507,14 @@ export async function requestAssistantTurn(input: {
       }
     }
     if (typeof completion.content !== 'string' || !completion.content.trim()) {
-      throw new AssistantProviderError('invalid-response', '理解引擎没有返回有效回复');
+      // 失败时保留思考尾部，便于在决策日志里回溯模型把输出放到了哪里。
+      const reasoningTail = completion.reasoningContent.trim().slice(-120);
+      throw new AssistantProviderError(
+        'invalid-response',
+        reasoningTail
+          ? `理解引擎没有返回有效回复（模型仅在思考中输出：…${reasoningTail}）`
+          : '理解引擎没有返回有效回复',
+      );
     }
     let output: AssistantTurnOutput;
     try {

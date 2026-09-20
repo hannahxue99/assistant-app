@@ -211,11 +211,12 @@ async function runSavedTurn(input: {
     createdAt: state.userMessage.createdAt,
   }));
 
+  // 工具轨迹提到 try 外：失败轮也能落库，调试页才能回溯失败前的读取过程。
+  const toolCallTrace: Array<Record<string, unknown>> = [];
   try {
     throwIfCancelled(input.signal);
     const readExecutions: AssistantReadToolExecution[] = [];
     const readExecutionCache = new Map<string, Promise<AssistantReadToolExecution>>();
-    const toolCallTrace: Array<Record<string, unknown>> = [];
     const summarizeToolExecution = (
       call: { name: string; argumentsJson: string },
       execution: AssistantReadToolExecution,
@@ -526,6 +527,7 @@ async function runSavedTurn(input: {
       providerAttemptCount: diagnostics?.attemptCount,
       providerAttempts: diagnostics?.attempts,
       protocolWarnings: diagnostics?.protocolWarnings,
+      toolCalls: toolCallTrace,
     }));
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       console.warn('[assistant-decision]', {

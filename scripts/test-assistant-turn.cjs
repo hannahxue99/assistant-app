@@ -138,6 +138,22 @@ async function main() {
   const networkFailureLog = sqlite.prepare("SELECT * FROM assistant_decision_logs WHERE request_id='request-2'").get();
   assert.equal(networkFailureLog.error_detail, 'offline', '失败日志必须保留精确且有界的错误原因');
 
+  provider = async input => {
+    await input.executeReadTool({
+      id: 'search-before-fail', name: 'search_memories', argumentsJson: '{"query":"偏好"}',
+    });
+    throw Object.assign(new Error('读取后模型失败'), { code: 'network' });
+  };
+  await assert.rejects(orchestrator.sendAssistantTurn({
+    requestId: 'request-trace-on-failure', content: '查一下偏好', source: 'text', settings, createdAt: 2050,
+  }), /读取后模型失败/);
+  const failedTraceLog = sqlite.prepare(
+    "SELECT tool_calls_json FROM assistant_decision_logs WHERE request_id='request-trace-on-failure'",
+  ).get();
+  assert.ok(JSON.parse(failedTraceLog.tool_calls_json)
+    .some(item => item.name === 'search_memories' && item.ok === true),
+    '失败轮也必须落库工具轨迹，调试页才能回溯失败前的读取过程');
+
   provider = async () => ({ reply: '网络恢复了。', segment: { action: 'continue' }, operations: [] });
   const retried = await orchestrator.retryAssistantTurn({ requestId: 'request-2', settings });
   assert.equal(retried.assistantMessage.content, '网络恢复了。');

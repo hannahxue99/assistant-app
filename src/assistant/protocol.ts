@@ -34,7 +34,7 @@ export class AssistantProtocolError extends Error {
   }
 }
 
-export type AssistantProtocolWarning = 'reply_execution_claim' | 'tool_budget_exhausted';
+export type AssistantProtocolWarning = 'reply_execution_claim' | 'tool_budget_exhausted' | 'empty_content_retried';
 
 function parseJson(content: string): any {
   try {
