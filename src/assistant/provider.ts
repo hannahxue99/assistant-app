@@ -400,6 +400,8 @@ export async function requestAssistantTurn(input: {
   const maxReadRounds = 4;
   const maxToolCalls = 8;
   let readRounds = 0;
+  // 收敛轮不再携带 tools：超限后迫使模型基于已读信息直接产出计划，而不是整轮失败。
+  let toolsDisabled = false;
   let completion: CompletionResponse | null = null;
   try {
     while (true) {
@@ -413,7 +415,7 @@ export async function requestAssistantTurn(input: {
           thinking: { type: 'enabled' },
           reasoning_effort: 'high',
           response_format: { type: 'json_object' },
-          ...(input.executeReadTool ? { tools: ASSISTANT_READ_TOOLS, tool_choice: 'auto' } : {}),
+          ...(input.executeReadTool && !toolsDisabled ? { tools: ASSISTANT_READ_TOOLS, tool_choice: 'auto' } : {}),
           stream: true,
           stream_options: { include_usage: true },
         }),
@@ -439,14 +441,40 @@ export async function requestAssistantTurn(input: {
       if (!input.executeReadTool) {
         throw new AssistantProviderError('invalid-response', '理解引擎请求了未启用的数据工具');
       }
+      if (toolsDisabled) break;
       readRounds += 1;
       if (readRounds > maxReadRounds || toolExecutions.length + completion.toolCalls.length > maxToolCalls) {
-        throw new AssistantProviderError('invalid-response', '理解引擎读取数据次数过多');
+        protocolWarnings = [...new Set([...protocolWarnings, 'tool_budget_exhausted' as const])];
+        messages.push({
+          role: 'assistant',
+          content: completion.content || null,
+          tool_calls: completion.toolCalls.map(call => ({
+            id: call.id,
+            type: 'function',
+            function: { name: call.name, arguments: call.argumentsJson },
+          })),
+        });
+        for (const call of completion.toolCalls) {
+          messages.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: JSON.stringify({
+              error: 'tool_budget_exhausted',
+              message: '本轮读取工具额度已用尽，此次调用未执行。',
+            }),
+          });
+        }
+        messages.push({
+          role: 'system',
+          content: '工具额度已用尽。不要再调用任何工具：直接基于已读取的信息输出最终 JSON 计划；对未能核实的事项，在 reply 中明确说明并请用户确认。',
+        });
+        toolsDisabled = true;
+        continue;
       }
       messages.push({
         role: 'assistant',
         content: completion.content || null,
-        reasoning_content: completion.reasoningContent || undefined,
+        // DeepSeek 明确禁止把上一轮 reasoning_content 回传后续请求，服务端会直接拒绝。
         tool_calls: completion.toolCalls.map(call => ({
           id: call.id,
           type: 'function',
@@ -471,13 +499,19 @@ export async function requestAssistantTurn(input: {
     try {
       output = parseAssistantTurnOutput(completion.content);
     } catch (error) {
-      protocolWarnings = inspectAssistantReplyWarnings(extractPartialJsonStringField(completion.content, 'reply'));
+      protocolWarnings = [...new Set([
+        ...protocolWarnings,
+        ...inspectAssistantReplyWarnings(extractPartialJsonStringField(completion.content, 'reply')),
+      ])];
       throw new AssistantProviderError(
         'invalid-response',
         error instanceof Error ? error.message : '理解引擎返回格式异常',
       );
     }
-    protocolWarnings = inspectAssistantReplyWarnings(output.reply);
+    protocolWarnings = [...new Set([
+      ...protocolWarnings,
+      ...inspectAssistantReplyWarnings(output.reply),
+    ])];
     input.onReplyText?.(output.reply);
     return {
       ...output,

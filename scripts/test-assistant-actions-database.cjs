@@ -97,6 +97,7 @@ async function main() {
     'provider_attempt_count', 'provider_attempts_json', 'protocol_warnings_json',
     'proposed_event_deltas_json',
     'tool_read_event_ids_json', 'tool_read_todo_ids_json', 'tool_read_memory_ids_json', 'execution_outcome',
+    'tool_calls_json', 'execution_rejected_json', 'narration_json',
   ]) {
     assert.ok(decisionLogColumns.has(column), `决策日志必须包含 ${column}`);
   }
@@ -142,15 +143,29 @@ async function main() {
   await decisionLog.recordAssistantModelDecision({
     requestId: 'request-1', operations: [], toolReadEventIds: ['event-trip'],
     toolReadTodoIds: ['todo-train'], toolReadMemoryIds: ['memory-cycle'],
+    toolCalls: [
+      { name: 'search_events', argumentsJson: '{"query":"哈尔滨"}', ok: true, errorCode: null, summary: 'events:1' },
+      { name: 'get_event', argumentsJson: '{"event_id":"missing"}', ok: false, errorCode: 'invalid_tool_arguments', summary: '数据工具缺少 event_id' },
+    ],
   });
   await decisionLog.recordAssistantExecutionOutcome({
     requestId: 'request-1', result: { outcome: 'rejected', committed: [], rejected: [{ type: 'event', reason: 'revision_conflict' }] },
+  });
+  await decisionLog.recordAssistantNarration({
+    requestId: 'request-1',
+    narration: { source: 'fallback', startedAt: 1000, completedAt: 1200, totalTokens: null, errorCode: 'network' },
   });
   const groundedLog = await decisionLog.getAssistantDecisionLog('request-1');
   assert.deepEqual([...groundedLog.toolReadEventIds], ['event-trip']);
   assert.deepEqual([...groundedLog.toolReadTodoIds], ['todo-train']);
   assert.deepEqual([...groundedLog.toolReadMemoryIds], ['memory-cycle']);
   assert.equal(groundedLog.executionOutcome, 'rejected', '零写入拒绝不得记录为 committed');
+  assert.deepEqual(groundedLog.executionRejected, [{ type: 'event', reason: 'revision_conflict' }],
+    '执行拒绝明细必须落库，支持问题回溯');
+  assert.equal(groundedLog.toolCalls[0].name, 'search_events');
+  assert.equal(groundedLog.toolCalls[1].ok, false, '工具调用轨迹必须记录失败和错误码');
+  assert.equal(groundedLog.narration.source, 'fallback');
+  assert.equal(groundedLog.narration.errorCode, 'network', '叙述兜底必须可从日志回溯');
 
   const firstEvent = await eventStore.createEvent({
     id: 'event-mortgage',

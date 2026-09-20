@@ -208,6 +208,13 @@ async function main() {
   assert.equal(fallbackAfterCommit.operations.length, 1, '最终表述失败不能回滚已经提交的数据');
   assert.ok(fallbackAfterCommit.assistantMessage.content.includes('建立待办：牙科复诊'),
     '最终表述失败时必须使用真实操作回执，而不是模型规划草稿');
+  const fallbackNarrationLog = sqlite.prepare(
+    "SELECT narration_json FROM assistant_decision_logs WHERE request_id='request-final-fallback'",
+  ).get();
+  assert.equal(JSON.parse(fallbackNarrationLog.narration_json).source, 'fallback',
+    '叙述兜底必须落库，能回溯用户看到的文案来源');
+  assert.equal(JSON.parse(fallbackNarrationLog.narration_json).errorCode, 'network',
+    '叙述失败原因必须进入决策日志');
   finalProvider = async input => ({
     reply: input.executionResult.outcome === 'no_change'
       ? input.draftReply
@@ -252,6 +259,9 @@ async function main() {
     '决策日志应保留模型提出的待办');
   assert.ok(JSON.parse(oneOffLog.validation_json).rejected.some(item => item.type === 'create_event'),
     '决策日志应保留本地拒绝的事件及原因');
+  assert.equal(JSON.parse(sqlite.prepare(
+    "SELECT narration_json FROM assistant_decision_logs WHERE request_id='request-4'",
+  ).get().narration_json).source, 'model', '叙述成功时必须记录来源为模型生成');
 
   provider = async () => ({
     reply: '我们继续沿着换房这条主线聊。',
@@ -461,6 +471,27 @@ async function main() {
   ).get();
   assert.ok(JSON.parse(memoryReadLog.tool_read_memory_ids_json).includes('memory-cycle'),
     '决策日志必须记录本轮精确读取并用于校验的记忆 ID');
+  assert.ok(JSON.parse(sqlite.prepare(
+    "SELECT tool_calls_json FROM assistant_decision_logs WHERE request_id='request-memory-exact-get'",
+  ).get().tool_calls_json).some(item => item.name === 'get_memory' && item.ok === true),
+    '决策日志必须记录工具调用轨迹，支持读取过程回溯');
+
+  provider = async input => {
+    const bad = await input.executeReadTool({
+      id: 'bad-tool-call', name: 'search_events', argumentsJson: '{"query":123}',
+    });
+    assert.equal(bad.result.error, 'invalid_tool_arguments',
+      '工具参数错误必须以结构化错误回传给模型自纠，而不是炸掉整轮');
+    return { reply: '参数错误后模型自行纠正并回答。', segment: { action: 'continue' }, operations: [] };
+  };
+  await orchestrator.sendAssistantTurn({
+    requestId: 'request-tool-self-correct', content: '看看换房计划进展', source: 'text', settings, createdAt: 5350,
+  });
+  const selfCorrectLog = sqlite.prepare(
+    "SELECT tool_calls_json FROM assistant_decision_logs WHERE request_id='request-tool-self-correct'",
+  ).get();
+  assert.ok(JSON.parse(selfCorrectLog.tool_calls_json).some(item => item.ok === false && item.errorCode === 'invalid_tool_arguments'),
+    '决策日志必须记录工具失败和自纠事件，用于评估模型工具能力');
 
   sqlite.exec(`CREATE TRIGGER fail_assistant_operation
     BEFORE INSERT ON assistant_operations BEGIN SELECT RAISE(ABORT, 'forced operation failure'); END;`);

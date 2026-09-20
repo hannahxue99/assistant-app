@@ -13,6 +13,7 @@ import {
   executeAssistantReadTool,
   mergeAssistantReadSets,
   type AssistantReadToolExecution,
+  type AssistantReadToolName,
 } from './data-tools';
 import { buildAssistantExecutionResult, fallbackReplyForExecution } from './execution-result';
 import type { AssistantRuntimeStage } from './runtime-state';
@@ -27,6 +28,7 @@ import {
   recordAssistantDecisionFailure,
   recordAssistantExecutionOutcome,
   recordAssistantModelDecision,
+  recordAssistantNarration,
   recordAssistantValidation,
 } from './decision-log';
 import { rankRelevantEntries, rankRelevantSegments } from './retrieval';
@@ -213,6 +215,28 @@ async function runSavedTurn(input: {
     throwIfCancelled(input.signal);
     const readExecutions: AssistantReadToolExecution[] = [];
     const readExecutionCache = new Map<string, Promise<AssistantReadToolExecution>>();
+    const toolCallTrace: Array<Record<string, unknown>> = [];
+    const summarizeToolExecution = (
+      call: { name: string; argumentsJson: string },
+      execution: AssistantReadToolExecution,
+    ): Record<string, unknown> => {
+      const result = execution.result;
+      if (typeof result.error === 'string') {
+        return {
+          name: call.name, argumentsJson: call.argumentsJson,
+          ok: false, errorCode: result.error, summary: String(result.message ?? ''),
+        };
+      }
+      let summary = 'ok';
+      if (Array.isArray(result.events)) summary = `events:${result.events.length}`;
+      else if (Array.isArray(result.todos)) summary = `todos:${result.todos.length}`;
+      else if (Array.isArray(result.memories)) summary = `memories:${result.memories.length}`;
+      else if (result.found === true) {
+        const primary = result.event ?? result.todo ?? result.memory;
+        summary = `found:${(primary as { id?: unknown } | undefined)?.id ?? ''}`;
+      } else if (result.found === false) summary = 'not_found';
+      return { name: call.name, argumentsJson: call.argumentsJson, ok: true, errorCode: null, summary };
+    };
     const executeReadTool = async (call: {
       id: string;
       name: string;
@@ -221,11 +245,23 @@ async function runSavedTurn(input: {
       const cacheKey = `${call.name}:${call.argumentsJson}`;
       let pending = readExecutionCache.get(cacheKey);
       if (!pending) {
-        pending = executeAssistantReadTool(call);
+        // 工具失败不炸整轮：把结构化错误作为工具结果回传，让模型自行纠正参数。
+        pending = executeAssistantReadTool(call).catch((error: any) => ({
+          toolCallId: call.id,
+          name: call.name as AssistantReadToolName,
+          result: {
+            error: typeof error?.code === 'string' ? error.code : 'tool_error',
+            message: error instanceof Error ? error.message : String(error),
+          },
+          readEventIds: [],
+          readTodoIds: [],
+          readMemoryIds: [],
+        }));
         readExecutionCache.set(cacheKey, pending);
         readExecutions.push(await pending);
       }
       const execution = await pending;
+      toolCallTrace.push(summarizeToolExecution(call, execution));
       return execution.toolCallId === call.id ? execution : { ...execution, toolCallId: call.id };
     };
     const output = await requestAssistantTurn({
@@ -271,6 +307,7 @@ async function runSavedTurn(input: {
       toolReadEventIds: readEventIds,
       toolReadTodoIds: readTodoIds,
       toolReadMemoryIds: readMemoryIds,
+      toolCalls: toolCallTrace,
     }));
     const recentEvidence = messages
       .filter(message => message.role === 'user' && message.id !== state.userMessage.id)
@@ -382,6 +419,7 @@ async function runSavedTurn(input: {
     const needsGroundedNarration = completed.operations.length > 0
       || proposedWriteCount > 0
       || executionRejected.length > 0;
+    const narrationStartedAt = Date.now();
     if (needsGroundedNarration) {
       try {
         const finalReply = await requestAssistantFinalReply({
@@ -394,12 +432,42 @@ async function runSavedTurn(input: {
           onProgress: () => input.onProgress?.('answering'),
         });
         assistantMessage = await updateAssistantReply(input.requestId, finalReply.reply);
+        await safelyLog(() => recordAssistantNarration({
+          requestId: input.requestId,
+          narration: {
+            source: 'model',
+            startedAt: narrationStartedAt,
+            completedAt: Date.now(),
+            totalTokens: finalReply.providerMetadata.totalTokens ?? null,
+            errorCode: null,
+          },
+        }));
       } catch (narrationError) {
         console.warn('[assistant-final-reply] 使用本地真实回执文案', narrationError);
         input.onReplyText?.(fallbackReply);
+        await safelyLog(() => recordAssistantNarration({
+          requestId: input.requestId,
+          narration: {
+            source: 'fallback',
+            startedAt: narrationStartedAt,
+            completedAt: Date.now(),
+            totalTokens: null,
+            errorCode: typeof (narrationError as any)?.code === 'string' ? (narrationError as any).code : 'unknown',
+          },
+        }));
       }
     } else {
       input.onReplyText?.(fallbackReply);
+      await safelyLog(() => recordAssistantNarration({
+        requestId: input.requestId,
+        narration: {
+          source: 'skipped',
+          startedAt: narrationStartedAt,
+          completedAt: Date.now(),
+          totalTokens: null,
+          errorCode: null,
+        },
+      }));
     }
     input.onProgress?.('finalizing');
     if (typeof __DEV__ !== 'undefined' && __DEV__) {

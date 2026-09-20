@@ -32,7 +32,10 @@ export interface AssistantDecisionLog {
   toolReadEventIds: string[];
   toolReadTodoIds: string[];
   toolReadMemoryIds: string[];
+  toolCalls: Array<Record<string, unknown>>;
   executionOutcome: string;
+  executionRejected: Array<Record<string, unknown>>;
+  narration: Record<string, unknown>;
 }
 
 function boundedErrorDetail(value: string | null | undefined): string | null {
@@ -76,8 +79,8 @@ export async function beginAssistantDecisionLog(input: {
          error_code=NULL, error_detail=NULL, repair_count=0, repair_status='not_needed',
          provider_attempt_count=0, provider_attempts_json='[]',
          protocol_warnings_json='[]', tool_read_event_ids_json='[]', tool_read_todo_ids_json='[]',
-         tool_read_memory_ids_json='[]',
-         execution_outcome='pending', updated_at=excluded.updated_at`,
+         tool_read_memory_ids_json='[]', tool_calls_json='[]',
+         execution_outcome='pending', execution_rejected_json='[]', narration_json='{}', updated_at=excluded.updated_at`,
       input.requestId, input.userMessageId, input.promptVersion, input.model,
       input.referenceAt, input.timeZone, JSON.stringify(input.contextRefs), createdAt, createdAt,
     );
@@ -99,6 +102,7 @@ export async function recordAssistantModelDecision(input: {
   toolReadEventIds?: string[];
   toolReadTodoIds?: string[];
   toolReadMemoryIds?: string[];
+  toolCalls?: Array<Record<string, unknown>>;
   updatedAt?: number;
 }): Promise<void> {
   const updatedAt = input.updatedAt ?? Date.now();
@@ -108,7 +112,8 @@ export async function recordAssistantModelDecision(input: {
        provider_started_at=?, provider_completed_at=?, finish_reason=?,
        prompt_tokens=?, completion_tokens=?, total_tokens=?,
        provider_attempt_count=?, provider_attempts_json=?, protocol_warnings_json=?,
-       tool_read_event_ids_json=?, tool_read_todo_ids_json=?, tool_read_memory_ids_json=?, updated_at=?
+       tool_read_event_ids_json=?, tool_read_todo_ids_json=?, tool_read_memory_ids_json=?,
+       tool_calls_json=?, updated_at=?
      WHERE request_id=?`,
     JSON.stringify(input.operations), JSON.stringify(input.eventDeltas ?? []), JSON.stringify(input.memoryDeltas ?? []),
     input.metadata?.startedAt ?? null,
@@ -120,8 +125,19 @@ export async function recordAssistantModelDecision(input: {
     JSON.stringify(input.toolReadEventIds ?? []),
     JSON.stringify(input.toolReadTodoIds ?? []),
     JSON.stringify(input.toolReadMemoryIds ?? []),
+    JSON.stringify(boundedToolCalls(input.toolCalls)),
     updatedAt, input.requestId,
   ));
+}
+
+function boundedToolCalls(toolCalls: Array<Record<string, unknown>> | undefined): Array<Record<string, unknown>> {
+  return (toolCalls ?? []).slice(0, 12).map(call => {
+    const argumentsJson = typeof call.argumentsJson === 'string' ? call.argumentsJson : '';
+    return {
+      ...call,
+      argumentsJson: argumentsJson.length <= 200 ? argumentsJson : `${argumentsJson.slice(0, 199)}…`,
+    };
+  });
 }
 
 export async function recordAssistantValidation(input: {
@@ -170,10 +186,37 @@ export async function recordAssistantExecutionOutcome(input: {
 }): Promise<void> {
   const updatedAt = input.updatedAt ?? Date.now();
   await withDatabaseConnection(async database => database.runAsync(
-    `UPDATE assistant_decision_logs SET execution_outcome=?, error_detail=COALESCE(error_detail, ?), updated_at=?
+    `UPDATE assistant_decision_logs SET execution_outcome=?, execution_rejected_json=?, error_detail=COALESCE(error_detail, ?), updated_at=?
      WHERE request_id=?`,
     input.result.outcome,
+    JSON.stringify(input.result.rejected),
     input.result.error ? boundedErrorDetail(input.result.error) : null,
+    updatedAt,
+    input.requestId,
+  ));
+}
+
+export async function recordAssistantNarration(input: {
+  requestId: string;
+  narration: {
+    source: 'model' | 'fallback' | 'skipped';
+    startedAt: number;
+    completedAt: number;
+    totalTokens?: number | null;
+    errorCode?: string | null;
+  };
+  updatedAt?: number;
+}): Promise<void> {
+  const updatedAt = input.updatedAt ?? Date.now();
+  await withDatabaseConnection(async database => database.runAsync(
+    `UPDATE assistant_decision_logs SET narration_json=?, updated_at=? WHERE request_id=?`,
+    JSON.stringify({
+      source: input.narration.source,
+      startedAt: input.narration.startedAt,
+      completedAt: input.narration.completedAt,
+      totalTokens: input.narration.totalTokens ?? null,
+      errorCode: input.narration.errorCode ?? null,
+    }),
     updatedAt,
     input.requestId,
   ));
@@ -224,7 +267,10 @@ export async function getAssistantDecisionLog(requestId: string): Promise<Assist
       toolReadEventIds: JSON.parse(row.tool_read_event_ids_json || '[]'),
       toolReadTodoIds: JSON.parse(row.tool_read_todo_ids_json || '[]'),
       toolReadMemoryIds: JSON.parse(row.tool_read_memory_ids_json || '[]'),
+      toolCalls: JSON.parse(row.tool_calls_json || '[]'),
       executionOutcome: row.execution_outcome ?? 'pending',
+      executionRejected: JSON.parse(row.execution_rejected_json || '[]'),
+      narration: JSON.parse(row.narration_json || '{}'),
     };
   });
 }

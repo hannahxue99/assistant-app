@@ -369,8 +369,55 @@ async function main() {
   check(toolResult.providerMetadata.attemptCount === 2, '一次工具读取和一次规划应记录两次 Provider 请求');
   check(toolBodies[0].tools?.length === 6, '启用读取执行器时必须向模型暴露事件、待办和记忆六个只读工具');
   check(toolBodies[1].messages.at(-1).role === 'tool', '第二轮必须带回真实工具结果');
-  check(toolBodies[1].messages.at(-2).reasoning_content === '先读取真实事件',
-    'DeepSeek 工具续轮必须保留上一轮 reasoning_content');
+  check(toolBodies[1].messages.at(-2).reasoning_content === undefined,
+    'DeepSeek 明确禁止回传上一轮 reasoning_content，续轮请求不得携带');
+
+  const degradedBodies: any[] = [];
+  const degradedResult = await requestAssistantTurn({
+    settings: {
+      llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model',
+    },
+    context: { contextBlock: '上下文', recentMessages: [{ id: 'u', role: 'user', content: '帮我整理所有主线', createdAt: 1 }] },
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      degradedBodies.push(body);
+      if (body.tools) {
+        return new Response(JSON.stringify({
+          choices: [{
+            message: {
+              content: '',
+              tool_calls: [{ id: `call-${degradedBodies.length}`, type: 'function', function: { name: 'search_events', arguments: '{"query":"主线"}' } }],
+            },
+            finish_reason: 'tool_calls',
+          }],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: '{"reply":"已整理已确认的部分；其余未核实，需要你确认。","segment":{"action":"continue"}}' }, finish_reason: 'stop' }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+    executeReadTool: async call => ({
+      toolCallId: call.id,
+      name: 'search_events',
+      result: { query: '主线', events: [] },
+      readEventIds: [],
+      readTodoIds: [],
+      readMemoryIds: [],
+    }),
+  });
+  check(degradedResult.reply.includes('未核实'),
+    '读取额度用尽后必须降级收敛，不得整轮失败');
+  check(degradedResult.providerMetadata.protocolWarnings.includes('tool_budget_exhausted'),
+    '额度降级必须记录可观测的协议警告');
+  check(degradedBodies.filter(body => body.tools).length === 5,
+    '四轮工具后第五轮不再执行工具调用');
+  check(!degradedBodies.at(-1).tools, '收敛轮请求不得再携带工具定义');
+  const degradedToolMessages = degradedBodies.at(-1).messages.filter((message: any) => message.role === 'tool');
+  check(degradedToolMessages.some((message: any) => message.content.includes('tool_budget_exhausted')),
+    '超额调用必须以工具结果形式告知模型，保持消息协议完整');
+  check(degradedBodies.at(-1).messages.some((message: any) => message.role === 'system'
+    && message.content.includes('工具额度已用尽')),
+    '收敛轮必须明确指示模型基于已读信息回答并声明未核实部分');
 
   const finalChunks: string[] = [];
   const finalReply = await requestAssistantFinalReply({
