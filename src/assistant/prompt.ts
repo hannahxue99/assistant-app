@@ -15,7 +15,7 @@ export const ASSISTANT_MEMORY_DELTA_FORMAT_GUIDE = [
   '- 用户明确说“记住/以后按这个来”等，可直接生效：create_active，admission_basis 必须为 explicit。',
   '- 候选再次被用户表达：activate_candidate，提供 memory_id、expected_revision、admission_basis=repeated；用户明确确认候选则用 confirmed。',
   '- 用户明确纠正已生效记忆：supersede_memory，提供旧 memory_id、expected_revision、新 category/content/sensitivity。',
-  '- 用户明确要求忘记：forget_memory，提供 memory_id、expected_revision。不要把“这次不用”理解为长期忘记。',
+  '- 用户明确要求忘记：forget_memory，提供 memory_id、expected_revision、evidence（逐字引用用户要求删除的原话）。不要把“这次不用”理解为长期忘记。',
   '- evidence 必须逐字来自本轮用户消息，不能引用助手回复、摘要、事件状态或你的改写。',
   '- 密码、验证码、证件号和完整金融账号不得返回；敏感候选不能仅靠重复自动生效。',
 ] as const;

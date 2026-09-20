@@ -493,6 +493,28 @@ async function main() {
   assert.ok(JSON.parse(selfCorrectLog.tool_calls_json).some(item => item.ok === false && item.errorCode === 'invalid_tool_arguments'),
     '决策日志必须记录工具失败和自纠事件，用于评估模型工具能力');
 
+  // 回归：真实模型按旧提示词习惯返回不带 evidence 的 forget_memory，不得整轮失败。
+  provider = async () => ({
+    reply: '好的，我已经把那条记忆删除。',
+    segment: { action: 'continue' },
+    operations: [],
+    memoryDeltas: [],
+    memoryRejections: [{ key: 'memory_delta_1', action: 'forget_memory', reason: 'missing_evidence' }],
+  });
+  const forgetNoEvidence = await orchestrator.sendAssistantTurn({
+    requestId: 'request-forget-no-evidence', content: '把例假周期的长期记忆删除', source: 'text', settings, createdAt: 5400,
+  });
+  assert.equal(forgetNoEvidence.operations.length, 0, '缺 evidence 的删除项不得提交');
+  assert.ok(forgetNoEvidence.assistantMessage.content.length > 0,
+    '模型格式瑕疵必须降级为可见回复，不得让整轮失败');
+  const forgetNoEvidenceLog = sqlite.prepare(
+    "SELECT status, execution_outcome, execution_rejected_json FROM assistant_decision_logs WHERE request_id='request-forget-no-evidence'",
+  ).get();
+  assert.notEqual(forgetNoEvidenceLog.status, 'failed', '单项格式瑕疵不得把请求标为失败');
+  assert.ok(JSON.parse(forgetNoEvidenceLog.execution_rejected_json)
+    .some(item => item.reason === 'missing_evidence'),
+    '降级拒绝必须落库，用户回复与回执都不虚报删除成功');
+
   sqlite.exec(`CREATE TRIGGER fail_assistant_operation
     BEFORE INSERT ON assistant_operations BEGIN SELECT RAISE(ABORT, 'forced operation failure'); END;`);
   provider = async () => ({

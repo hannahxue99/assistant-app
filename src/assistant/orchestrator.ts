@@ -298,6 +298,7 @@ async function runSavedTurn(input: {
     });
     const eventDeltas = output.eventDeltas ?? [];
     const memoryDeltas = output.memoryDeltas ?? [];
+    const parseRejections = output.memoryRejections ?? [];
     await safelyLog(() => recordAssistantModelDecision({
       requestId: input.requestId,
       operations: output.operations ?? [],
@@ -389,6 +390,11 @@ async function runSavedTurn(input: {
       ...memoryValidation.rejected.map(item => ({
         type: item.action,
         reason: item.reason,
+      })),
+      ...parseRejections.map(item => ({
+        type: item.action,
+        reason: item.reason,
+        detail: '模型返回的该项缺少 evidence，已降级拒绝',
       })),
     ];
     if (proposedWriteCount > completed.operations.length) {

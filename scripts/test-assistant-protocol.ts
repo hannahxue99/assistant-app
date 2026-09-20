@@ -24,6 +24,29 @@ check(parsed.segment.action === 'continue', '应解析分段动作');
 check(parsed.operations.length === 0, '旧返回未提供 operations 时应兼容为空数组');
 check(parsed.memoryDeltas.length === 0, '旧返回未提供 memory_deltas 时应兼容为空数组');
 
+const forgetWithoutEvidence = parseAssistantTurnOutput(JSON.stringify({
+  reply: '好的，我把那条记忆删除。',
+  segment: { action: 'continue' },
+  memory_deltas: [
+    { action: 'forget_memory', memory_id: 'assistant-memory-x', expected_revision: 2 },
+  ],
+}));
+check(forgetWithoutEvidence.memoryDeltas.length === 0
+  && forgetWithoutEvidence.memoryRejections.length === 1
+  && forgetWithoutEvidence.memoryRejections[0].reason === 'missing_evidence',
+'forget_memory 缺少 evidence 必须降级为单项拒绝，不得让整轮失败');
+
+const forgetWithEvidence = parseAssistantTurnOutput(JSON.stringify({
+  reply: '好的，我把那条记忆删除。',
+  segment: { action: 'continue' },
+  memory_deltas: [
+    { action: 'forget_memory', memory_id: 'assistant-memory-x', expected_revision: 2, evidence: '把那条记忆删除' },
+  ],
+}));
+check(forgetWithEvidence.memoryDeltas.length === 1
+  && forgetWithEvidence.memoryRejections.length === 0,
+'forget_memory 带 evidence 时应正常解析');
+
 const withOperations = parseAssistantTurnOutput(JSON.stringify({
   reply: '可以，我们把它作为一条持续主线。',
   segment: { action: 'continue' },
@@ -274,6 +297,8 @@ check(prompt[0].content.includes('下个月11号还款10万'), '提示词必须�
 check(prompt[0].content.includes('银行说下个月可能调整利率'), '提示词必须包含非用户承诺的反例');
 check(prompt[0].content.includes('due_date'), '提示词必须要求模型解析日期');
 check(prompt[0].content.includes('memory_deltas'), '提示词必须要求模型独立判断长期记忆');
+check(prompt[0].content.includes('forget_memory，提供 memory_id、expected_revision、evidence'),
+  '提示词对 forget_memory 的字段要求必须与协议校验一致，避免模型照说明书缺 evidence');
 check(prompt[0].content.includes('已有有效快照'), '提示词必须要求优先复用当前上下文中的有效快照');
 check(prompt[0].content.includes('搜索结果只用于发现候选'), '提示词必须区分搜索发现与精确详情读取');
 check(prompt[0].content.includes('更新已有对象前必须获得完整详情'), '提示词必须要求写入前读取完整真实状态');

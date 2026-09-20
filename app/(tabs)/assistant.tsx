@@ -424,6 +424,17 @@ export default function AssistantScreen() {
             <Text style={styles.title}>小知</Text>
             <Text style={styles.caption}>连续对话 · 自动保存</Text>
           </View>
+          {__DEV__ ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="打开决策日志调试页"
+              onPress={() => router.push('/debug/decisions')}
+              hitSlop={8}
+              style={({ pressed }) => [styles.debugEntry, pressed && styles.pressed]}
+            >
+              <Ionicons name="terminal-outline" size={20} color={theme.colors.textDim} />
+            </Pressable>
+          ) : null}
         </View>
 
         {engineStatus === 'unconfigured' && initialLoad === 'ready' ? (
@@ -537,7 +548,8 @@ export default function AssistantScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   flex: { flex: 1 },
-  header: { minHeight: 62, paddingHorizontal: theme.spacing.md, paddingTop: 7, paddingBottom: 8, justifyContent: 'center' },
+  header: { minHeight: 62, paddingHorizontal: theme.spacing.md, paddingTop: 7, paddingBottom: 8, justifyContent: 'space-between', alignItems: 'center', flexDirection: 'row' },
+  debugEntry: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   title: { color: theme.colors.text, fontSize: theme.font.title, fontWeight: theme.fontWeight.semibold },
   caption: { color: theme.colors.textDim, fontSize: 12, marginTop: 1 },
   configBanner: { minHeight: 44, marginHorizontal: theme.spacing.md, marginBottom: 6, paddingHorizontal: 12, borderRadius: 12, backgroundColor: theme.colors.goldSoft, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
