@@ -165,6 +165,11 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
     await database.execAsync('ALTER TABLE assistant_requests ADD COLUMN error_code TEXT;');
   }
 
+  const assistantMessageColumns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(assistant_messages)');
+  if (!assistantMessageColumns.some(column => column.name === 'stage_durations_json')) {
+    await database.execAsync("ALTER TABLE assistant_messages ADD COLUMN stage_durations_json TEXT NOT NULL DEFAULT '{}';");
+  }
+
   const decisionLogColumns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(assistant_decision_logs)');
   if (!decisionLogColumns.some(column => column.name === 'error_code')) {
     await database.execAsync('ALTER TABLE assistant_decision_logs ADD COLUMN error_code TEXT;');

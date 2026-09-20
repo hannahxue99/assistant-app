@@ -37,6 +37,7 @@ export const assistantSchema = `
     status TEXT NOT NULL CHECK (status IN ('saved', 'sending', 'failed')),
     segment_id TEXT NOT NULL,
     legacy_entry_id TEXT UNIQUE,
+    stage_durations_json TEXT NOT NULL DEFAULT '{}',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     FOREIGN KEY(segment_id) REFERENCES conversation_segments(id)

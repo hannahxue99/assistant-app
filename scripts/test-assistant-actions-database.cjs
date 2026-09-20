@@ -109,9 +109,9 @@ async function main() {
   ) VALUES ('segment-1', '', 'current', 1000, NULL, 1000)`).run();
   sqlite.prepare(`INSERT INTO assistant_messages (
     id, request_id, role, content, source, status, segment_id,
-    legacy_entry_id, created_at, updated_at
+    legacy_entry_id, stage_durations_json, created_at, updated_at
   ) VALUES ('message-1', 'request-1', 'user', '整理照片', 'text', 'saved',
-    'segment-1', NULL, 1000, 1000)`).run();
+    'segment-1', NULL, '{}', 1000, 1000)`).run();
   sqlite.prepare(`INSERT INTO assistant_requests (
     id, user_message_id, status, error_code, attempt_count, created_at, updated_at
   ) VALUES ('request-1', 'message-1', 'succeeded', NULL, 1, 1000, 1000)`).run();

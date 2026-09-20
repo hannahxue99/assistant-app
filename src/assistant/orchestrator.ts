@@ -16,7 +16,7 @@ import {
   type AssistantReadToolName,
 } from './data-tools';
 import { buildAssistantExecutionResult, fallbackReplyForExecution } from './execution-result';
-import type { AssistantRuntimeStage } from './runtime-state';
+import { assistantStageDurationsFromTimeline, type AssistantRuntimeStage } from './runtime-state';
 import { getAssistantReasoning, type AssistantReasoning } from './reasoning-store';
 import { ASSISTANT_PROMPT_VERSION } from './prompt';
 import { loadAssistantMemoryContext } from './memory-retrieval';
@@ -213,6 +213,13 @@ async function runSavedTurn(input: {
 
   // 工具轨迹提到 try 外：失败轮也能落库，调试页才能回溯失败前的读取过程。
   const toolCallTrace: Array<Record<string, unknown>> = [];
+  // 阶段切换时间线：落定后合并成各阶段实际耗时，持久化到助手消息。
+  const stageTimeline: Array<{ stage: AssistantRuntimeStage; at: number }> = [];
+  const emitProgress = (stage: AssistantRuntimeStage) => {
+    const last = stageTimeline.at(-1);
+    if (!last || last.stage !== stage) stageTimeline.push({ stage, at: Date.now() });
+    input.onProgress?.(stage);
+  };
   try {
     throwIfCancelled(input.signal);
     const readExecutions: AssistantReadToolExecution[] = [];
@@ -272,13 +279,13 @@ async function runSavedTurn(input: {
       timeZone,
       signal: input.signal,
       onReasoningText: input.onReasoningText,
-      onProgress: (stage: AssistantProviderProgressStage) => input.onProgress?.(
+      onProgress: (stage: AssistantProviderProgressStage) => emitProgress(
         stage === 'reading' ? 'reading' : 'planning',
       ),
       executeReadTool,
     });
     throwIfCancelled(input.signal);
-    input.onProgress?.('planning');
+    emitProgress('planning');
     const cachedReadSet = readSetFromAssistantWorkingSnapshots(selectedWorkingSnapshots);
     const executedReadSet = mergeAssistantReadSets(readExecutions);
     const grounding = output.grounding ?? { eventIds: [], todoIds: [], memoryIds: [] };
@@ -350,7 +357,7 @@ async function runSavedTurn(input: {
       rejectedMemoryDeltas: memoryValidation.rejected,
     }));
     throwIfCancelled(input.signal);
-    input.onProgress?.('updating');
+    emitProgress('updating');
     const completed = await completeAssistantTurnWithActions({
       requestId: input.requestId,
       userMessageId: state.userMessage.id,
@@ -359,6 +366,7 @@ async function runSavedTurn(input: {
       segment: output.segment,
       operations: validation.accepted,
       memoryDeltas: memoryValidation.accepted,
+      stageDurations: assistantStageDurationsFromTimeline(stageTimeline, Date.now()),
       reasoning: output.reasoning
         ? {
           requestId: input.requestId,
@@ -422,7 +430,7 @@ async function runSavedTurn(input: {
     }));
     const fallbackReply = fallbackReplyForExecution(executionResult, output.reply);
     let assistantMessage = await updateAssistantReply(input.requestId, fallbackReply);
-    input.onProgress?.('answering');
+    emitProgress('answering');
     const needsGroundedNarration = completed.operations.length > 0
       || proposedWriteCount > 0
       || executionRejected.length > 0;
@@ -436,7 +444,7 @@ async function runSavedTurn(input: {
           executionResult,
           signal: input.signal,
           onReplyText: input.onReplyText,
-          onProgress: () => input.onProgress?.('answering'),
+          onProgress: () => emitProgress('answering'),
         });
         assistantMessage = await updateAssistantReply(input.requestId, finalReply.reply);
         await safelyLog(() => recordAssistantNarration({
@@ -476,7 +484,7 @@ async function runSavedTurn(input: {
         },
       }));
     }
-    input.onProgress?.('finalizing');
+    emitProgress('finalizing');
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       console.log('[assistant-decision]', {
         requestId: input.requestId,

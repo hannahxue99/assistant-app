@@ -159,6 +159,12 @@ async function main() {
   assert.equal(retried.assistantMessage.content, '网络恢复了。');
   assert.equal((await store.listMessages({ limit: 20 })).filter(item => item.requestId === 'request-2').length, 2,
     '重试应复用用户消息，只新增一条助手回复');
+  const stageDurationsRow = sqlite.prepare(
+    "SELECT stage_durations_json FROM assistant_messages WHERE request_id='request-2' AND role='assistant'",
+  ).get();
+  const stageDurations = JSON.parse(stageDurationsRow.stage_durations_json || '{}');
+  assert.ok(typeof stageDurations.thinkingMs === 'number' && stageDurations.thinkingMs >= 0,
+    '助手消息必须持久化各阶段实际耗时，落定后展示过程摘要');
 
   provider = async () => {
     const error = Object.assign(new Error('operations[0]: resolved 缺少 due_date'), {

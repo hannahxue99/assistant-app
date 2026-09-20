@@ -32,6 +32,7 @@ import type {
   AssistantInitialLoadStatus,
   AssistantMessage,
   AssistantOlderLoadStatus,
+  AssistantStageSegment,
 } from '../../src/assistant/types';
 import type { AssistantRuntimeStage } from '../../src/assistant/runtime-state';
 import { getAssistantReasoning } from '../../src/assistant/reasoning-store';
@@ -75,6 +76,7 @@ export default function AssistantScreen() {
   const loadedOnceRef = useRef(false);
   const olderLoadRef = useRef<AssistantOlderLoadStatus>('idle');
   const pendingEndScrollRef = useRef<{ animated: boolean } | null>(null);
+  const stageSegmentsRef = useRef<Map<string, AssistantStageSegment[]>>(new Map());
   const followEndRef = useRef(true);
   const preservePositionOnNextFocusRef = useRef(false);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
@@ -113,6 +115,7 @@ export default function AssistantScreen() {
     runtimeStartedAt?: number;
     content?: string;
     stage?: AssistantRuntimeStage;
+    stageSegments?: AssistantStageSegment[];
     reasoningContent?: string;
     reasoningCompletedAt?: number;
   }) => {
@@ -134,6 +137,7 @@ export default function AssistantScreen() {
           legacyEntryId: null,
           errorCode: null,
           runtimeStage: input.stage ?? existing?.runtimeStage ?? 'planning',
+          stageSegments: input.stageSegments ?? existing?.stageSegments,
           runtimeStartedAt: existing?.runtimeStartedAt ?? input.runtimeStartedAt ?? Date.now(),
           reasoningAvailable: Boolean(input.reasoningContent || existing?.reasoningAvailable),
           reasoningContent: input.reasoningContent ?? existing?.reasoningContent,
@@ -146,6 +150,32 @@ export default function AssistantScreen() {
     });
     if (followEndRef.current) scrollToLatest(false, false);
   }, [scrollToLatest]);
+
+  /** 阶段切换时逐行累加：上一阶段定格为一行耗时，当前阶段继续转圈计时。 */
+  const advanceStage = useCallback((requestId: string, stage: AssistantRuntimeStage, base: {
+    messageCreatedAt: number;
+    runtimeStartedAt: number;
+  }) => {
+    const existing = stageSegmentsRef.current.get(requestId) ?? [];
+    const last = existing.at(-1);
+    if (last && last.stage === stage) return;
+    const now = Date.now();
+    const next = [...existing];
+    if (last) next[next.length - 1] = { ...last, endedAt: now };
+    next.push({ stage, startedAt: now, endedAt: null });
+    stageSegmentsRef.current.set(requestId, next);
+    updateStreamingReply({
+      requestId,
+      messageCreatedAt: base.messageCreatedAt,
+      runtimeStartedAt: base.runtimeStartedAt,
+      stage,
+      stageSegments: next,
+    });
+  }, [updateStreamingReply]);
+
+  const clearStageSegments = useCallback((requestId: string) => {
+    stageSegmentsRef.current.delete(requestId);
+  }, []);
 
   const clearStreamingReply = useCallback((requestId: string) => {
     setStreamingReplies((current) => {
@@ -252,12 +282,7 @@ export default function AssistantScreen() {
     const runtimeStartedAt = Date.now();
     if (mountedRef.current) {
       setMessages(current => mergeAssistantMessages(current, [userMessage]));
-      updateStreamingReply({
-        requestId,
-        messageCreatedAt: userMessage.createdAt,
-        runtimeStartedAt,
-        stage: 'planning',
-      });
+      advanceStage(requestId, 'planning', { messageCreatedAt: userMessage.createdAt, runtimeStartedAt });
       followEndRef.current = true;
       scrollToLatest(true);
     }
@@ -281,11 +306,9 @@ export default function AssistantScreen() {
         reasoningContent: text,
         stage: 'planning',
       }),
-      onProgress: stage => updateStreamingReply({
-        requestId,
+      onProgress: stage => advanceStage(requestId, stage, {
         messageCreatedAt: userMessage.createdAt,
         runtimeStartedAt,
-        stage,
       }),
     });
     void job
@@ -308,6 +331,7 @@ export default function AssistantScreen() {
       })
       .finally(async () => {
         clearStreamingReply(requestId);
+        clearStageSegments(requestId);
         await loadLatest(true).catch(() => {});
       });
   }
@@ -384,6 +408,7 @@ export default function AssistantScreen() {
         // 错误状态由对应消息承载，不再重复显示页面级错误。
       } finally {
         clearStreamingReply(requestId);
+        clearStageSegments(requestId);
         await loadLatest(true).catch(() => {});
       }
     })();
