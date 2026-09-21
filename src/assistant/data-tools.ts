@@ -157,14 +157,25 @@ function escapedLike(value: string): string {
   return `%${value.replace(/[\\%_]/g, match => `\\${match}`)}%`;
 }
 
+/**
+ * 工具结果给人读模型看的时间一律用 ISO 字符串：毫秒数字的任意数字串
+ * 会与敏感词组合触发上游内容风控（实测"北京"+含特定数字组合的时间戳 → 400），
+ * ISO 表示从根上消除这类巧合，且对模型语义无损。revision 是本地写入校验
+ * 必需的小整数，保留数字。
+ */
+function isoTime(value: unknown): string | null {
+  const ms = Number(value);
+  return Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : null;
+}
+
 function todoSnapshot(row: any) {
   return {
     id: row.id,
     text: row.summary || row.raw_text,
-    dueAt: row.due_at ?? null,
+    dueAt: isoTime(row.due_at),
     done: Boolean(row.done),
     revision: Number(row.revision_at ?? row.updated_at ?? 0),
-    updatedAt: Number(row.updated_at ?? row.created_at ?? 0),
+    updatedAt: isoTime(row.updated_at ?? row.created_at),
   };
 }
 
@@ -175,7 +186,7 @@ function eventSnapshot(row: any) {
     currentState: row.current_state,
     status: row.status,
     revision: Number(row.revision),
-    updatedAt: Number(row.updated_at),
+    updatedAt: isoTime(row.updated_at),
   };
 }
 
@@ -188,11 +199,11 @@ function memorySnapshot(row: any) {
     sensitivity: row.sensitivity,
     admissionBasis: row.admission_basis,
     revision: Number(row.revision),
-    createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
-    activatedAt: row.activated_at ?? null,
-    supersededAt: row.superseded_at ?? null,
-    forgottenAt: row.forgotten_at ?? null,
+    createdAt: isoTime(row.created_at),
+    updatedAt: isoTime(row.updated_at),
+    activatedAt: isoTime(row.activated_at),
+    supersededAt: isoTime(row.superseded_at),
+    forgottenAt: isoTime(row.forgotten_at),
     supersededById: row.superseded_by_id ?? null,
   };
 }
@@ -280,7 +291,7 @@ export async function executeAssistantReadToolWithDatabase(
         updates: updates.map(item => ({
           id: item.id,
           content: item.content,
-          occurredAt: Number(item.occurred_at),
+          occurredAt: isoTime(item.occurred_at),
           sourceMessageId: item.source_message_id ?? null,
         })),
         todos: todos.map(todoSnapshot),

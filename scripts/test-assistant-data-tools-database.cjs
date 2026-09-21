@@ -103,6 +103,20 @@ async function main() {
   });
   assert.equal(missing.result.found, false);
   assert.equal(missing.readEventIds.length, 0);
+
+  // 回归：工具结果时间必须是 ISO 字符串而非毫秒数字——原始时间戳的任意数字串
+  // 会与敏感词组合触发上游内容风控（实测"北京"+1789640590929 → 400 Content Exists Risk）。
+  sqlite.prepare(`INSERT INTO assistant_events
+    (id,title,current_state,status,pinned_at,revision,created_at,updated_at)
+    VALUES ('event-risk','十一出行','10月3日哈尔滨飞北京返程机票','active',NULL,6,100,1789640590929)`).run();
+  const risky = await tools.executeAssistantReadToolWithDatabase(adapter, {
+    id: 'call-risk', name: 'get_event', argumentsJson: '{"event_id":"event-risk"}',
+  });
+  const riskyJson = JSON.stringify(risky.result);
+  assert.ok(riskyJson.includes('"2026-'), '工具结果时间应序列化为 ISO 字符串');
+  assert.ok(!/\d{13}/.test(riskyJson), '工具结果不得包含 13 位毫秒时间戳（消除数字串与敏感词的组合风控）');
+  assert.equal(risky.result.event.revision, 6, 'revision 保持数字供本地写入校验');
+
   console.log('assistant data tools database tests passed');
 }
 
