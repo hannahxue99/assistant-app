@@ -398,8 +398,8 @@ export async function requestAssistantTurn(input: {
       timeZone: input.timeZone,
   });
   const toolExecutions: AssistantReadToolExecution[] = [];
-  const maxReadRounds = 4;
-  const maxToolCalls = 8;
+  const maxReadRounds = 6;
+  const maxToolCalls = 12;
   let readRounds = 0;
   // 收敛轮不再携带 tools：超限后迫使模型基于已读信息直接产出计划，而不是整轮失败。
   let toolsDisabled = false;

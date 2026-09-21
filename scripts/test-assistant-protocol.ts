@@ -492,8 +492,9 @@ async function main() {
     '读取额度用尽后必须降级收敛，不得整轮失败');
   check(degradedResult.providerMetadata.protocolWarnings.includes('tool_budget_exhausted'),
     '额度降级必须记录可观测的协议警告');
-  check(degradedBodies.filter(body => body.tools).length === 5,
-    '四轮工具后第五轮不再执行工具调用');
+  check(degradedBodies.filter(body => body.tools).length === 7,
+    '六轮工具额度用尽后，第七次工具请求触发收敛（此后不再带工具）');
+  check(degradedBodies.length === 8, '额度用尽后恰好一次收敛轮（7 工具请求 + 1 收敛轮）');
   check(!degradedBodies.at(-1).tools, '收敛轮请求不得再携带工具定义');
   const degradedToolMessages = degradedBodies.at(-1).messages.filter((message: any) => message.role === 'tool');
   check(degradedToolMessages.some((message: any) => message.content.includes('tool_budget_exhausted')),
