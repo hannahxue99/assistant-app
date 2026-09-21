@@ -537,6 +537,54 @@ async function main() {
     .some(item => item.reason === 'missing_evidence'),
     '降级拒绝必须落库，用户回复与回执都不虚报删除成功');
 
+  // 回归：删除进展 + 解除关联（优化动作 #1 #7）。
+  provider = async input => {
+    await input.executeReadTool({
+      id: 'get-loan-event', name: 'get_event', argumentsJson: JSON.stringify({ event_id: houseEvent.id }),
+    });
+    return {
+      reply: '好的，删除那条进展并解除关联。',
+      segment: { action: 'continue' },
+      operations: [
+        { key: 'del-update', type: 'delete_event_update', updateId: 'update-loan-1', eventId: houseEvent.id },
+        { key: 'unlink', type: 'unlink_todo_event', todo: { kind: 'candidate', id: 'todo-loan' }, event: { kind: 'candidate', id: houseEvent.id } },
+      ],
+    };
+  };
+  // 造一条可删的进展和一个可解除的关联待办
+  sqlite.prepare(`INSERT INTO assistant_event_updates
+    (id,event_id,content,occurred_at,source_message_id,stable_key,created_at,undone_at)
+    VALUES ('update-loan-1',?,'旧的进展记录',3000,NULL,'loan-old',3000,NULL)`).run(houseEvent.id);
+  sqlite.prepare(`INSERT INTO entries (id,raw_text,kind,summary,due_at,remind_at,topic,tags,persons,parse_status,parse_source,corrected_from,created_at,updated_at,revision_at,done,done_at,source)
+    VALUES ('todo-loan','还贷款','task','还贷款',NULL,NULL,NULL,'[]','[]','done','assistant',NULL,3500,3500,3500,0,NULL,'assistant')`).run();
+  sqlite.prepare(`INSERT INTO assistant_object_relations
+    (id,from_type,from_id,relation_type,to_type,to_id,source_message_id,created_at,undone_at)
+    VALUES ('relation-loan','todo','todo-loan','belongs_to','event',?,NULL,3500,NULL)`).run(houseEvent.id);
+
+  const editOps = await orchestrator.sendAssistantTurn({
+    requestId: 'request-progress-unlink', content: '把换房计划里旧的进展记录删掉，还贷款那条待办别挂这个事件上了', source: 'text', settings, createdAt: 3600,
+  });
+  assert.equal(editOps.operations.length, 2, '删除进展与解除关联应各提交一条');
+  assert.ok(editOps.operations.some(op => op.operationType === 'delete_event_update'),
+    '删除进展应真实提交');
+  assert.ok(editOps.operations.some(op => op.operationType === 'unlink_todo_event'),
+    '解除关联应真实提交');
+  assert.equal(sqlite.prepare("SELECT undone_at FROM assistant_event_updates WHERE id='update-loan-1'").get().undone_at !== null, true,
+    '进展删除必须是软删（数据保留可撤销）');
+  assert.equal(sqlite.prepare("SELECT undone_at FROM assistant_object_relations WHERE id='relation-loan'").get().undone_at !== null, true,
+    '解除关联必须是软删（两侧数据保留）');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM entries WHERE id=?').get('todo-loan').count, 1,
+    '解除关联后待办本身必须保留');
+  // 未读取进展就删 → 拒绝
+  provider = async () => ({
+    reply: '试试直接删。', segment: { action: 'continue' },
+    operations: [{ key: 'del-unread', type: 'delete_event_update', updateId: 'update-loan-1', eventId: houseEvent.id }],
+  });
+  const unreadDelete = await orchestrator.sendAssistantTurn({
+    requestId: 'request-progress-unread', content: '再删一次那条进展', source: 'text', settings, createdAt: 3700,
+  });
+  assert.equal(unreadDelete.operations.length, 0, '未在本轮精确读取进展的删除必须被拒绝');
+
   sqlite.exec(`CREATE TRIGGER fail_assistant_operation
     BEFORE INSERT ON assistant_operations BEGIN SELECT RAISE(ABORT, 'forced operation failure'); END;`);
   provider = async () => ({

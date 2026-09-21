@@ -199,6 +199,26 @@ async function undoOperation(
     return;
   }
 
+  if (operation.operationType === 'unlink_todo_event') {
+    // 撤销"解除关联" = 恢复关系行。
+    await database.runAsync(
+      'UPDATE assistant_object_relations SET undone_at=NULL WHERE id=? AND undone_at IS NOT NULL',
+      operation.objectId,
+    );
+    return;
+  }
+
+  if (operation.operationType === 'delete_event_update') {
+    // 撤销"删除进展" = 恢复进展并回滚事件版本快照。
+    await database.runAsync(
+      'UPDATE assistant_event_updates SET undone_at=NULL WHERE id=? AND undone_at IS NOT NULL',
+      operation.objectId,
+    );
+    const beforeEvent = parseSnapshot<AssistantEvent>(operation.beforeSnapshot);
+    if (beforeEvent) await restoreEvent(database, beforeEvent, undoneAt);
+    return;
+  }
+
   if (operation.operationType === 'append_event_update') {
     const beforeEvent = parseSnapshot<AssistantEvent>(operation.beforeSnapshot);
     await database.runAsync('DELETE FROM assistant_event_updates WHERE id=?', operation.objectId);

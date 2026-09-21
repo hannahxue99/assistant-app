@@ -7,6 +7,7 @@
 const ASSISTANT_OPERATION_TYPES = [
   'create_todo', 'update_todo', 'complete_todo', 'delete_todo', 'create_event', 'update_event',
   'append_event_update', 'rename_event', 'pin_event', 'delete_event', 'link_todo_event',
+  'unlink_todo_event', 'delete_event_update',
   'create_memory', 'activate_memory', 'supersede_memory', 'forget_memory',
 ] as const;
 
@@ -161,7 +162,8 @@ export async function ensureAssistantOperationSchema(database: OperationSchemaDa
   const row = await database.getFirstAsync<{ sql: string }>(
     "SELECT sql FROM sqlite_master WHERE type='table' AND name='assistant_operations'",
   );
-  if (!row || ["'create_memory'", "'memory'", "'delete_todo'", "'delete_event'"]
+  if (!row || ["'create_memory'", "'memory'", "'delete_todo'", "'delete_event'",
+    "'unlink_todo_event'", "'delete_event_update'"]
     .every(value => row.sql.includes(value))) return;
 
   await database.withExclusiveTransactionAsync(async (txn) => {

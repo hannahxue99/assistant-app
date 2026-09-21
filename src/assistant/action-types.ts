@@ -63,6 +63,8 @@ export type AssistantOperationType =
   | 'pin_event'
   | 'delete_event'
   | 'link_todo_event'
+  | 'unlink_todo_event'
+  | 'delete_event_update'
   | 'create_memory'
   | 'activate_memory'
   | 'supersede_memory'
@@ -125,7 +127,9 @@ export type AssistantOperationProposal =
   | { key: string; type: 'rename_event'; eventId: string; title: string }
   | { key: string; type: 'pin_event'; eventId: string; pinned: boolean }
   | { key: string; type: 'delete_event'; eventId: string; linkedTodoPolicy: 'keep' | 'delete' }
-  | { key: string; type: 'link_todo_event'; todo: AssistantObjectRef; event: AssistantObjectRef };
+  | { key: string; type: 'link_todo_event'; todo: AssistantObjectRef; event: AssistantObjectRef }
+  | { key: string; type: 'unlink_todo_event'; todo: AssistantObjectRef; event: AssistantObjectRef }
+  | { key: string; type: 'delete_event_update'; updateId: string; eventId: string };
 
 export interface AssistantEventCandidate {
   id: string;
@@ -137,6 +141,8 @@ export interface AssistantEventCandidate {
   linkedTodoCount?: number;
   openLinkedTodoCount?: number;
   recentUpdateTexts?: string[];
+  /** 精确读取模式下的进展 id 列表；delete_event_update 以此校验目标。 */
+  updates?: Array<{ id: string; content: string }>;
   revision: number;
   updatedAt: number;
   score: number;

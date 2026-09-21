@@ -162,6 +162,23 @@ export function validateAssistantActions(input: {
       continue;
     }
 
+    if (operation.type === 'delete_event_update') {
+      // 删除进展：进展必须来自本轮精确读取（get_event 结果含 update id），事件在可读集合。
+      const denied = eventAllowed(operation.eventId);
+      if (denied) {
+        reject(operation, denied);
+        continue;
+      }
+      const candidate = input.actionContext.events.find(event => event.id === operation.eventId);
+      const updateReadable = candidate?.updates?.some(update => update.id === operation.updateId);
+      if (!updateReadable) {
+        reject(operation, 'candidate_not_allowed');
+        continue;
+      }
+      accepted.push(operation);
+      continue;
+    }
+
     const todoDenied = refAllowed(operation.todo, 'todo');
     const eventDenied = refAllowed(operation.event, 'event');
     if (todoDenied || eventDenied) reject(operation, todoDenied ?? eventDenied!);

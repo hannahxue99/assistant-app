@@ -5,7 +5,7 @@ export interface AssistantPromptMessage {
   content: string;
 }
 
-export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v12-relaxed-limits';
+export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v13-progress-unlink';
 
 export const ASSISTANT_MEMORY_DELTA_FORMAT_GUIDE = [
   '长期记忆增量格式（每轮最多2项；不需要 key，本地生成幂等键）：',
@@ -49,6 +49,8 @@ export const ASSISTANT_OPERATION_FORMAT_GUIDE = [
   '- pin_event: {"key":"...","type":"pin_event","event_id":"候选ID","pinned":true|false}',
   '- delete_event: {"key":"...","type":"delete_event","event_id":"候选ID","linked_todo_policy":"keep|delete"}',
   '- link_todo_event: {"key":"...","type":"link_todo_event","todo_id":"候选ID"或"todo_ref":"todo_1","event_id":"候选ID"或"event_ref":"event_1"}',
+  '- unlink_todo_event: {"key":"...","type":"unlink_todo_event","todo_id":"候选ID","event_id":"候选ID"}。用户要求把待办从事件上解除关联时使用；两侧记录都保留，仅解除关系。',
+  '- delete_event_update: {"key":"...","type":"delete_event_update","update_id":"本轮get_event读到的进展ID","event_id":"候选ID"}。用户要求删除某条事件进展时使用；删除前必须已精确读取该事件的进展列表。',
   '- 日期由你根据参考时间和用户时区解析：resolved 必须保留 date_text 并给 due_date；只有明确时刻才给 due_time 且精度为 dateTime；仅日期精度为 date。',
   '- 日期含糊时用 ambiguous，只保留 date_text，不猜 due_date；没有日期时用 absent，其他日期字段全部省略。没有合适操作时返回空数组。',
 ] as const;
@@ -92,6 +94,7 @@ export function buildAssistantPromptMessages(input: {
     '- 删除事件且没有关联待办时，直接输出 delete_event，linked_todo_policy=keep。',
     '- 删除事件若有关联待办：用户已明确“保留待办”就用 keep，明确“一起删”就用 delete；用户没说明时只问“关联的 N 条待办也一起删除吗？”，operations 留空。用户没有回答前什么都不删除。',
     '- 删除事件的 linked_todo_policy=delete 会删除全部关联待办，包括已完成和未完成。不得仅根据上下文展示的部分待办自行缩小范围。',
+    '- 用户要求"解除待办与事件的关联""这条待办别挂这个事件上"时输出 unlink_todo_event；要求"删掉某条进展"时先 get_event 拿到进展 ID，再输出 delete_event_update。',
     '',
     '严格只输出 JSON，不要代码块或额外文字：',
     '{',

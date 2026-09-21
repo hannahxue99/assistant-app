@@ -435,6 +435,69 @@ async function applyActions(database: SQLiteDatabase, input: {
       continue;
     }
 
+    if (operation.type === 'delete_event_update') {
+      // 软删进展（undone_at），事件与进展两侧数据保留、可撤销。
+      const before = await getEvent(operation.eventId, database);
+      if (!before) continue;
+      const updateRow = await database.getFirstAsync<any>(
+        'SELECT * FROM assistant_event_updates WHERE id=? AND undone_at IS NULL',
+        operation.updateId,
+      );
+      if (!updateRow || updateRow.event_id !== operation.eventId) continue;
+      await database.runAsync(
+        'UPDATE assistant_event_updates SET undone_at=? WHERE id=? AND undone_at IS NULL',
+        input.createdAt, operation.updateId,
+      );
+      const afterEvent = await getEvent(operation.eventId, database);
+      if (!afterEvent) throw new Error('进展删除后事件丢失');
+      eventRevisions.set(operation.eventId, afterEvent.revision);
+      committed.push(await insertOperation(database, {
+        requestId: input.requestId,
+        operation,
+        objectType: 'event_update',
+        objectId: operation.updateId,
+        before: { event: before, update: updateRow },
+        after: { event: afterEvent },
+        receiptSummary: `删除进展：${updateRow.content}`,
+        sequence: sequence++,
+        createdAt: input.createdAt,
+      }));
+      continue;
+    }
+
+    if (operation.type === 'unlink_todo_event') {
+      // 解除待办与事件的关联（软删关系行）：两侧数据都保留，可撤销。
+      const todoId = referenceId(operation.todo, localTodoRefs);
+      const eventId = referenceId(operation.event, localEventRefs);
+      if (!todoId || !eventId) continue;
+      const todo = await getEntryWithDatabase(database, todoId);
+      const event = await getEvent(eventId, database);
+      if (!todo || !event) continue;
+      const existing = await database.getFirstAsync<any>(
+        `SELECT * FROM assistant_object_relations
+         WHERE from_type='todo' AND from_id=? AND relation_type='belongs_to'
+           AND to_type='event' AND to_id=? AND undone_at IS NULL`,
+        todoId, eventId,
+      );
+      if (!existing) continue;
+      await database.runAsync(
+        'UPDATE assistant_object_relations SET undone_at=? WHERE id=? AND undone_at IS NULL',
+        input.createdAt, existing.id,
+      );
+      committed.push(await insertOperation(database, {
+        requestId: input.requestId,
+        operation,
+        objectType: 'relation',
+        objectId: existing.id,
+        before: existing,
+        after: { ...existing, undoneAt: input.createdAt },
+        receiptSummary: `解除关联：${todo.summary} 与 ${event.title}`,
+        sequence: sequence++,
+        createdAt: input.createdAt,
+      }));
+      continue;
+    }
+
     const todoId = referenceId(operation.todo, localTodoRefs);
     const eventId = referenceId(operation.event, localEventRefs);
     if (!todoId || !eventId) continue;
