@@ -3,6 +3,7 @@ import {
   AssistantProtocolError,
   inspectAssistantReplyWarnings,
   parseAssistantTurnOutput,
+  truncationWarnings,
 } from '../src/assistant/protocol';
 import {
   mergeProviderToolCallDelta,
@@ -46,6 +47,60 @@ const forgetWithEvidence = parseAssistantTurnOutput(JSON.stringify({
 check(forgetWithEvidence.memoryDeltas.length === 1
   && forgetWithEvidence.memoryRejections.length === 0,
 'forget_memory 带 evidence 时应正常解析');
+
+// 数量超限统一截断：不再整轮失败，截断数进回执，警告可观测。
+const elevenOperations = parseAssistantTurnOutput(JSON.stringify({
+  reply: '收到', segment: { action: 'continue' },
+  operations: Array.from({ length: 11 }, (_, index) => ({
+    key: `done-${index}`, type: 'complete_todo', todo_id: `todo-${index}`,
+  })),
+}));
+check(elevenOperations.operations.length === 10
+  && elevenOperations.truncations.operations === 1,
+  'operations 超限（11>10）必须截断取前 10 条并记录丢弃数');
+
+const threeMemoryDeltas = parseAssistantTurnOutput(JSON.stringify({
+  reply: '收到', segment: { action: 'continue' },
+  memory_deltas: Array.from({ length: 3 }, () => ({
+    action: 'create_candidate', category: 'preference', content: '喜欢茶',
+    sensitivity: 'ordinary', admission_basis: 'inferred', evidence: '喜欢茶',
+  })),
+}));
+check(threeMemoryDeltas.memoryDeltas.length === 2
+  && threeMemoryDeltas.truncations.memoryDeltas === 1,
+  'memory_deltas 超限（3>2）必须截断取前 2 条并记录丢弃数');
+
+const manyTodosDelta = parseAssistantTurnOutput(JSON.stringify({
+  reply: '收到', segment: { action: 'continue' },
+  event_deltas: [{
+    target: { action: 'update_existing', event_id: 'event-a' },
+    evidence: ['原话'],
+    state: { action: 'replace', change_type: 'plan', value: '合并后状态' },
+    progress: [{ type: 'fact', content: '变化' }],
+    todos: Array.from({ length: 13 }, (_, index) => ({
+      action: 'update', todo_id: `todo-${index}`, text: `新内容${index}`,
+    })),
+  }],
+}));
+check(manyTodosDelta.eventDeltas[0].todos.length === 10
+  && manyTodosDelta.truncations.todos.length === 1
+  && manyTodosDelta.truncations.todos[0].dropped === 3,
+  'event_delta.todos 超限（13>10）必须截断取前 10 条并记录丢弃数');
+
+const manyDeltas = parseAssistantTurnOutput(JSON.stringify({
+  reply: '收到', segment: { action: 'continue' },
+  event_deltas: Array.from({ length: 5 }, () => ({
+    target: { action: 'update_existing', event_id: 'event-a' },
+    evidence: ['原话'], state: { action: 'keep' }, progress: [], todos: [],
+  })),
+}));
+check(manyDeltas.eventDeltas.length === 4
+  && manyDeltas.truncations.eventDeltas === 1,
+  'event_deltas 超限（5>4）必须截断取前 4 条并记录丢弃数');
+
+check(truncationWarnings({ operations: 1, eventDeltas: 0, memoryDeltas: 0, todos: [], progress: [] })
+  .includes('operations_truncated'),
+  '截断详情必须转换为可观测的协议警告');
 
 const withOperations = parseAssistantTurnOutput(JSON.stringify({
   reply: '可以，我们把它作为一条持续主线。',
@@ -192,9 +247,6 @@ for (const [label, operations] of [
   ]],
   ['未知动作', [{ key: 'x', type: 'delete_everything' }]],
   ['非法候选 ID', [{ key: 'x', type: 'complete_todo', todo_id: '../../todo' }]],
-  ['超过六个动作', Array.from({ length: 7 }, (_, index) => ({
-    key: `done-${index}`, type: 'complete_todo', todo_id: `todo-${index}`,
-  }))],
   ['字段过长', [{ key: 'x', type: 'create_event', event_ref: 'event_1', title: '事'.repeat(121), current_state: '开始' }]],
   ['错误本地引用', [{ key: 'x', type: 'create_event', event_ref: 'event-x', title: '换房', current_state: '开始' }]],
   ['新待办缺少日期判断', [{ key: 'x', type: 'create_todo', todo_ref: 'todo_1', text: '买牛奶' }]],
@@ -252,7 +304,7 @@ let tooManyDeltasRejected = false;
 try {
   parseAssistantTurnOutput(JSON.stringify({
     reply: '收到', segment: { action: 'continue' },
-    event_deltas: Array.from({ length: 3 }, (_, index) => ({
+    event_deltas: Array.from({ length: 5 }, (_, index) => ({
       key: `delta-${index}`, target: { action: 'update_existing', event_id: `event-${index}` },
       evidence: ['原话'], state: { action: 'keep' }, progress: [], todos: [],
     })),
@@ -260,14 +312,13 @@ try {
 } catch (error) {
   tooManyDeltasRejected = error instanceof AssistantProtocolError;
 }
-check(tooManyDeltasRejected, '单轮事件增量必须限制数量');
+check(!tooManyDeltasRejected, '5 个事件增量超限（>4）必须截断而不是整轮失败');
 
 for (const [label, memoryDeltas] of [
   ['缺少证据', [{ action: 'create_candidate', category: 'preference', content: '喜欢茶', sensitivity: 'ordinary', admission_basis: 'inferred' }]],
   ['直接生效依据错误', [{ action: 'create_active', category: 'preference', content: '喜欢茶', sensitivity: 'ordinary', admission_basis: 'inferred', evidence: '喜欢茶' }]],
   ['未知类别', [{ action: 'create_candidate', category: 'account', content: '喜欢茶', sensitivity: 'ordinary', admission_basis: 'inferred', evidence: '喜欢茶' }]],
   ['非法版本', [{ action: 'forget_memory', memory_id: 'memory-a', expected_revision: 0, evidence: '忘掉' }]],
-  ['超过两项', Array.from({ length: 3 }, () => ({ action: 'create_candidate', category: 'preference', content: '喜欢茶', sensitivity: 'ordinary', admission_basis: 'inferred', evidence: '喜欢茶' }))],
 ] as const) {
   let rejected = false;
   try {

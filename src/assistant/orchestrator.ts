@@ -420,9 +420,21 @@ async function runSavedTurn(input: {
         reason: 'unverified_execution_claim',
       });
     }
+    const parseTruncations = output.truncations
+      ?? { operations: 0, eventDeltas: 0, memoryDeltas: 0, todos: [], progress: [] };
     const executionResult = buildAssistantExecutionResult({
       operations: completed.operations,
       rejected: executionRejected,
+      truncated: (parseTruncations.operations || parseTruncations.eventDeltas
+        || parseTruncations.memoryDeltas || parseTruncations.todos.length || parseTruncations.progress.length)
+        ? {
+          operations: parseTruncations.operations,
+          eventDeltas: parseTruncations.eventDeltas,
+          memoryDeltas: parseTruncations.memoryDeltas,
+          todos: parseTruncations.todos.reduce((sum, item) => sum + item.dropped, 0),
+          progress: parseTruncations.progress.reduce((sum, item) => sum + item.dropped, 0),
+        }
+        : undefined,
     });
     await safelyLog(() => recordAssistantExecutionOutcome({
       requestId: input.requestId,

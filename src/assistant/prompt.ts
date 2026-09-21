@@ -5,7 +5,7 @@ export interface AssistantPromptMessage {
   content: string;
 }
 
-export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v11-memory-tools';
+export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v12-relaxed-limits';
 
 export const ASSISTANT_MEMORY_DELTA_FORMAT_GUIDE = [
   '长期记忆增量格式（每轮最多2项；不需要 key，本地生成幂等键）：',
@@ -29,8 +29,8 @@ export const ASSISTANT_EVENT_DELTA_FORMAT_GUIDE = [
   '- evidence 必须是 1–3 段可在本轮用户原话中找到的原文；不得引用助手建议、旧摘要或模型推断作为新承诺证据。',
   '- state 保持：{"action":"keep"}。state 更新：{"action":"replace","change_type":"fact|decision|result|blocker|plan|correction","value":"合并旧状态后的完整新快照"}。',
   '- state.value 必须保留仍然有效的旧事实，再纳入本轮变化；不能只抄本轮消息。状态变化必须同时给一条对应 progress。',
-  '- progress 最多2条：{"type":"fact|decision|result|blocker|plan|correction","content":"本轮新增的关键变化"}；不要复述完整状态或重复最近进展。',
-  '- todos 最多2条。新建：{"action":"create","todo_ref":"todo_1","text":"行动","date_status":"..."...}。修改：{"action":"update","todo_id":"候选ID","text":"可选新内容","date_status":"可选"...}。完成：{"action":"complete","todo_id":"候选ID"}。',
+  '- progress 最多10条（仅记本轮关键变化，通常1-2条）：{"type":"fact|decision|result|blocker|plan|correction","content":"本轮新增的关键变化"}；不要复述完整状态或重复最近进展。',
+  '- todos 最多10条（合并、批量整理等场景可多条）。新建：{"action":"create","todo_ref":"todo_1","text":"行动","date_status":"..."...}。修改：{"action":"update","todo_id":"候选ID","text":"可选新内容","date_status":"可选"...}。完成：{"action":"complete","todo_id":"候选ID"}。',
   '- 每个待办变化必须有对应 progress；相关待办由本地自动关联事件，不要在 operations 重复输出 link_todo_event。',
   '- 删除待办不要放进 event_delta.todos；使用普通 operations 的 delete_todo，绝不能用 complete 代替删除。',
 ] as const;
@@ -100,9 +100,9 @@ export function buildAssistantPromptMessages(input: {
     '    "previous_summary": "仅切换话题时填写：旧分段最终摘要，不超过240字",',
     '    "summary": "仅有重要新增时填写：当前分段滚动摘要，不超过240字"',
     '  },',
-    '  "event_deltas": [最多2个完整事件增量],',
+    '  "event_deltas": [最多4个完整事件增量；合并、批量整理等多主线场景可多条],',
     '  "memory_deltas": [最多2个长期记忆增量],',
-    '  "operations": [最多6个与事件增量无关的候选操作]',
+    '  "operations": [最多10个与事件增量无关的候选操作]',
     '}',
     '',
     ...ASSISTANT_EVENT_DELTA_FORMAT_GUIDE,

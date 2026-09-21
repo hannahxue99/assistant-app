@@ -4,6 +4,7 @@ import { buildAssistantPromptMessages } from './prompt';
 import {
   inspectAssistantReplyWarnings,
   parseAssistantTurnOutput,
+  truncationWarnings,
   type AssistantProtocolWarning,
   type AssistantTurnOutput,
 } from './protocol';
@@ -534,6 +535,7 @@ export async function requestAssistantTurn(input: {
     protocolWarnings = [...new Set([
       ...protocolWarnings,
       ...inspectAssistantReplyWarnings(output.reply),
+      ...truncationWarnings(output.truncations),
     ])];
     input.onReplyText?.(output.reply);
     return {

@@ -6,12 +6,21 @@ export interface AssistantExecutionResult {
   outcome: AssistantExecutionOutcome;
   committed: Array<Pick<AssistantOperation, 'operationType' | 'objectType' | 'objectId' | 'receiptSummary'>>;
   rejected: Array<{ type: string; reason: string; detail?: string }>;
+  /** 解析层截断统计：未处理的计划项数量，叙述时应告知用户如何补做。 */
+  truncated?: {
+    operations: number;
+    eventDeltas: number;
+    memoryDeltas: number;
+    todos: number;
+    progress: number;
+  };
   error?: string;
 }
 
 export function buildAssistantExecutionResult(input: {
   operations: AssistantOperation[];
   rejected?: Array<{ type?: string; reason?: string; detail?: string }>;
+  truncated?: AssistantExecutionResult['truncated'];
   error?: string;
 }): AssistantExecutionResult {
   const rejected = (input.rejected ?? []).map(item => ({
@@ -32,7 +41,7 @@ export function buildAssistantExecutionResult(input: {
       : rejected.length > 0
         ? 'rejected'
         : 'no_change';
-  return { outcome, committed, rejected, ...(input.error ? { error: input.error } : {}) };
+  return { outcome, committed, rejected, ...(input.truncated ? { truncated: input.truncated } : {}), ...(input.error ? { error: input.error } : {}) };
 }
 
 export function fallbackReplyForExecution(result: AssistantExecutionResult, draftReply?: string): string {
