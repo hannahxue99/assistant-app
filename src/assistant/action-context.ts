@@ -105,7 +105,7 @@ export async function loadAssistantActionContext(input: {
     );
     const aliasRows = await database.getAllAsync<any>('SELECT event_id, alias FROM assistant_event_aliases');
     const updateRows = await database.getAllAsync<any>(
-      `SELECT event_id, content FROM assistant_event_updates
+      `SELECT id, event_id, content FROM assistant_event_updates
        WHERE undone_at IS NULL ORDER BY occurred_at DESC, id DESC`,
     );
     const linkedTodoRows = await database.getAllAsync<any>(
@@ -122,9 +122,12 @@ export async function loadAssistantActionContext(input: {
       aliasesByEvent.set(row.event_id, [...(aliasesByEvent.get(row.event_id) ?? []), row.alias]);
     }
     const updatesByEvent = new Map<string, string[]>();
+    const updateIdsByEvent = new Map<string, Array<{ id: string; content: string }>>();
     for (const row of updateRows) {
       const existing = updatesByEvent.get(row.event_id) ?? [];
       if (existing.length < 3) updatesByEvent.set(row.event_id, [...existing, row.content]);
+      const ids = updateIdsByEvent.get(row.event_id) ?? [];
+      if (ids.length < 12) updateIdsByEvent.set(row.event_id, [...ids, { id: row.id, content: row.content }]);
     }
     const todosByEvent = new Map<string, string[]>();
     const openTodoCountsByEvent = new Map<string, number>();
@@ -157,6 +160,7 @@ export async function loadAssistantActionContext(input: {
       linkedTodoCount: (todosByEvent.get(row.id) ?? []).length,
       openLinkedTodoCount: openTodoCountsByEvent.get(row.id) ?? 0,
       recentUpdateTexts: updatesByEvent.get(row.id) ?? [],
+      updates: updateIdsByEvent.get(row.id) ?? [],
       revision: Number(row.revision),
       updatedAt: Number(row.updated_at),
       score: 0,

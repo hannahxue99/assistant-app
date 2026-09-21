@@ -240,11 +240,19 @@ function parseOperation(value: unknown): AssistantOperationProposal {
       };
     }
     case 'link_todo_event':
+    case 'unlink_todo_event':
       return {
         key,
         type: raw.type,
         todo: objectRef(raw, 'todo'),
         event: objectRef(raw, 'event'),
+      };
+    case 'delete_event_update':
+      return {
+        key,
+        type: raw.type,
+        updateId: identifier(raw.update_id, 'update_id'),
+        eventId: identifier(raw.event_id, 'event_id'),
       };
     default:
       throw new AssistantProtocolError('模型返回了未知候选操作');
