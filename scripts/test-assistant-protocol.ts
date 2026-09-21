@@ -450,7 +450,7 @@ async function main() {
   });
   check(toolResult.grounding.eventIds[0] === 'event-trip', '工具读取到的事件 ID 必须回传给本地校验层');
   check(toolResult.providerMetadata.attemptCount === 2, '一次工具读取和一次规划应记录两次 Provider 请求');
-  check(toolBodies[0].tools?.length === 6, '启用读取执行器时必须向模型暴露事件、待办和记忆六个只读工具');
+  check(toolBodies[0].tools?.length === 9, '启用读取执行器时必须向模型暴露事件、待办、记忆的搜索/读取/列表九个只读工具');
   check(toolBodies[1].messages.at(-1).role === 'tool', '第二轮必须带回真实工具结果');
   check(toolBodies[1].messages.at(-2).reasoning_content === '先读取真实事件',
     '续轮必须回传上一轮 reasoning_content（实测 deepseek-flash thinking 模式缺失会被 400 拒绝）');

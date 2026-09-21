@@ -117,6 +117,28 @@ async function main() {
   assert.ok(!/\d{13}/.test(riskyJson), '工具结果不得包含 13 位毫秒时间戳（消除数字串与敏感词的组合风控）');
   assert.equal(risky.result.event.revision, 6, 'revision 保持数字供本地写入校验');
 
+  // 列表工具：总览返回全量清单（不含正文），不授权写入。
+  const listedEvents = await tools.executeAssistantReadToolWithDatabase(adapter, {
+    id: 'call-list-events', name: 'list_events', argumentsJson: '{}',
+  });
+  assert.ok(listedEvents.result.events.length >= 2, 'list_events 应返回全部活跃事件');
+  assert.ok(listedEvents.result.events.every(e => e.title && e.revision !== undefined),
+    'list_events 条目应含标题和版本');
+  assert.equal(listedEvents.readEventIds.length, 0, '列表不授权写入');
+
+  const listedTodos = await tools.executeAssistantReadToolWithDatabase(adapter, {
+    id: 'call-list-todos', name: 'list_todos', argumentsJson: '{"include_done":true}',
+  });
+  assert.ok(listedTodos.result.todos.length >= 1, 'list_todos 含已完成时应返回待办');
+  assert.ok(listedTodos.result.todos.every(t => typeof t.done === 'boolean'),
+    'list_todos 条目应带完成状态');
+
+  const listedMemories = await tools.executeAssistantReadToolWithDatabase(adapter, {
+    id: 'call-list-memories', name: 'list_memories', argumentsJson: '{}',
+  });
+  assert.ok(listedMemories.result.memories.length >= 1, 'list_memories 应返回记忆清单');
+  assert.equal(listedMemories.readMemoryIds.length, 0, '列表不授权记忆写入');
+
   console.log('assistant data tools database tests passed');
 }
 

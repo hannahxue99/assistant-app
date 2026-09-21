@@ -5,6 +5,9 @@ export const ASSISTANT_READ_TOOL_NAMES = [
   'get_todo',
   'search_memories',
   'get_memory',
+  'list_events',
+  'list_todos',
+  'list_memories',
 ] as const;
 
 export type AssistantReadToolName = typeof ASSISTANT_READ_TOOL_NAMES[number];
@@ -122,6 +125,52 @@ export const ASSISTANT_READ_TOOLS = [
         type: 'object',
         properties: { memory_id: { type: 'string' } },
         required: ['memory_id'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_events',
+      description: '列出全部活跃事件的 ID 和标题（不含正文，紧凑总览）。用户要求总览或全部列出时调用；需要某条的完整状态再按 ID 调 get_event。',
+      parameters: {
+        type: 'object',
+        properties: {
+          pinned_only: { type: 'boolean', description: '可选；只列置顶事件，默认否' },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_todos',
+      description: '列出待办的 ID 和摘要（不含正文）。include_done 控制是否包含已完成，默认只列未完成；需要完整详情再按 ID 调 get_todo。',
+      parameters: {
+        type: 'object',
+        properties: {
+          include_done: { type: 'boolean', description: '可选；包含已完成待办，默认否' },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_memories',
+      description: '列出长期记忆的 ID、类别和内容（不含元数据）。用户要求查看全部记忆时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          status: {
+            type: 'string',
+            enum: ['active', 'candidate'],
+            description: '可选；只列已生效或待确认记忆，默认两者都列',
+          },
+        },
         additionalProperties: false,
       },
     },
@@ -386,6 +435,81 @@ export async function executeAssistantReadToolWithDatabase(
         readTodoIds: [],
         readMemoryIds: [],
       };
+  }
+
+  if (call.name === 'list_events') {
+    const pinnedOnly = args.pinned_only === true;
+    const rows = await database.getAllAsync<any>(
+      `SELECT id, title, status, pinned_at, revision FROM assistant_events
+       WHERE status='active' ${pinnedOnly ? 'AND pinned_at IS NOT NULL' : ''}
+       ORDER BY pinned_at IS NOT NULL DESC, updated_at DESC`,
+    );
+    return {
+      toolCallId: call.id,
+      name: call.name,
+      result: {
+        pinnedOnly,
+        events: rows.map(row => ({
+          id: row.id,
+          title: row.title,
+          pinned: row.pinned_at != null,
+          revision: Number(row.revision),
+        })),
+      },
+      readEventIds: [],
+      readTodoIds: [],
+      readMemoryIds: [],
+    };
+  }
+
+  if (call.name === 'list_todos') {
+    const includeDone = args.include_done === true;
+    const rows = await database.getAllAsync<any>(
+      `SELECT id, summary, raw_text, done FROM entries
+       WHERE kind='task' ${includeDone ? '' : 'AND done=0'}
+       ORDER BY done ASC, updated_at DESC`,
+    );
+    return {
+      toolCallId: call.id,
+      name: call.name,
+      result: {
+        includeDone,
+        todos: rows.map(row => ({
+          id: row.id,
+          text: row.summary || row.raw_text,
+          done: Boolean(row.done),
+        })),
+      },
+      readEventIds: [],
+      readTodoIds: [],
+      readMemoryIds: [],
+    };
+  }
+
+  if (call.name === 'list_memories') {
+    const status = args.status;
+    if (status !== undefined && status !== 'active' && status !== 'candidate') {
+      throw Object.assign(new Error('数据工具的 status 无效'), { code: 'invalid_tool_arguments' });
+    }
+    const rows = status
+      ? await database.getAllAsync<any>(
+        `SELECT id, category, content, status FROM assistant_memories WHERE status=? ORDER BY updated_at DESC`,
+        status,
+      )
+      : await database.getAllAsync<any>(
+        `SELECT id, category, content, status FROM assistant_memories WHERE status IN ('active','candidate') ORDER BY updated_at DESC`,
+      );
+    return {
+      toolCallId: call.id,
+      name: call.name,
+      result: {
+        status: status ?? null,
+        memories: rows,
+      },
+      readEventIds: [],
+      readTodoIds: [],
+      readMemoryIds: [],
+    };
   }
 
   const todoId = requiredString(args, 'todo_id');
