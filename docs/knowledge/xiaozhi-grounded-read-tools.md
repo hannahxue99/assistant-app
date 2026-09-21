@@ -47,6 +47,14 @@
 - 时间戳给模型一律 ISO；revision 保持数字（本地校验必需的小整数）。
 - 上下文注入最小化：launchContext 只给 ID 指针，事件正文只能经工具读取进入上下文。
 
+### 5. 操作扩展模式（PR #23）
+
+删除进展（delete_event_update）与解除关联（unlink_todo_event）沿用既有模式快速落地：协议解析 → 可读集合校验（目标必须本轮 get 过）→ 软删执行（undone_at）→ 撤销恢复。新增操作需同步四处：action-types、protocol、validator、action-store（+ action-schema 的 CHECK 约束走事务化重建迁移）。VM 测试的 provider stub 输出必须用 camelCase（orchestrator 消费的是解析后对象，不再走 snake_case 协议层）。
+
+### 6. 已知不修：阶段耗时展示口径
+
+落定摘要"读取 X 秒"几乎不会出现——本地 SQLite 查询毫秒级（<1s 被展示过滤），模型往返时间记入 thinking。用户感知的"读取"实为模型决策。用户已确认不修，保留现状。
+
 ## 验证与回滚
 
 - 验证：`npm run ci`（22 套件）+ 真实 API 端到端（三轮工具循环、风控组合、降级路径）+ Dev 真机（合并、全库总览、连续分页读取、断网兜底）。
