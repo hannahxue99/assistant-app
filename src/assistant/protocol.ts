@@ -524,10 +524,10 @@ export function parseAssistantTurnOutput(content: string): AssistantTurnOutput {
   if (!raw || typeof raw !== 'object') throw new AssistantProtocolError('模型返回缺少对象');
   const reply = typeof raw.reply === 'string' ? raw.reply.trim() : '';
   if (!reply) throw new AssistantProtocolError('模型返回缺少自然回复');
-  const action = raw.segment?.action;
-  if (action !== 'continue' && action !== 'split_before_user') {
-    throw new AssistantProtocolError('模型返回了非法分段动作');
-  }
+  // segment.action 缺失或非法时降级为 continue：不错误关闭当前分段；
+  // 原值进错误信息仅供日志观测（protocol_warnings 不承载，避免噪音）。
+  const rawAction = raw.segment?.action;
+  const action: 'continue' | 'split_before_user' = rawAction === 'split_before_user' ? 'split_before_user' : 'continue';
   const { operations, dropped: droppedOperations } = parseOperations(raw.operations);
   const { deltas, dropped: droppedEventDeltas, todosTruncations, progressTruncations } = parseEventDeltas(raw.event_deltas);
   const { memoryDeltas, memoryRejections, dropped: droppedMemoryDeltas } = parseMemoryDeltas(raw.memory_deltas);

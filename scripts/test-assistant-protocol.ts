@@ -222,7 +222,6 @@ check((longSummary.segment.summary?.length ?? 0) <= 240, '摘要必须有硬长�
 for (const invalid of [
   '{}',
   '{"reply":"","segment":{"action":"continue"}}',
-  '{"reply":"好","segment":{"action":"unknown"}}',
 ]) {
   let rejected = false;
   try {
@@ -232,6 +231,14 @@ for (const invalid of [
   }
   check(rejected, `非法返回必须拒绝：${invalid}`);
 }
+
+// 回归：segment.action 非法/缺失时降级为 continue，不炸整轮（模型字段瑕疵不惩罚用户）。
+const badSegment = parseAssistantTurnOutput('{"reply":"好的","segment":{"action":"unknown"}}');
+check(badSegment.segment.action === 'continue',
+  '非法分段动作必须降级为 continue，不得让整轮失败');
+const missingSegment = parseAssistantTurnOutput('{"reply":"好的"}');
+check(missingSegment.segment.action === 'continue',
+  'segment 整体缺失必须降级为 continue');
 
 const completionClaim = parseAssistantTurnOutput(
   '{"reply":"好的，记下了","segment":{"action":"continue"},"operations":[]}',
@@ -649,7 +656,7 @@ async function main() {
       fetchImpl: async () => {
         invalidResponseCalls += 1;
         return new Response(JSON.stringify({
-          choices: [{ message: { content: '{"reply":"收到","segment":{"action":"bad"}}' } }],
+          choices: [{ message: { content: '不是 JSON' } }],
         }), { status: 200, headers: { 'content-type': 'application/json' } });
       },
     });
