@@ -15,7 +15,7 @@ import {
   type AssistantReadToolExecution,
 } from './data-tools';
 
-export type AssistantProviderErrorCode = 'missing-key' | 'timeout' | 'network' | 'provider' | 'invalid-response' | 'cancelled' | 'content-risk';
+export type AssistantProviderErrorCode = 'missing-key' | 'timeout' | 'network' | 'provider' | 'invalid-response' | 'cancelled';
 
 export interface AssistantProviderAttempt {
   attempt: number;
@@ -79,9 +79,6 @@ export interface AssistantProviderTimeouts {
   streamIdleMs: number;
   totalMs: number;
 }
-
-/** 已实证触发 DeepSeek 内容风控的工具结果敏感词；降级时全角化。 */
-const SENSITIVE_CONTENT_WORDS = ['北京'];
 
 export const DEFAULT_ASSISTANT_PROVIDER_TIMEOUTS: AssistantProviderTimeouts = {
   firstByteMs: 45_000,
@@ -329,9 +326,8 @@ async function requestCompletion(input: {
       const detail = await response.text().catch(() => '');
       markActivity();
       const retryable = response.status === 429 || response.status >= 500;
-      const contentRisk = response.status === 400 && detail.includes('Content Exists Risk');
       throw new AssistantProviderError(
-        contentRisk ? 'content-risk' : 'provider',
+        'provider',
         `理解引擎返回错误 ${response.status}: ${detail.slice(0, 160)}`,
         undefined,
         retryable,
@@ -394,7 +390,7 @@ export async function requestAssistantTurn(input: {
   const attempts: AssistantProviderAttempt[] = [];
   let protocolWarnings: AssistantProtocolWarning[] = [];
   const timeouts = { ...DEFAULT_ASSISTANT_PROVIDER_TIMEOUTS, ...input.timeouts };
-  let messages: any[] = buildAssistantPromptMessages({
+  const messages: any[] = buildAssistantPromptMessages({
       contextBlock: input.context.contextBlock,
       recentMessages: input.context.recentMessages,
       referenceAt: input.referenceAt,
@@ -408,55 +404,30 @@ export async function requestAssistantTurn(input: {
   let toolsDisabled = false;
   // DeepSeek 偶发把全部输出放进 reasoning_content 而 content 为空；追加提示重试一次。
   let emptyContentRetried = false;
-  // 内容风控降级：工具结果含敏感词被 400 拒绝时，全角化重试一次（模型可读全角中文）。
-  let contentRiskRetried = false;
   let completion: CompletionResponse | null = null;
-  /** 工具结果敏感词中点化（如"北京"→"北·京"）：绕过内容风控，模型仍可正确理解。 */
-  const sanitizeToolMessages = (list: any[]): any[] => list.map(message => {
-    if (message?.role !== 'tool' || typeof message.content !== 'string') return message;
-    let sanitized = message.content;
-    for (const word of SENSITIVE_CONTENT_WORDS) {
-      sanitized = sanitized.split(word).join(word.split('').join('·'));
-    }
-    return { ...message, content: sanitized };
-  });
   try {
     while (true) {
       const attemptStartedAt = Date.now();
       input.onProgress?.('thinking');
-      try {
-        completion = await requestCompletion({
-          settings: input.settings,
-          body: JSON.stringify({
-            model: input.settings.llmModel,
-            messages,
-            thinking: { type: 'enabled' },
-            reasoning_effort: 'high',
-            response_format: { type: 'json_object' },
-            ...(input.executeReadTool && !toolsDisabled ? { tools: ASSISTANT_READ_TOOLS, tool_choice: 'auto' } : {}),
-            stream: true,
-            stream_options: { include_usage: true },
-          }),
-          callerSignal: input.signal,
-          fetchImpl,
-          onReplyText: input.onReplyText,
-          onReasoningText: input.onReasoningText,
-          onProgress: input.onProgress,
-          timeouts,
-        });
-      } catch (completionError: any) {
-        // 工具结果触发内容风控时，全角化工具结果重试一次，而不是整轮失败。
-        if (completionError instanceof AssistantProviderError
-          && completionError.code === 'content-risk'
-          && !contentRiskRetried
-          && messages.some(message => message?.role === 'tool')) {
-          contentRiskRetried = true;
-          protocolWarnings = [...new Set([...protocolWarnings, 'content_risk_retried' as const])];
-          messages = sanitizeToolMessages(messages);
-          continue;
-        }
-        throw completionError;
-      }
+      completion = await requestCompletion({
+        settings: input.settings,
+        body: JSON.stringify({
+          model: input.settings.llmModel,
+          messages,
+          thinking: { type: 'enabled' },
+          reasoning_effort: 'high',
+          response_format: { type: 'json_object' },
+          ...(input.executeReadTool && !toolsDisabled ? { tools: ASSISTANT_READ_TOOLS, tool_choice: 'auto' } : {}),
+          stream: true,
+          stream_options: { include_usage: true },
+        }),
+        callerSignal: input.signal,
+        fetchImpl,
+        onReplyText: input.onReplyText,
+        onReasoningText: input.onReasoningText,
+        onProgress: input.onProgress,
+        timeouts,
+      });
       attempts.push({
         attempt: attempts.length + 1,
         startedAt: attemptStartedAt,
