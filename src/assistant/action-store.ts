@@ -656,6 +656,7 @@ export async function completeAssistantTurnWithActions(input: {
   reasoning?: AssistantReasoning | null;
   actionContext: AssistantActionContext;
   createdAt?: number;
+  stageDurations?: AssistantMessage['stageDurations'];
 }): Promise<{ assistantMessage: AssistantMessage; operations: AssistantOperation[] }> {
   const createdAt = input.createdAt ?? Date.now();
   return withExclusiveDatabaseTransaction(async (database) => {
@@ -681,6 +682,7 @@ export async function completeAssistantTurnWithActions(input: {
       reply: input.reply,
       segment: input.segment,
       createdAt,
+      stageDurations: input.stageDurations,
     });
     if (input.reasoning) await saveAssistantReasoningWithDatabase(database, input.reasoning);
     return { assistantMessage, operations: [...operations, ...memoryOperations] };

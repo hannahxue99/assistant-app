@@ -25,6 +25,11 @@ import {
   formatAssistantMessageTime,
   shouldShowAssistantDateSeparator,
 } from '../src/assistant/message-time';
+import {
+  assistantStageDurationsFromTimeline,
+  assistantStageLineLabel,
+  assistantStageSummaryLabel,
+} from '../src/assistant/runtime-state';
 import type { AssistantMessage } from '../src/assistant/types';
 import type { AssistantOperation } from '../src/assistant/action-types';
 
@@ -105,12 +110,45 @@ check(!isAssistantComposerDisabled('ready', [sending]), '有回复处理中时�
 check(!isAssistantComposerDisabled('ready', [latestFailure]), '回复失败后输入应恢复');
 check(formatAssistantRuntimeDuration(8_999) === '8 秒', '一分钟内运行时间应按整秒展示');
 check(formatAssistantRuntimeDuration(68_999) === '1 分 08 秒', '一分钟后应切换为分秒展示');
-check(assistantRuntimeLabel('thinking', 68_000) === '小知正在思考 · 1 分 08 秒',
+check(assistantRuntimeLabel('planning', 68_000) === '小知正在整理处理方案 · 1 分 08 秒',
   '思考状态应展示连续运行时间');
+check(assistantRuntimeLabel('reading', 9_000) === '小知正在读取事件和待办 · 9 秒',
+  '调用数据工具时应明确展示读取状态');
+check(assistantRuntimeLabel('updating', 70_000) === '小知正在更新 · 1 分 10 秒',
+  '本地事务执行时应明确展示更新状态');
 check(assistantRuntimeLabel('answering', 72_000) === '小知正在回答 · 1 分 12 秒',
   '开始流式回答后只切换阶段文案，不重置计时');
 check(assistantRuntimeLabel('finalizing', 80_000) === '小知正在整理 · 1 分 20 秒',
   '本地校验提交阶段应继续沿用同一运行时间');
+
+check(assistantStageLineLabel('reading', 3_000) === '读取事件和待办 3 秒',
+  '运行中已定格阶段应显示阶段名与耗时');
+check(assistantStageLineLabel('planning', 8_500) === '整理处理方案 8 秒',
+  '已定格阶段的耗时按整秒展示');
+
+const timeline = [
+  { stage: 'planning' as const, at: 1_000 },
+  { stage: 'reading' as const, at: 2_000 },
+  { stage: 'planning' as const, at: 5_000 },
+  { stage: 'updating' as const, at: 11_000 },
+  { stage: 'answering' as const, at: 12_000 },
+];
+const mergedStages = assistantStageDurationsFromTimeline(timeline, 20_000);
+check(mergedStages.thinkingMs === 7_000 && mergedStages.readingMs === 3_000 && mergedStages.updatingMs === 1_000,
+  '同阶段多段时间线必须合并累加，忽略回答与收尾');
+
+check(assistantStageSummaryLabel({ readingMs: 3_000, thinkingMs: 8_000, updatingMs: 1_000 })
+  === '读取 3 秒 · 思考 8 秒 · 更新 1 秒',
+  '落定摘要应按阶段顺序拼接实际耗时');
+check(assistantStageSummaryLabel({ thinkingMs: 6_000 }) === '思考了 6 秒',
+  '纯聊天轮应退化为思考了 X 秒');
+check(assistantStageSummaryLabel(undefined, 7_000) === '思考了 7 秒',
+  '旧消息无阶段耗时时回退到思考时长');
+check(assistantStageSummaryLabel({ readingMs: 400, updatingMs: 300 }) === null,
+  '各阶段耗时不足一秒时不显示摘要行');
+check(assistantStageSummaryLabel({ readingMs: 3_000, thinkingMs: 8_000 })
+  === '读取 3 秒 · 思考 8 秒',
+  '未发生的阶段不得出现在摘要行');
 check(assistantCompletedRuntimeLabel(84_000) === '用时 1 分 24 秒',
   '完成后应弱化展示本轮总用时');
 const todayAtNoon = new Date(2026, 8, 15, 12, 0).getTime();

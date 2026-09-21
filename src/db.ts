@@ -160,7 +160,20 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
   await ensureAssistantOperationSchema(database);
   await database.execAsync(assistantMemorySchema);
 
+  const requestColumns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(assistant_requests)');
+  if (!requestColumns.some(column => column.name === 'error_code')) {
+    await database.execAsync('ALTER TABLE assistant_requests ADD COLUMN error_code TEXT;');
+  }
+
+  const assistantMessageColumns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(assistant_messages)');
+  if (!assistantMessageColumns.some(column => column.name === 'stage_durations_json')) {
+    await database.execAsync("ALTER TABLE assistant_messages ADD COLUMN stage_durations_json TEXT NOT NULL DEFAULT '{}';");
+  }
+
   const decisionLogColumns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(assistant_decision_logs)');
+  if (!decisionLogColumns.some(column => column.name === 'error_code')) {
+    await database.execAsync('ALTER TABLE assistant_decision_logs ADD COLUMN error_code TEXT;');
+  }
   if (!decisionLogColumns.some(column => column.name === 'error_detail')) {
     await database.execAsync('ALTER TABLE assistant_decision_logs ADD COLUMN error_detail TEXT;');
   }
@@ -184,6 +197,27 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
   }
   if (!decisionLogColumns.some(column => column.name === 'proposed_memory_deltas_json')) {
     await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN proposed_memory_deltas_json TEXT NOT NULL DEFAULT '[]';");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'tool_read_event_ids_json')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN tool_read_event_ids_json TEXT NOT NULL DEFAULT '[]';");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'tool_read_todo_ids_json')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN tool_read_todo_ids_json TEXT NOT NULL DEFAULT '[]';");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'tool_read_memory_ids_json')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN tool_read_memory_ids_json TEXT NOT NULL DEFAULT '[]';");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'execution_outcome')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN execution_outcome TEXT NOT NULL DEFAULT 'pending';");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'tool_calls_json')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN tool_calls_json TEXT NOT NULL DEFAULT '[]';");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'execution_rejected_json')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN execution_rejected_json TEXT NOT NULL DEFAULT '[]';");
+  }
+  if (!decisionLogColumns.some(column => column.name === 'narration_json')) {
+    await database.execAsync("ALTER TABLE assistant_decision_logs ADD COLUMN narration_json TEXT NOT NULL DEFAULT '{}';");
   }
 
   // 旧版本只有 created_at。先探测列再迁移，避免重复 ALTER 导致启动失败。

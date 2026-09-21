@@ -23,6 +23,19 @@ export interface AssistantTurnOutput {
   operations: AssistantOperationProposal[];
   eventDeltas: AssistantEventDelta[];
   memoryDeltas: AssistantMemoryDeltaProposal[];
+  /** 解析层降级剔除的记忆增量；模型格式瑕疵不再炸掉整轮。 */
+  memoryRejections: Array<{ key: string; action: string; reason: string }>;
+  /**
+   * 解析层截断详情（超限取前 N 条继续，不惩罚用户）。
+   * dropped 计数进执行回执，模型在最终回复中告知用户剩余部分如何补做。
+   */
+  truncations: {
+    operations: number;
+    eventDeltas: number;
+    memoryDeltas: number;
+    todos: Array<{ deltaKey: string; dropped: number }>;
+    progress: Array<{ deltaKey: string; dropped: number }>;
+  };
 }
 
 export class AssistantProtocolError extends Error {
@@ -32,7 +45,7 @@ export class AssistantProtocolError extends Error {
   }
 }
 
-export type AssistantProtocolWarning = 'reply_execution_claim';
+export type AssistantProtocolWarning = 'reply_execution_claim' | 'tool_budget_exhausted' | 'empty_content_retried' | 'operations_truncated' | 'event_deltas_truncated' | 'todos_truncated' | 'progress_truncated' | 'memory_deltas_truncated';
 
 function parseJson(content: string): any {
   try {
@@ -238,11 +251,18 @@ function parseOperation(value: unknown): AssistantOperationProposal {
   }
 }
 
-function parseOperations(value: unknown): AssistantOperationProposal[] {
-  if (value === undefined) return [];
+const MAX_OPERATIONS = 10;
+const MAX_EVENT_DELTAS = 4;
+const MAX_MEMORY_DELTAS = 2;
+const MAX_DELTA_PROGRESS = 10;
+const MAX_DELTA_TODOS = 10;
+
+function parseOperations(value: unknown): { operations: AssistantOperationProposal[]; dropped: number } {
+  if (value === undefined) return { operations: [], dropped: 0 };
   if (!Array.isArray(value)) throw new AssistantProtocolError('operations 必须是数组');
-  if (value.length > 6) throw new AssistantProtocolError('单轮候选操作不能超过 6 个');
-  const operations = value.map((operation, index) => {
+  // 超限截断取前 N 条：数量超限是模型话多，不惩罚用户；截断数进回执告知如何补做。
+  const bounded = value.slice(0, MAX_OPERATIONS);
+  const operations = bounded.map((operation, index) => {
     try {
       return parseOperation(operation);
     } catch (error) {
@@ -254,7 +274,7 @@ function parseOperations(value: unknown): AssistantOperationProposal[] {
   });
   const keys = new Set(operations.map(operation => operation.key));
   if (keys.size !== operations.length) throw new AssistantProtocolError('单轮候选操作键不能重复');
-  return operations;
+  return { operations, dropped: value.length - bounded.length };
 }
 
 function parseChangeType(value: unknown, field: string): AssistantEventDeltaChangeType {
@@ -341,11 +361,19 @@ function parseEventDeltaTodo(value: unknown): AssistantEventDeltaTodoMutation {
   throw new AssistantProtocolError('event_delta.todo.action 非法');
 }
 
-function parseEventDeltas(value: unknown): AssistantEventDelta[] {
-  if (value === undefined) return [];
+function parseEventDeltas(value: unknown): {
+  deltas: AssistantEventDelta[];
+  dropped: number;
+  todosTruncations: Array<{ deltaKey: string; dropped: number }>;
+  progressTruncations: Array<{ deltaKey: string; dropped: number }>;
+} {
+  if (value === undefined) return { deltas: [], dropped: 0, todosTruncations: [], progressTruncations: [] };
   if (!Array.isArray(value)) throw new AssistantProtocolError('event_deltas 必须是数组');
-  if (value.length > 2) throw new AssistantProtocolError('单轮事件增量不能超过 2 个');
-  const deltas = value.map((candidate, index) => {
+  // 超限截断取前 N 条：合并等多主线场景不再被硬上限拒掉整轮。
+  const bounded = value.slice(0, MAX_EVENT_DELTAS);
+  const todosTruncations: Array<{ deltaKey: string; dropped: number }> = [];
+  const progressTruncations: Array<{ deltaKey: string; dropped: number }> = [];
+  const deltas = bounded.map((candidate, index) => {
     try {
       if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
         throw new AssistantProtocolError('事件增量必须是对象');
@@ -361,10 +389,14 @@ function parseEventDeltas(value: unknown): AssistantEventDelta[] {
       const evidence = raw.evidence.map((item: unknown) => requiredText(item, 'event_delta.evidence', 160));
       const target = parseEventDeltaTarget(raw.target);
       const state = parseEventDeltaState(raw.state);
-      if (!Array.isArray(raw.progress) || raw.progress.length > 2) {
-        throw new AssistantProtocolError('event_delta.progress 必须是最多 2 条的数组');
+      if (!Array.isArray(raw.progress)) {
+        throw new AssistantProtocolError('event_delta.progress 必须是数组');
       }
-      const progress = raw.progress.map((item: any) => {
+      const boundedProgress = raw.progress.slice(0, MAX_DELTA_PROGRESS);
+      if (raw.progress.length > boundedProgress.length) {
+        progressTruncations.push({ deltaKey: `event_delta_${index + 1}`, dropped: raw.progress.length - boundedProgress.length });
+      }
+      const progress = boundedProgress.map((item: any) => {
         if (!item || typeof item !== 'object' || Array.isArray(item)) {
           throw new AssistantProtocolError('event_delta.progress 项必须是对象');
         }
@@ -373,10 +405,14 @@ function parseEventDeltas(value: unknown): AssistantEventDelta[] {
           content: requiredText(item.content, 'event_delta.progress.content', 800),
         };
       });
-      if (!Array.isArray(raw.todos) || raw.todos.length > 2) {
-        throw new AssistantProtocolError('event_delta.todos 必须是最多 2 条的数组');
+      if (!Array.isArray(raw.todos)) {
+        throw new AssistantProtocolError('event_delta.todos 必须是数组');
       }
-      const todos = raw.todos.map(parseEventDeltaTodo);
+      const boundedTodos = raw.todos.slice(0, MAX_DELTA_TODOS);
+      if (raw.todos.length > boundedTodos.length) {
+        todosTruncations.push({ deltaKey: `event_delta_${index + 1}`, dropped: raw.todos.length - boundedTodos.length });
+      }
+      const todos = boundedTodos.map(parseEventDeltaTodo);
       if ((target.action === 'none' || target.action === 'clarify')
         && (state.action !== 'keep' || progress.length > 0 || todos.length > 0)) {
         throw new AssistantProtocolError(`${target.action} 事件增量不能携带数据变化`);
@@ -392,20 +428,34 @@ function parseEventDeltas(value: unknown): AssistantEventDelta[] {
       throw error;
     }
   });
-  return deltas;
+  return { deltas, dropped: value.length - bounded.length, todosTruncations, progressTruncations };
 }
 
-function parseMemoryDeltas(value: unknown): AssistantMemoryDeltaProposal[] {
-  if (value === undefined) return [];
+function parseMemoryDeltas(value: unknown): {
+  memoryDeltas: AssistantMemoryDeltaProposal[];
+  memoryRejections: Array<{ key: string; action: string; reason: string }>;
+  dropped: number;
+} {
+  if (value === undefined) return { memoryDeltas: [], memoryRejections: [], dropped: 0 };
   if (!Array.isArray(value)) throw new AssistantProtocolError('memory_deltas 必须是数组');
-  if (value.length > 2) throw new AssistantProtocolError('单轮记忆增量不能超过 2 个');
-  return value.map((candidate, index) => {
+  // 记忆准入规则本身谨慎，上限保持 2；超限截断而非整轮失败。
+  const bounded = value.slice(0, MAX_MEMORY_DELTAS);
+  const memoryDeltas: AssistantMemoryDeltaProposal[] = [];
+  const memoryRejections: Array<{ key: string; action: string; reason: string }> = [];
+  bounded.forEach((candidate, index) => {
+    const key = `memory_delta_${index + 1}`;
+    // forget 缺 evidence 时降级为单项拒绝：删除指令的格式瑕疵不应让整轮报废。
+    if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)
+      && (candidate as any).action === 'forget_memory'
+      && typeof (candidate as any).evidence !== 'string') {
+      memoryRejections.push({ key, action: 'forget_memory', reason: 'missing_evidence' });
+      return;
+    }
     try {
       if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
         throw new AssistantProtocolError('记忆增量必须是对象');
       }
       const raw = candidate as any;
-      const key = `memory_delta_${index + 1}`;
       const action = requiredText(raw.action, 'memory_delta.action', 32);
       const evidence = requiredText(raw.evidence, 'memory_delta.evidence', 200);
       if (action === 'create_candidate' || action === 'create_active') {
@@ -417,10 +467,12 @@ function parseMemoryDeltas(value: unknown): AssistantMemoryDeltaProposal[] {
         const content = requiredText(raw.content, 'memory_delta.content', 200);
         if (action === 'create_active') {
           if (admissionBasis !== 'explicit') throw new AssistantProtocolError('create_active 的准入依据非法');
-          return { key, action, category, content, sensitivity, admissionBasis: 'explicit', evidence };
+          memoryDeltas.push({ key, action, category, content, sensitivity, admissionBasis: 'explicit', evidence });
+          return;
         }
         if (admissionBasis !== 'inferred') throw new AssistantProtocolError('create_candidate 的准入依据非法');
-        return { key, action, category, content, sensitivity, admissionBasis: 'inferred', evidence };
+        memoryDeltas.push({ key, action, category, content, sensitivity, admissionBasis: 'inferred', evidence });
+        return;
       }
       const memoryId = identifier(raw.memory_id, 'memory_delta.memory_id');
       const expectedRevision = raw.expected_revision;
@@ -432,14 +484,15 @@ function parseMemoryDeltas(value: unknown): AssistantMemoryDeltaProposal[] {
         if (admissionBasis !== 'repeated' && admissionBasis !== 'confirmed') {
           throw new AssistantProtocolError('activate_candidate 的准入依据非法');
         }
-        return { key, action, memoryId, expectedRevision, admissionBasis, evidence };
+        memoryDeltas.push({ key, action, memoryId, expectedRevision, admissionBasis, evidence });
+        return;
       }
       if (action === 'supersede_memory') {
         const category = requiredText(raw.category, 'memory_delta.category', 32) as AssistantMemoryCategory;
         const sensitivity = requiredText(raw.sensitivity, 'memory_delta.sensitivity', 16) as AssistantMemorySensitivity;
         if (!MEMORY_CATEGORIES.has(category)) throw new AssistantProtocolError('memory_delta.category 非法');
         if (!MEMORY_SENSITIVITIES.has(sensitivity)) throw new AssistantProtocolError('memory_delta.sensitivity 非法');
-        return {
+        memoryDeltas.push({
           key,
           action,
           memoryId,
@@ -448,9 +501,13 @@ function parseMemoryDeltas(value: unknown): AssistantMemoryDeltaProposal[] {
           content: requiredText(raw.content, 'memory_delta.content', 200),
           sensitivity,
           evidence,
-        };
+        });
+        return;
       }
-      if (action === 'forget_memory') return { key, action, memoryId, expectedRevision, evidence };
+      if (action === 'forget_memory') {
+        memoryDeltas.push({ key, action, memoryId, expectedRevision, evidence });
+        return;
+      }
       throw new AssistantProtocolError('memory_delta.action 非法');
     } catch (error) {
       if (error instanceof AssistantProtocolError) {
@@ -459,6 +516,7 @@ function parseMemoryDeltas(value: unknown): AssistantMemoryDeltaProposal[] {
       throw error;
     }
   });
+  return { memoryDeltas, memoryRejections, dropped: value.length - bounded.length };
 }
 
 export function parseAssistantTurnOutput(content: string): AssistantTurnOutput {
@@ -466,10 +524,13 @@ export function parseAssistantTurnOutput(content: string): AssistantTurnOutput {
   if (!raw || typeof raw !== 'object') throw new AssistantProtocolError('模型返回缺少对象');
   const reply = typeof raw.reply === 'string' ? raw.reply.trim() : '';
   if (!reply) throw new AssistantProtocolError('模型返回缺少自然回复');
-  const action = raw.segment?.action;
-  if (action !== 'continue' && action !== 'split_before_user') {
-    throw new AssistantProtocolError('模型返回了非法分段动作');
-  }
+  // segment.action 缺失或非法时降级为 continue：不错误关闭当前分段；
+  // 原值进错误信息仅供日志观测（protocol_warnings 不承载，避免噪音）。
+  const rawAction = raw.segment?.action;
+  const action: 'continue' | 'split_before_user' = rawAction === 'split_before_user' ? 'split_before_user' : 'continue';
+  const { operations, dropped: droppedOperations } = parseOperations(raw.operations);
+  const { deltas, dropped: droppedEventDeltas, todosTruncations, progressTruncations } = parseEventDeltas(raw.event_deltas);
+  const { memoryDeltas, memoryRejections, dropped: droppedMemoryDeltas } = parseMemoryDeltas(raw.memory_deltas);
   return {
     reply,
     segment: {
@@ -477,8 +538,27 @@ export function parseAssistantTurnOutput(content: string): AssistantTurnOutput {
       summary: compactSummary(raw.segment?.summary),
       previousSummary: compactSummary(raw.segment?.previous_summary ?? raw.segment?.previousSummary),
     },
-    operations: parseOperations(raw.operations),
-    eventDeltas: parseEventDeltas(raw.event_deltas),
-    memoryDeltas: parseMemoryDeltas(raw.memory_deltas),
+    operations,
+    eventDeltas: deltas,
+    memoryDeltas,
+    memoryRejections,
+    truncations: {
+      operations: droppedOperations,
+      eventDeltas: droppedEventDeltas,
+      memoryDeltas: droppedMemoryDeltas,
+      todos: todosTruncations,
+      progress: progressTruncations,
+    },
   };
+}
+
+/** 把截断详情转成协议警告列表，供决策日志与 provider 元数据记录。 */
+export function truncationWarnings(truncations: AssistantTurnOutput['truncations']): AssistantProtocolWarning[] {
+  const warnings: AssistantProtocolWarning[] = [];
+  if (truncations.operations > 0) warnings.push('operations_truncated');
+  if (truncations.eventDeltas > 0) warnings.push('event_deltas_truncated');
+  if (truncations.memoryDeltas > 0) warnings.push('memory_deltas_truncated');
+  if (truncations.todos.length) warnings.push('todos_truncated');
+  if (truncations.progress.length) warnings.push('progress_truncated');
+  return warnings;
 }

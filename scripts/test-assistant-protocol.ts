@@ -3,8 +3,13 @@ import {
   AssistantProtocolError,
   inspectAssistantReplyWarnings,
   parseAssistantTurnOutput,
+  truncationWarnings,
 } from '../src/assistant/protocol';
-import { requestAssistantTurn } from '../src/assistant/provider';
+import {
+  mergeProviderToolCallDelta,
+  requestAssistantFinalReply,
+  requestAssistantTurn,
+} from '../src/assistant/provider';
 import { extractPartialJsonStringField } from '../src/assistant/streaming-json';
 
 function check(condition: unknown, message: string): asserts condition {
@@ -19,6 +24,83 @@ check(parsed.reply === '我们先从最小一步开始。', '应解析自然回�
 check(parsed.segment.action === 'continue', '应解析分段动作');
 check(parsed.operations.length === 0, '旧返回未提供 operations 时应兼容为空数组');
 check(parsed.memoryDeltas.length === 0, '旧返回未提供 memory_deltas 时应兼容为空数组');
+
+const forgetWithoutEvidence = parseAssistantTurnOutput(JSON.stringify({
+  reply: '好的，我把那条记忆删除。',
+  segment: { action: 'continue' },
+  memory_deltas: [
+    { action: 'forget_memory', memory_id: 'assistant-memory-x', expected_revision: 2 },
+  ],
+}));
+check(forgetWithoutEvidence.memoryDeltas.length === 0
+  && forgetWithoutEvidence.memoryRejections.length === 1
+  && forgetWithoutEvidence.memoryRejections[0].reason === 'missing_evidence',
+'forget_memory 缺少 evidence 必须降级为单项拒绝，不得让整轮失败');
+
+const forgetWithEvidence = parseAssistantTurnOutput(JSON.stringify({
+  reply: '好的，我把那条记忆删除。',
+  segment: { action: 'continue' },
+  memory_deltas: [
+    { action: 'forget_memory', memory_id: 'assistant-memory-x', expected_revision: 2, evidence: '把那条记忆删除' },
+  ],
+}));
+check(forgetWithEvidence.memoryDeltas.length === 1
+  && forgetWithEvidence.memoryRejections.length === 0,
+'forget_memory 带 evidence 时应正常解析');
+
+// 数量超限统一截断：不再整轮失败，截断数进回执，警告可观测。
+const elevenOperations = parseAssistantTurnOutput(JSON.stringify({
+  reply: '收到', segment: { action: 'continue' },
+  operations: Array.from({ length: 11 }, (_, index) => ({
+    key: `done-${index}`, type: 'complete_todo', todo_id: `todo-${index}`,
+  })),
+}));
+check(elevenOperations.operations.length === 10
+  && elevenOperations.truncations.operations === 1,
+  'operations 超限（11>10）必须截断取前 10 条并记录丢弃数');
+
+const threeMemoryDeltas = parseAssistantTurnOutput(JSON.stringify({
+  reply: '收到', segment: { action: 'continue' },
+  memory_deltas: Array.from({ length: 3 }, () => ({
+    action: 'create_candidate', category: 'preference', content: '喜欢茶',
+    sensitivity: 'ordinary', admission_basis: 'inferred', evidence: '喜欢茶',
+  })),
+}));
+check(threeMemoryDeltas.memoryDeltas.length === 2
+  && threeMemoryDeltas.truncations.memoryDeltas === 1,
+  'memory_deltas 超限（3>2）必须截断取前 2 条并记录丢弃数');
+
+const manyTodosDelta = parseAssistantTurnOutput(JSON.stringify({
+  reply: '收到', segment: { action: 'continue' },
+  event_deltas: [{
+    target: { action: 'update_existing', event_id: 'event-a' },
+    evidence: ['原话'],
+    state: { action: 'replace', change_type: 'plan', value: '合并后状态' },
+    progress: [{ type: 'fact', content: '变化' }],
+    todos: Array.from({ length: 13 }, (_, index) => ({
+      action: 'update', todo_id: `todo-${index}`, text: `新内容${index}`,
+    })),
+  }],
+}));
+check(manyTodosDelta.eventDeltas[0].todos.length === 10
+  && manyTodosDelta.truncations.todos.length === 1
+  && manyTodosDelta.truncations.todos[0].dropped === 3,
+  'event_delta.todos 超限（13>10）必须截断取前 10 条并记录丢弃数');
+
+const manyDeltas = parseAssistantTurnOutput(JSON.stringify({
+  reply: '收到', segment: { action: 'continue' },
+  event_deltas: Array.from({ length: 5 }, () => ({
+    target: { action: 'update_existing', event_id: 'event-a' },
+    evidence: ['原话'], state: { action: 'keep' }, progress: [], todos: [],
+  })),
+}));
+check(manyDeltas.eventDeltas.length === 4
+  && manyDeltas.truncations.eventDeltas === 1,
+  'event_deltas 超限（5>4）必须截断取前 4 条并记录丢弃数');
+
+check(truncationWarnings({ operations: 1, eventDeltas: 0, memoryDeltas: 0, todos: [], progress: [] })
+  .includes('operations_truncated'),
+  '截断详情必须转换为可观测的协议警告');
 
 const withOperations = parseAssistantTurnOutput(JSON.stringify({
   reply: '可以，我们把它作为一条持续主线。',
@@ -140,7 +222,6 @@ check((longSummary.segment.summary?.length ?? 0) <= 240, '摘要必须有硬长�
 for (const invalid of [
   '{}',
   '{"reply":"","segment":{"action":"continue"}}',
-  '{"reply":"好","segment":{"action":"unknown"}}',
 ]) {
   let rejected = false;
   try {
@@ -150,6 +231,14 @@ for (const invalid of [
   }
   check(rejected, `非法返回必须拒绝：${invalid}`);
 }
+
+// 回归：segment.action 非法/缺失时降级为 continue，不炸整轮（模型字段瑕疵不惩罚用户）。
+const badSegment = parseAssistantTurnOutput('{"reply":"好的","segment":{"action":"unknown"}}');
+check(badSegment.segment.action === 'continue',
+  '非法分段动作必须降级为 continue，不得让整轮失败');
+const missingSegment = parseAssistantTurnOutput('{"reply":"好的"}');
+check(missingSegment.segment.action === 'continue',
+  'segment 整体缺失必须降级为 continue');
 
 const completionClaim = parseAssistantTurnOutput(
   '{"reply":"好的，记下了","segment":{"action":"continue"},"operations":[]}',
@@ -165,9 +254,6 @@ for (const [label, operations] of [
   ]],
   ['未知动作', [{ key: 'x', type: 'delete_everything' }]],
   ['非法候选 ID', [{ key: 'x', type: 'complete_todo', todo_id: '../../todo' }]],
-  ['超过六个动作', Array.from({ length: 7 }, (_, index) => ({
-    key: `done-${index}`, type: 'complete_todo', todo_id: `todo-${index}`,
-  }))],
   ['字段过长', [{ key: 'x', type: 'create_event', event_ref: 'event_1', title: '事'.repeat(121), current_state: '开始' }]],
   ['错误本地引用', [{ key: 'x', type: 'create_event', event_ref: 'event-x', title: '换房', current_state: '开始' }]],
   ['新待办缺少日期判断', [{ key: 'x', type: 'create_todo', todo_ref: 'todo_1', text: '买牛奶' }]],
@@ -225,7 +311,7 @@ let tooManyDeltasRejected = false;
 try {
   parseAssistantTurnOutput(JSON.stringify({
     reply: '收到', segment: { action: 'continue' },
-    event_deltas: Array.from({ length: 3 }, (_, index) => ({
+    event_deltas: Array.from({ length: 5 }, (_, index) => ({
       key: `delta-${index}`, target: { action: 'update_existing', event_id: `event-${index}` },
       evidence: ['原话'], state: { action: 'keep' }, progress: [], todos: [],
     })),
@@ -233,14 +319,13 @@ try {
 } catch (error) {
   tooManyDeltasRejected = error instanceof AssistantProtocolError;
 }
-check(tooManyDeltasRejected, '单轮事件增量必须限制数量');
+check(!tooManyDeltasRejected, '5 个事件增量超限（>4）必须截断而不是整轮失败');
 
 for (const [label, memoryDeltas] of [
   ['缺少证据', [{ action: 'create_candidate', category: 'preference', content: '喜欢茶', sensitivity: 'ordinary', admission_basis: 'inferred' }]],
   ['直接生效依据错误', [{ action: 'create_active', category: 'preference', content: '喜欢茶', sensitivity: 'ordinary', admission_basis: 'inferred', evidence: '喜欢茶' }]],
   ['未知类别', [{ action: 'create_candidate', category: 'account', content: '喜欢茶', sensitivity: 'ordinary', admission_basis: 'inferred', evidence: '喜欢茶' }]],
   ['非法版本', [{ action: 'forget_memory', memory_id: 'memory-a', expected_revision: 0, evidence: '忘掉' }]],
-  ['超过两项', Array.from({ length: 3 }, () => ({ action: 'create_candidate', category: 'preference', content: '喜欢茶', sensitivity: 'ordinary', admission_basis: 'inferred', evidence: '喜欢茶' }))],
 ] as const) {
   let rejected = false;
   try {
@@ -270,6 +355,11 @@ check(prompt[0].content.includes('下个月11号还款10万'), '提示词必须�
 check(prompt[0].content.includes('银行说下个月可能调整利率'), '提示词必须包含非用户承诺的反例');
 check(prompt[0].content.includes('due_date'), '提示词必须要求模型解析日期');
 check(prompt[0].content.includes('memory_deltas'), '提示词必须要求模型独立判断长期记忆');
+check(prompt[0].content.includes('forget_memory，提供 memory_id、expected_revision、evidence'),
+  '提示词对 forget_memory 的字段要求必须与协议校验一致，避免模型照说明书缺 evidence');
+check(prompt[0].content.includes('已有有效快照'), '提示词必须要求优先复用当前上下文中的有效快照');
+check(prompt[0].content.includes('搜索结果只用于发现候选'), '提示词必须区分搜索发现与精确详情读取');
+check(prompt[0].content.includes('更新已有对象前必须获得完整详情'), '提示词必须要求写入前读取完整真实状态');
 check(prompt[0].content.includes('临时状态'), '提示词必须区分临时状态与长期记忆');
 check(prompt[0].content.includes('关联的 N 条待办也一起删除吗'), '删除含待办事件时必须先确认级联范围');
 check(prompt[0].content.includes('用户没有回答前什么都不删除'), '删除确认未答时不得提交操作');
@@ -277,6 +367,18 @@ check(prompt[0].content.includes('包括已完成和未完成'), '级联删除�
 check(prompt.at(-1)?.content === '那继续梳理。', '最近原话必须保持角色与顺序');
 check(extractPartialJsonStringField('{"reply":"第一行\\n第', 'reply') === '第一行\n第',
   '流式 JSON 应解码完整转义并保留未闭合回复');
+
+const fragmentedToolCalls = new Map();
+mergeProviderToolCallDelta(fragmentedToolCalls, [{
+  index: 0, id: 'call_', function: { name: 'search_', arguments: '{"query":"十' },
+}]);
+mergeProviderToolCallDelta(fragmentedToolCalls, [{
+  index: 0, id: '1', function: { name: 'events', arguments: '一出行"}' },
+}]);
+check(fragmentedToolCalls.get(0)?.id === 'call_1'
+  && fragmentedToolCalls.get(0)?.name === 'search_events'
+  && fragmentedToolCalls.get(0)?.argumentsJson === '{"query":"十一出行"}',
+'分片 tool_calls 必须按 index 正确重组');
 
 async function main() {
   let capturedBody = '';
@@ -310,6 +412,183 @@ async function main() {
     && capturedBody.includes('"reasoning_effort":"high"'),
   'Provider 应显式开启 DeepSeek 思考并设置推理强度');
   check(providerResult.reasoning === null, '未返回思考内容时应保持空状态');
+  check(providerResult.grounding.eventIds.length === 0, '未启用数据工具时读取集合应为空');
+
+  const toolBodies: any[] = [];
+  let toolFetchIndex = 0;
+  const toolResult = await requestAssistantTurn({
+    settings: {
+      llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model',
+    },
+    context: { contextBlock: '上下文', recentMessages: [{ id: 'u', role: 'user', content: '十一怎么安排', createdAt: 1 }] },
+    fetchImpl: async (_url, init) => {
+      toolBodies.push(JSON.parse(String(init?.body)));
+      toolFetchIndex += 1;
+      if (toolFetchIndex === 1) {
+        return new Response(JSON.stringify({
+          choices: [{
+            message: {
+              content: '', reasoning_content: '先读取真实事件',
+              tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'get_event', arguments: '{"event_id":"event-trip"}' } }],
+            },
+            finish_reason: 'tool_calls',
+          }],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: '{"reply":"我看到了十一出行。","segment":{"action":"continue"}}' }, finish_reason: 'stop' }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+    executeReadTool: async call => ({
+      toolCallId: call.id,
+      name: 'get_event',
+      result: { found: true, event: { id: 'event-trip', title: '十一出行', revision: 4 } },
+      readEventIds: ['event-trip'],
+      readTodoIds: [],
+      readMemoryIds: [],
+    }),
+  });
+  check(toolResult.grounding.eventIds[0] === 'event-trip', '工具读取到的事件 ID 必须回传给本地校验层');
+  check(toolResult.providerMetadata.attemptCount === 2, '一次工具读取和一次规划应记录两次 Provider 请求');
+  check(toolBodies[0].tools?.length === 9, '启用读取执行器时必须向模型暴露事件、待办、记忆的搜索/读取/列表九个只读工具');
+  check(toolBodies[1].messages.at(-1).role === 'tool', '第二轮必须带回真实工具结果');
+  check(toolBodies[1].messages.at(-2).reasoning_content === '先读取真实事件',
+    '续轮必须回传上一轮 reasoning_content（实测 deepseek-flash thinking 模式缺失会被 400 拒绝）');
+
+  const degradedBodies: any[] = [];
+  const degradedResult = await requestAssistantTurn({
+    settings: {
+      llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model',
+    },
+    context: { contextBlock: '上下文', recentMessages: [{ id: 'u', role: 'user', content: '帮我整理所有主线', createdAt: 1 }] },
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      degradedBodies.push(body);
+      if (body.tools) {
+        return new Response(JSON.stringify({
+          choices: [{
+            message: {
+              content: '',
+              tool_calls: [{ id: `call-${degradedBodies.length}`, type: 'function', function: { name: 'search_events', arguments: '{"query":"主线"}' } }],
+            },
+            finish_reason: 'tool_calls',
+          }],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: '{"reply":"已整理已确认的部分；其余未核实，需要你确认。","segment":{"action":"continue"}}' }, finish_reason: 'stop' }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+    executeReadTool: async call => ({
+      toolCallId: call.id,
+      name: 'search_events',
+      result: { query: '主线', events: [] },
+      readEventIds: [],
+      readTodoIds: [],
+      readMemoryIds: [],
+    }),
+  });
+  check(degradedResult.reply.includes('未核实'),
+    '读取额度用尽后必须降级收敛，不得整轮失败');
+  check(degradedResult.providerMetadata.protocolWarnings.includes('tool_budget_exhausted'),
+    '额度降级必须记录可观测的协议警告');
+  check(degradedBodies.filter(body => body.tools).length === 7,
+    '六轮工具额度用尽后，第七次工具请求触发收敛（此后不再带工具）');
+  check(degradedBodies.length === 8, '额度用尽后恰好一次收敛轮（7 工具请求 + 1 收敛轮）');
+  check(!degradedBodies.at(-1).tools, '收敛轮请求不得再携带工具定义');
+  const degradedToolMessages = degradedBodies.at(-1).messages.filter((message: any) => message.role === 'tool');
+  check(degradedToolMessages.some((message: any) => message.content.includes('tool_budget_exhausted')),
+    '超额调用必须以工具结果形式告知模型，保持消息协议完整');
+  check(degradedBodies.at(-1).messages.some((message: any) => message.role === 'system'
+    && message.content.includes('工具额度已用尽')),
+    '收敛轮必须明确指示模型基于已读信息回答并声明未核实部分');
+
+  // 回归：模型把全部输出放进思考、content 为空时，应追加提示重试一次而不是直接失败。
+  const emptyContentBodies: any[] = [];
+  let emptyContentFetchIndex = 0;
+  const emptyContentResult = await requestAssistantTurn({
+    settings: {
+      llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model',
+    },
+    context: { contextBlock: '上下文', recentMessages: [{ id: 'u', role: 'user', content: '为什么上面这个思考过程这么啰嗦', createdAt: 1 }] },
+    fetchImpl: async (_url, init) => {
+      emptyContentBodies.push(JSON.parse(String(init?.body)));
+      emptyContentFetchIndex += 1;
+      if (emptyContentFetchIndex === 1) {
+        return new Response(JSON.stringify({
+          choices: [{
+            message: { content: '', reasoning_content: '用户在问我的思考过程为什么啰嗦。这个问题涉及我自身的推理行为。' },
+            finish_reason: 'stop',
+          }],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: '{"reply":"因为要先确认目标对象，我会先读数据库再回答。","segment":{"action":"continue"}}' }, finish_reason: 'stop' }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+  });
+  check(emptyContentResult.reply.includes('数据库'),
+    '空 content 重试后应拿到模型正文回复');
+  check(emptyContentResult.providerMetadata.attemptCount === 2,
+    '空 content 应恰好自动重试一次');
+  check(emptyContentResult.providerMetadata.protocolWarnings.includes('empty_content_retried'),
+    '空 content 重试必须记录协议警告');
+  check(emptyContentBodies[1].messages.at(-1).content.includes('回复正文'),
+    '重试请求必须追加指示模型把答复写进正文');
+
+  // 二次仍空：失败且错误信息带思考尾部，便于日志回溯。
+  let doubleEmptyError: any = null;
+  try {
+    await requestAssistantTurn({
+      settings: {
+        llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model',
+      },
+      context: { contextBlock: '上下文', recentMessages: [{ id: 'u', role: 'user', content: '继续', createdAt: 1 }] },
+      fetchImpl: async () => new Response(JSON.stringify({
+        choices: [{
+          message: { content: '', reasoning_content: '全部输出都在思考里，无法生成正文。' },
+          finish_reason: 'stop',
+        }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    });
+  } catch (error) {
+    doubleEmptyError = error;
+  }
+  check(doubleEmptyError?.code === 'invalid-response'
+    && doubleEmptyError?.message.includes('模型仅在思考中输出'),
+    '二次空 content 失败时错误信息必须带思考尾部辅助回溯');
+  check(doubleEmptyError?.diagnostics?.attemptCount === 2,
+    '二次空 content 只允许共两次请求，不得无限重试');
+
+  const finalChunks: string[] = [];
+  const finalReply = await requestAssistantFinalReply({
+    settings: {
+      llmEnabled: true, llmBaseUrl: 'https://example.test/v1', llmKey: 'secret', llmModel: 'fixture-model',
+    },
+    userMessage: '下个月11号还款10万',
+    draftReply: '我会帮你更新。',
+    executionResult: {
+      outcome: 'committed',
+      committed: [{ receiptSummary: '已更新贷款事件' }, { receiptSummary: '已创建11号还款待办' }],
+      rejected: [],
+    },
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      check(!body.response_format, '最终回复是自然文本，不应继续要求结构化 JSON');
+      check(body.messages[1].content.includes('已创建11号还款待办'),
+        '最终回复请求必须拿到本地真实执行回执');
+      const events = [
+        { choices: [{ delta: { content: '已更新贷款事件，' }, finish_reason: null }] },
+        { choices: [{ delta: { content: '也创建了11号还款待办。' }, finish_reason: 'stop' }] },
+      ];
+      const stream = `${events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('')}data: [DONE]\n\n`;
+      return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    },
+    onReplyText: text => finalChunks.push(text),
+  });
+  check(finalReply.reply === '已更新贷款事件，也创建了11号还款待办。',
+    '最终回复必须按普通文本流重组');
+  check(finalChunks.at(-1) === finalReply.reply, '最终真实回复必须流式展示到客户端');
 
   const modelJson = JSON.stringify({
     reply: '下个月10号继续还款。',
@@ -378,7 +657,7 @@ async function main() {
       fetchImpl: async () => {
         invalidResponseCalls += 1;
         return new Response(JSON.stringify({
-          choices: [{ message: { content: '{"reply":"收到","segment":{"action":"bad"}}' } }],
+          choices: [{ message: { content: '不是 JSON' } }],
         }), { status: 200, headers: { 'content-type': 'application/json' } });
       },
     });

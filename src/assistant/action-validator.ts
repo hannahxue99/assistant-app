@@ -48,12 +48,7 @@ export function validateAssistantActions(input: {
     rejected.push({ key: operation.key, type: operation.type, reason });
   };
   const eventAllowed = (eventId: string) => {
-    if (!eventIds.has(eventId)
-      && eventId !== input.actionContext.explicitEventId
-      && eventId !== input.actionContext.segmentEventId) return 'candidate_not_allowed' as const;
-    if (eventDecision.kind === 'ambiguous'
-      && eventId !== input.actionContext.explicitEventId
-      && eventId !== input.actionContext.segmentEventId) return 'ambiguous_candidate' as const;
+    if (!eventIds.has(eventId)) return 'candidate_not_allowed' as const;
     return null;
   };
   const refAllowed = (ref: AssistantObjectRef, kind: 'event' | 'todo') => {
@@ -113,9 +108,7 @@ export function validateAssistantActions(input: {
     }
 
     if (operation.type === 'create_event') {
-      if (eventDecision.kind === 'ambiguous'
-        && !input.actionContext.explicitEventId
-        && !input.actionContext.segmentEventId) {
+      if (eventDecision.kind === 'ambiguous') {
         reject(operation, 'ambiguous_candidate');
         continue;
       }

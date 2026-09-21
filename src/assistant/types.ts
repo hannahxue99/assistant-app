@@ -1,5 +1,12 @@
 import type { AssistantOperation } from './action-types';
-import type { AssistantRuntimeStage } from './runtime-state';
+import type { AssistantRuntimeStage, AssistantStageDurations } from './runtime-state';
+
+/** 流式期间的阶段片段；endedAt 为空表示当前阶段仍在进行。 */
+export interface AssistantStageSegment {
+  stage: AssistantRuntimeStage;
+  startedAt: number;
+  endedAt: number | null;
+}
 
 export type AssistantRole = 'user' | 'assistant';
 export type AssistantMessageStatus = 'saved' | 'sending' | 'failed' | 'streaming';
@@ -24,6 +31,10 @@ export interface AssistantMessage {
   operations?: AssistantOperation[];
   /** 仅用于当前进程内的流式展示，不写入数据库。 */
   runtimeStage?: AssistantRuntimeStage;
+  /** 流式期间逐行累加的阶段片段；落库后由 stageDurations 取代。 */
+  stageSegments?: AssistantStageSegment[];
+  /** 落定后的各阶段实际耗时，来自决策时间线并持久化。 */
+  stageDurations?: AssistantStageDurations;
   /** 本轮用户发送时间，用于秒级运行计时。 */
   runtimeStartedAt?: number;
   /** 是否存在可按需展开的 DeepSeek 思考过程。 */

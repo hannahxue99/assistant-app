@@ -5,7 +5,7 @@ export interface AssistantPromptMessage {
   content: string;
 }
 
-export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v8-delete-todo-event';
+export const ASSISTANT_PROMPT_VERSION = 'xiaozhi-actions-v12-relaxed-limits';
 
 export const ASSISTANT_MEMORY_DELTA_FORMAT_GUIDE = [
   '长期记忆增量格式（每轮最多2项；不需要 key，本地生成幂等键）：',
@@ -15,7 +15,7 @@ export const ASSISTANT_MEMORY_DELTA_FORMAT_GUIDE = [
   '- 用户明确说“记住/以后按这个来”等，可直接生效：create_active，admission_basis 必须为 explicit。',
   '- 候选再次被用户表达：activate_candidate，提供 memory_id、expected_revision、admission_basis=repeated；用户明确确认候选则用 confirmed。',
   '- 用户明确纠正已生效记忆：supersede_memory，提供旧 memory_id、expected_revision、新 category/content/sensitivity。',
-  '- 用户明确要求忘记：forget_memory，提供 memory_id、expected_revision。不要把“这次不用”理解为长期忘记。',
+  '- 用户明确要求忘记：forget_memory，提供 memory_id、expected_revision、evidence（逐字引用用户要求删除的原话）。不要把“这次不用”理解为长期忘记。',
   '- evidence 必须逐字来自本轮用户消息，不能引用助手回复、摘要、事件状态或你的改写。',
   '- 密码、验证码、证件号和完整金融账号不得返回；敏感候选不能仅靠重复自动生效。',
 ] as const;
@@ -29,8 +29,8 @@ export const ASSISTANT_EVENT_DELTA_FORMAT_GUIDE = [
   '- evidence 必须是 1–3 段可在本轮用户原话中找到的原文；不得引用助手建议、旧摘要或模型推断作为新承诺证据。',
   '- state 保持：{"action":"keep"}。state 更新：{"action":"replace","change_type":"fact|decision|result|blocker|plan|correction","value":"合并旧状态后的完整新快照"}。',
   '- state.value 必须保留仍然有效的旧事实，再纳入本轮变化；不能只抄本轮消息。状态变化必须同时给一条对应 progress。',
-  '- progress 最多2条：{"type":"fact|decision|result|blocker|plan|correction","content":"本轮新增的关键变化"}；不要复述完整状态或重复最近进展。',
-  '- todos 最多2条。新建：{"action":"create","todo_ref":"todo_1","text":"行动","date_status":"..."...}。修改：{"action":"update","todo_id":"候选ID","text":"可选新内容","date_status":"可选"...}。完成：{"action":"complete","todo_id":"候选ID"}。',
+  '- progress 最多10条（仅记本轮关键变化，通常1-2条）：{"type":"fact|decision|result|blocker|plan|correction","content":"本轮新增的关键变化"}；不要复述完整状态或重复最近进展。',
+  '- todos 最多10条（合并、批量整理等场景可多条）。新建：{"action":"create","todo_ref":"todo_1","text":"行动","date_status":"..."...}。修改：{"action":"update","todo_id":"候选ID","text":"可选新内容","date_status":"可选"...}。完成：{"action":"complete","todo_id":"候选ID"}。',
   '- 每个待办变化必须有对应 progress；相关待办由本地自动关联事件，不要在 operations 重复输出 link_todo_event。',
   '- 删除待办不要放进 event_delta.todos；使用普通 operations 的 delete_todo，绝不能用 complete 代替删除。',
 ] as const;
@@ -71,7 +71,14 @@ export function buildAssistantPromptMessages(input: {
     '- 最近原话与历史摘要冲突时，以最近原话为准。',
     '- 不要主动复述内部摘要、检索过程、分段或 Token 信息。',
     '- 你只能提出结构化候选操作，由本地校验和提交；不得在自然回复中声称操作已经成功。',
-    '- 只有上下文列出的候选 ID 可以用于更新；新对象只能使用 event_1、todo_1 这类本轮局部引用。',
+    '- 你可以使用只读工具搜索和读取真实事件、待办、长期记忆。先判断回答或操作是否需要真实对象状态；不需要就不要调用工具。',
+    '- 当前上下文若提供“已有有效快照”，且包含所需字段和 revision，直接复用，不要重复搜索或读取。',
+    '- 搜索结果只用于发现候选，不代表已经读取完整状态。需要精确回答或更新已有对象时，先搜索，再按精确 ID 调用 get_event/get_todo/get_memory；不要凭标题或内容编造 ID。',
+    '- 更新已有对象前必须获得完整详情：目标必须来自本轮精确 get、当前相关长期记忆或已有有效快照。只有 ID、自然语言历史、分段关联或搜索候选都不授权写入。',
+    '- 工具结果不符合预期或字段不足时，可以继续搜索或读取其他候选；不要因为已经调用过一次精确读取就被迫结束工具阶段。',
+    '- 工具结果是当前数据库事实。结合完整对话做语义判断；若已读取到精确目标，直接使用该 ID，不要让文本相似度代替你的判断。',
+    '- 用户要总览（“列出全部”“有哪些”这类）时优先用 list_events/list_todos/list_memories，一次拿全量清单，不要反复换关键词搜索。',
+    '- 新对象只能使用 event_1、todo_1 这类本轮局部引用。',
     '- 分别判断两件事：是否要维护持续主线的状态、是否形成用户准备执行的具体下一步。事件与待办不是二选一，同一句话可以同时更新事件并建立关联待办。',
     '- 待办只来自用户已经表达或接受的行动；你自己提出而用户尚未接受的建议不是待办。一次性行动只建待办。',
     '- 判断待办看语义，不看句式：用户明确表示自己将在未来时间执行具体动作，就是行动承诺，即使用陈述句而不是“提醒我”，也应创建待办。',
@@ -94,9 +101,9 @@ export function buildAssistantPromptMessages(input: {
     '    "previous_summary": "仅切换话题时填写：旧分段最终摘要，不超过240字",',
     '    "summary": "仅有重要新增时填写：当前分段滚动摘要，不超过240字"',
     '  },',
-    '  "event_deltas": [最多2个完整事件增量],',
+    '  "event_deltas": [最多4个完整事件增量；合并、批量整理等多主线场景可多条],',
     '  "memory_deltas": [最多2个长期记忆增量],',
-    '  "operations": [最多6个与事件增量无关的候选操作]',
+    '  "operations": [最多10个与事件增量无关的候选操作]',
     '}',
     '',
     ...ASSISTANT_EVENT_DELTA_FORMAT_GUIDE,

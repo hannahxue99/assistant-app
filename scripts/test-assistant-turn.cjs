@@ -21,6 +21,12 @@ const adapter = {
 
 let providerCalls = 0;
 let provider = async () => ({ reply: '默认回复', segment: { action: 'continue' }, operations: [] });
+let finalProvider = async input => ({
+  reply: input.executionResult.outcome === 'no_change'
+    ? input.draftReply
+    : input.executionResult.committed.map(item => item.receiptSummary).join('\n') || '没有完成更新',
+  providerMetadata: { attemptCount: 1, attempts: [], protocolWarnings: [] },
+});
 const cache = new Map();
 function load(file) {
   const normalized = path.posix.normalize(file);
@@ -43,7 +49,10 @@ function load(file) {
       if (target === 'src/engine/notifications.ts') return { syncEntryReminder: async () => {} };
       if (target === 'src/engine/llm.ts') return { understandWithLlm: async () => ({}) };
       if (target === 'src/assistant/provider.ts') {
-        return { requestAssistantTurn: async input => { providerCalls++; return provider(input); } };
+        return {
+          requestAssistantTurn: async input => { providerCalls++; return provider(input); },
+          requestAssistantFinalReply: async input => finalProvider(input),
+        };
       }
       return load(target);
     },
@@ -55,6 +64,7 @@ async function main() {
   const db = load('src/db.ts');
   const store = load('src/assistant/store.ts');
   const orchestrator = load('src/assistant/orchestrator.ts');
+  const workingSnapshots = load('src/assistant/working-snapshots.ts');
   await db.initDatabase();
   const settings = {
     llmEnabled: true,
@@ -111,9 +121,9 @@ async function main() {
   await assert.rejects(cancelledJob, /取消/);
   const cancelledState = await store.getRequestState('request-cancelled');
   assert.equal(cancelledState.status, 'failed');
-  assert.equal(cancelledState.userMessage.status, 'saved', '已有部分回复时用户消息应保持正常历史状态');
-  assert.equal(cancelledState.assistantMessage.content, '我先帮你梳理到这里', '已显示的部分回复应保留');
-  assert.equal(cancelledState.assistantMessage.errorCode, 'cancelled', '部分回复应带主动停止标记');
+  assert.equal(cancelledState.userMessage.status, 'failed', '写库前停止时应保留可重试的用户原话');
+  assert.equal(cancelledState.assistantMessage, null,
+    '规划阶段的草稿回复不得展示或保存，避免把未执行计划误当结果');
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM assistant_operations WHERE request_id='request-cancelled'").get().count, 0,
     '停止请求不得写入任何对象操作');
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM entries WHERE summary='不应落库的停止待办'").get().count, 0,
@@ -128,11 +138,33 @@ async function main() {
   const networkFailureLog = sqlite.prepare("SELECT * FROM assistant_decision_logs WHERE request_id='request-2'").get();
   assert.equal(networkFailureLog.error_detail, 'offline', '失败日志必须保留精确且有界的错误原因');
 
+  provider = async input => {
+    await input.executeReadTool({
+      id: 'search-before-fail', name: 'search_memories', argumentsJson: '{"query":"偏好"}',
+    });
+    throw Object.assign(new Error('读取后模型失败'), { code: 'network' });
+  };
+  await assert.rejects(orchestrator.sendAssistantTurn({
+    requestId: 'request-trace-on-failure', content: '查一下偏好', source: 'text', settings, createdAt: 2050,
+  }), /读取后模型失败/);
+  const failedTraceLog = sqlite.prepare(
+    "SELECT tool_calls_json FROM assistant_decision_logs WHERE request_id='request-trace-on-failure'",
+  ).get();
+  assert.ok(JSON.parse(failedTraceLog.tool_calls_json)
+    .some(item => item.name === 'search_memories' && item.ok === true),
+    '失败轮也必须落库工具轨迹，调试页才能回溯失败前的读取过程');
+
   provider = async () => ({ reply: '网络恢复了。', segment: { action: 'continue' }, operations: [] });
   const retried = await orchestrator.retryAssistantTurn({ requestId: 'request-2', settings });
   assert.equal(retried.assistantMessage.content, '网络恢复了。');
   assert.equal((await store.listMessages({ limit: 20 })).filter(item => item.requestId === 'request-2').length, 2,
     '重试应复用用户消息，只新增一条助手回复');
+  const stageDurationsRow = sqlite.prepare(
+    "SELECT stage_durations_json FROM assistant_messages WHERE request_id='request-2' AND role='assistant'",
+  ).get();
+  const stageDurations = JSON.parse(stageDurationsRow.stage_durations_json || '{}');
+  assert.ok(typeof stageDurations.thinkingMs === 'number' && stageDurations.thinkingMs >= 0,
+    '助手消息必须持久化各阶段实际耗时，落定后展示过程摘要');
 
   provider = async () => {
     const error = Object.assign(new Error('operations[0]: resolved 缺少 due_date'), {
@@ -175,8 +207,42 @@ async function main() {
     requestId: 'request-false-claim', content: '帮我记一下', source: 'text', settings, createdAt: 2600,
   });
   assert.equal(falseClaim.operations.length, 0);
-  assert.ok(falseClaim.assistantMessage.content.includes('没有形成可保存的操作'),
+  assert.ok(falseClaim.assistantMessage.content.includes('没有完成'),
     '没有任何合法操作时不得保存模型的虚假成功措辞');
+  const falseClaimLog = sqlite.prepare(
+    "SELECT status, execution_outcome FROM assistant_decision_logs WHERE request_id='request-false-claim'",
+  ).get();
+  assert.notEqual(falseClaimLog.status, 'committed', '零写入不得再把决策日志标为 committed');
+  assert.equal(falseClaimLog.execution_outcome, 'rejected', '虚假执行声称必须记录为 rejected');
+
+  provider = async () => ({
+    reply: '准备记录牙科复诊。',
+    segment: { action: 'continue' },
+    operations: [{
+      key: 'dentist', type: 'create_todo', todoRef: 'todo_1', text: '牙科复诊',
+      dateStatus: 'resolved', dateText: '后天', dueDate: '1970-01-03', timePrecision: 'date',
+    }],
+  });
+  finalProvider = async () => { throw Object.assign(new Error('final narration offline'), { code: 'network' }); };
+  const fallbackAfterCommit = await orchestrator.sendAssistantTurn({
+    requestId: 'request-final-fallback', content: '后天去牙科复诊', source: 'text', settings, createdAt: 2700,
+  });
+  assert.equal(fallbackAfterCommit.operations.length, 1, '最终表述失败不能回滚已经提交的数据');
+  assert.ok(fallbackAfterCommit.assistantMessage.content.includes('建立待办：牙科复诊'),
+    '最终表述失败时必须使用真实操作回执，而不是模型规划草稿');
+  const fallbackNarrationLog = sqlite.prepare(
+    "SELECT narration_json FROM assistant_decision_logs WHERE request_id='request-final-fallback'",
+  ).get();
+  assert.equal(JSON.parse(fallbackNarrationLog.narration_json).source, 'fallback',
+    '叙述兜底必须落库，能回溯用户看到的文案来源');
+  assert.equal(JSON.parse(fallbackNarrationLog.narration_json).errorCode, 'network',
+    '叙述失败原因必须进入决策日志');
+  finalProvider = async input => ({
+    reply: input.executionResult.outcome === 'no_change'
+      ? input.draftReply
+      : input.executionResult.committed.map(item => item.receiptSummary).join('\n') || '没有完成更新',
+    providerMetadata: { attemptCount: 1, attempts: [], protocolWarnings: [] },
+  });
 
   provider = async () => ({
     reply: '我们换到新话题。',
@@ -215,6 +281,9 @@ async function main() {
     '决策日志应保留模型提出的待办');
   assert.ok(JSON.parse(oneOffLog.validation_json).rejected.some(item => item.type === 'create_event'),
     '决策日志应保留本地拒绝的事件及原因');
+  assert.equal(JSON.parse(sqlite.prepare(
+    "SELECT narration_json FROM assistant_decision_logs WHERE request_id='request-4'",
+  ).get().narration_json).source, 'model', '叙述成功时必须记录来源为模型生成');
 
   provider = async () => ({
     reply: '我们继续沿着换房这条主线聊。',
@@ -237,22 +306,28 @@ async function main() {
   assert.equal(sqlite.prepare(`SELECT COUNT(*) AS count FROM assistant_object_relations
     WHERE from_type='todo' AND relation_type='belongs_to' AND to_id=?`).get(houseEvent.id).count, 1);
 
-  provider = async () => ({
-    reply: '还款计划继续沿用这条主线。',
-    segment: { action: 'continue' },
-    operations: [],
-    eventDeltas: [{
-      key: 'repay-plan',
-      target: { action: 'update_existing', eventId: houseEvent.id },
-      evidence: ['下个月10号还'],
-      state: { action: 'replace', changeType: 'plan', value: '已开始看房；下个月10号继续还款' },
-      progress: [{ type: 'decision', content: '确定下个月10号继续还款' }],
-      todos: [{
-        action: 'create', todoRef: 'todo_1', text: '继续还款',
-        dateStatus: 'resolved', dateText: '下个月10号', dueDate: '2026-10-10', timePrecision: 'date',
+  provider = async input => {
+    const execution = await input.executeReadTool({
+      id: 'read-house-event', name: 'get_event', argumentsJson: JSON.stringify({ event_id: houseEvent.id }),
+    });
+    assert.equal(execution.result.found, true, '更新已有事件前必须精确读取真实状态');
+    return {
+      reply: '还款计划继续沿用这条主线。',
+      segment: { action: 'continue' },
+      operations: [],
+      eventDeltas: [{
+        key: 'repay-plan',
+        target: { action: 'update_existing', eventId: houseEvent.id },
+        evidence: ['下个月10号还'],
+        state: { action: 'replace', changeType: 'plan', value: '已开始看房；下个月10号继续还款' },
+        progress: [{ type: 'decision', content: '确定下个月10号继续还款' }],
+        todos: [{
+          action: 'create', todoRef: 'todo_1', text: '继续还款',
+          dateStatus: 'resolved', dateText: '下个月10号', dueDate: '2026-10-10', timePrecision: 'date',
+        }],
       }],
-    }],
-  });
+    };
+  };
   const modelOnlyEvent = await orchestrator.sendAssistantTurn({
     requestId: 'request-model-only-event', content: '下个月10号还', source: 'text', settings,
     createdAt: new Date('2026-09-15T11:30:00+08:00').getTime(),
@@ -283,7 +358,43 @@ async function main() {
   const hiddenTodo = sqlite.prepare("SELECT * FROM entries WHERE kind='task' AND summary='整理照片'").get();
   assert.equal(hiddenTodo.due_at, null, '首次无日期行动应保存为隐藏待办');
   provider = async input => {
-    assert.ok(input.context.contextBlock.includes(hiddenTodo.id), '当前分段最近待办必须进入补日期上下文');
+    assert.ok(!input.context.contextBlock.includes(`\"id\":\"${hiddenTodo.id}\"`),
+      '未精确读取的分段关联待办不得自动进入模型上下文');
+    return {
+      reply: '先尝试直接修改。',
+      segment: { action: 'continue' },
+      operations: [{ key: 'date', type: 'update_todo', todoId: hiddenTodo.id, dateStatus: 'resolved', dateText: '周五', dueDate: '2026-09-18', timePrecision: 'date' }],
+    };
+  };
+  const unreadUpdate = await orchestrator.sendAssistantTurn({
+    requestId: 'request-hidden-todo-unread', content: '那就周五吧', source: 'text', settings,
+    createdAt: new Date('2026-09-15T12:00:00+08:00').getTime(),
+  });
+  assert.equal(unreadUpdate.operations.length, 0, '未读取详情的已有待办修改必须被本地拒绝');
+  assert.equal(sqlite.prepare('SELECT due_at FROM entries WHERE id=?').get(hiddenTodo.id).due_at, null);
+
+  provider = async input => {
+    assert.ok(!input.context.contextBlock.includes(`\"id\":\"${hiddenTodo.id}\"`),
+      '尚无快照时模型必须通过工具读取待办');
+    const execution = await input.executeReadTool({
+      id: 'read-hidden-todo', name: 'get_todo', argumentsJson: JSON.stringify({ todo_id: hiddenTodo.id }),
+    });
+    assert.equal(execution.result.found, true, '精确读取必须拿到待办真实状态');
+    return { reply: '这条待办目前还没有日期。', segment: { action: 'continue' }, operations: [] };
+  };
+  await orchestrator.sendAssistantTurn({
+    requestId: 'request-hidden-todo-read', content: '先看一下整理照片这条待办', source: 'text', settings,
+    createdAt: new Date('2026-09-15T12:01:00+08:00').getTime(),
+  });
+  const snapshotSegmentId = (await store.getRequestState('request-hidden-todo-read')).userMessage.segmentId;
+  assert.equal((await workingSnapshots.loadValidAssistantWorkingSnapshots(`${snapshotSegmentId}-other`)).length, 0,
+    '短期工作快照必须按分段隔离，不能泄漏到其他话题');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM assistant_memories').get().count, 0,
+    '工作快照只存在于当前进程，不能升级成“我的”长期记忆');
+
+  provider = async input => {
+    assert.ok(input.context.contextBlock.includes(`\"id\":\"${hiddenTodo.id}\"`),
+      '同一分段中版本未变化的精确读取结果必须作为有效快照复用');
     return {
       reply: '时间按周六继续安排。',
       segment: { action: 'continue' },
@@ -292,12 +403,139 @@ async function main() {
   };
   await orchestrator.sendAssistantTurn({
     requestId: 'request-hidden-todo-date', content: '那就周六吧', source: 'text', settings,
-    createdAt: new Date('2026-09-15T12:00:00+08:00').getTime(),
+    createdAt: new Date('2026-09-15T12:02:00+08:00').getTime(),
   });
   assert.ok(sqlite.prepare('SELECT due_at FROM entries WHERE id=?').get(hiddenTodo.id).due_at,
     '日期补充应更新同一条隐藏待办');
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM entries WHERE kind='task' AND summary='整理照片'").get().count, 1,
     '补日期不得创建重复待办');
+
+  provider = async input => {
+    assert.ok(!input.context.contextBlock.includes(`\"id\":\"${hiddenTodo.id}\"`),
+      '待办 revision 变化后旧快照必须自动失效');
+    return { reply: '需要时我会重新读取。', segment: { action: 'continue' }, operations: [] };
+  };
+  await orchestrator.sendAssistantTurn({
+    requestId: 'request-hidden-todo-stale', content: '刚才那条待办现在是什么状态', source: 'text', settings,
+    createdAt: new Date('2026-09-15T12:03:00+08:00').getTime(),
+  });
+
+  sqlite.prepare(`INSERT INTO assistant_memories
+    (id,category,content,normalized_content,status,sensitivity,admission_basis,
+     superseded_by_id,revision,created_at,updated_at,activated_at,superseded_at,forgotten_at)
+    VALUES ('memory-office','preference','用户偏好安静办公','用户偏好安静办公',
+      'active','ordinary','explicit',NULL,2,5000,5000,5000,NULL,NULL)`).run();
+  provider = async input => {
+    const execution = await input.executeReadTool({
+      id: 'get-office-memory', name: 'get_memory', argumentsJson: '{"memory_id":"memory-office"}',
+    });
+    assert.equal(execution.result.memory.revision, 2);
+    return { reply: '我已经看到了。', segment: { action: 'continue' }, operations: [] };
+  };
+  await orchestrator.sendAssistantTurn({
+    requestId: 'request-memory-read', content: '看一下第二条记忆', source: 'text', settings, createdAt: 5050,
+  });
+  provider = async input => {
+    assert.ok(input.context.contextBlock.includes('get_memory:memory-office'),
+      '同一分段内版本未变化的记忆详情应通过短期快照复用');
+    return { reply: '刚才那条仍然有效。', segment: { action: 'continue' }, operations: [] };
+  };
+  await orchestrator.sendAssistantTurn({
+    requestId: 'request-memory-reuse', content: '刚才那条呢', source: 'text', settings, createdAt: 5075,
+  });
+
+  sqlite.prepare(`INSERT INTO assistant_memories
+    (id,category,content,normalized_content,status,sensitivity,admission_basis,
+     superseded_by_id,revision,created_at,updated_at,activated_at,superseded_at,forgotten_at)
+    VALUES ('memory-cycle','recurring_pattern','最近一次9月18日来例假','最近一次9月18日来例假',
+      'active','sensitive','explicit',NULL,3,5100,5100,5100,NULL,NULL)`).run();
+  provider = async input => {
+    const execution = await input.executeReadTool({
+      id: 'search-cycle-memory', name: 'search_memories', argumentsJson: '{"query":"例假"}',
+    });
+    assert.equal(execution.result.memories[0].id, 'memory-cycle');
+    return {
+      reply: '先尝试删除。', segment: { action: 'continue' }, operations: [],
+      memoryDeltas: [{
+        key: 'forget-cycle-search-only', action: 'forget_memory', memoryId: 'memory-cycle',
+        expectedRevision: 3, evidence: '把那条长期记忆删除',
+      }],
+    };
+  };
+  const searchOnlyMemoryTurn = await orchestrator.sendAssistantTurn({
+    requestId: 'request-memory-search-only', content: '把那条长期记忆删除', source: 'text', settings,
+    createdAt: 5200,
+  });
+  assert.equal(searchOnlyMemoryTurn.operations.length, 0, '只搜索候选不得授权删除长期记忆');
+  assert.equal(sqlite.prepare("SELECT status FROM assistant_memories WHERE id='memory-cycle'").get().status, 'active');
+
+  provider = async input => {
+    const execution = await input.executeReadTool({
+      id: 'get-cycle-memory', name: 'get_memory', argumentsJson: '{"memory_id":"memory-cycle"}',
+    });
+    assert.equal(execution.result.memory.revision, 3, '精确读取必须返回长期记忆的真实版本');
+    return {
+      reply: '已经删除。', segment: { action: 'continue' }, operations: [],
+      memoryDeltas: [{
+        key: 'forget-cycle-after-get', action: 'forget_memory', memoryId: 'memory-cycle',
+        expectedRevision: 3, evidence: '把那条长期记忆删除',
+      }],
+    };
+  };
+  const exactMemoryTurn = await orchestrator.sendAssistantTurn({
+    requestId: 'request-memory-exact-get', content: '把那条长期记忆删除', source: 'text', settings,
+    createdAt: 5300,
+  });
+  assert.equal(exactMemoryTurn.operations.length, 1, '精确读取后的合法删除应提交');
+  assert.equal(sqlite.prepare("SELECT status FROM assistant_memories WHERE id='memory-cycle'").get().status, 'forgotten');
+  const memoryReadLog = sqlite.prepare(
+    "SELECT tool_read_memory_ids_json FROM assistant_decision_logs WHERE request_id='request-memory-exact-get'",
+  ).get();
+  assert.ok(JSON.parse(memoryReadLog.tool_read_memory_ids_json).includes('memory-cycle'),
+    '决策日志必须记录本轮精确读取并用于校验的记忆 ID');
+  assert.ok(JSON.parse(sqlite.prepare(
+    "SELECT tool_calls_json FROM assistant_decision_logs WHERE request_id='request-memory-exact-get'",
+  ).get().tool_calls_json).some(item => item.name === 'get_memory' && item.ok === true),
+    '决策日志必须记录工具调用轨迹，支持读取过程回溯');
+
+  provider = async input => {
+    const bad = await input.executeReadTool({
+      id: 'bad-tool-call', name: 'search_events', argumentsJson: '{"query":123}',
+    });
+    assert.equal(bad.result.error, 'invalid_tool_arguments',
+      '工具参数错误必须以结构化错误回传给模型自纠，而不是炸掉整轮');
+    return { reply: '参数错误后模型自行纠正并回答。', segment: { action: 'continue' }, operations: [] };
+  };
+  await orchestrator.sendAssistantTurn({
+    requestId: 'request-tool-self-correct', content: '看看换房计划进展', source: 'text', settings, createdAt: 5350,
+  });
+  const selfCorrectLog = sqlite.prepare(
+    "SELECT tool_calls_json FROM assistant_decision_logs WHERE request_id='request-tool-self-correct'",
+  ).get();
+  assert.ok(JSON.parse(selfCorrectLog.tool_calls_json).some(item => item.ok === false && item.errorCode === 'invalid_tool_arguments'),
+    '决策日志必须记录工具失败和自纠事件，用于评估模型工具能力');
+
+  // 回归：真实模型按旧提示词习惯返回不带 evidence 的 forget_memory，不得整轮失败。
+  provider = async () => ({
+    reply: '好的，我已经把那条记忆删除。',
+    segment: { action: 'continue' },
+    operations: [],
+    memoryDeltas: [],
+    memoryRejections: [{ key: 'memory_delta_1', action: 'forget_memory', reason: 'missing_evidence' }],
+  });
+  const forgetNoEvidence = await orchestrator.sendAssistantTurn({
+    requestId: 'request-forget-no-evidence', content: '把例假周期的长期记忆删除', source: 'text', settings, createdAt: 5400,
+  });
+  assert.equal(forgetNoEvidence.operations.length, 0, '缺 evidence 的删除项不得提交');
+  assert.ok(forgetNoEvidence.assistantMessage.content.length > 0,
+    '模型格式瑕疵必须降级为可见回复，不得让整轮失败');
+  const forgetNoEvidenceLog = sqlite.prepare(
+    "SELECT status, execution_outcome, execution_rejected_json FROM assistant_decision_logs WHERE request_id='request-forget-no-evidence'",
+  ).get();
+  assert.notEqual(forgetNoEvidenceLog.status, 'failed', '单项格式瑕疵不得把请求标为失败');
+  assert.ok(JSON.parse(forgetNoEvidenceLog.execution_rejected_json)
+    .some(item => item.reason === 'missing_evidence'),
+    '降级拒绝必须落库，用户回复与回执都不虚报删除成功');
 
   sqlite.exec(`CREATE TRIGGER fail_assistant_operation
     BEFORE INSERT ON assistant_operations BEGIN SELECT RAISE(ABORT, 'forced operation failure'); END;`);

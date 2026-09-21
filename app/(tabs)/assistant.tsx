@@ -32,6 +32,7 @@ import type {
   AssistantInitialLoadStatus,
   AssistantMessage,
   AssistantOlderLoadStatus,
+  AssistantStageSegment,
 } from '../../src/assistant/types';
 import type { AssistantRuntimeStage } from '../../src/assistant/runtime-state';
 import { getAssistantReasoning } from '../../src/assistant/reasoning-store';
@@ -75,6 +76,7 @@ export default function AssistantScreen() {
   const loadedOnceRef = useRef(false);
   const olderLoadRef = useRef<AssistantOlderLoadStatus>('idle');
   const pendingEndScrollRef = useRef<{ animated: boolean } | null>(null);
+  const stageSegmentsRef = useRef<Map<string, AssistantStageSegment[]>>(new Map());
   const followEndRef = useRef(true);
   const preservePositionOnNextFocusRef = useRef(false);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
@@ -113,6 +115,7 @@ export default function AssistantScreen() {
     runtimeStartedAt?: number;
     content?: string;
     stage?: AssistantRuntimeStage;
+    stageSegments?: AssistantStageSegment[];
     reasoningContent?: string;
     reasoningCompletedAt?: number;
   }) => {
@@ -133,7 +136,8 @@ export default function AssistantScreen() {
           updatedAt: Date.now(),
           legacyEntryId: null,
           errorCode: null,
-          runtimeStage: input.stage ?? existing?.runtimeStage ?? 'thinking',
+          runtimeStage: input.stage ?? existing?.runtimeStage ?? 'planning',
+          stageSegments: input.stageSegments ?? existing?.stageSegments,
           runtimeStartedAt: existing?.runtimeStartedAt ?? input.runtimeStartedAt ?? Date.now(),
           reasoningAvailable: Boolean(input.reasoningContent || existing?.reasoningAvailable),
           reasoningContent: input.reasoningContent ?? existing?.reasoningContent,
@@ -146,6 +150,32 @@ export default function AssistantScreen() {
     });
     if (followEndRef.current) scrollToLatest(false, false);
   }, [scrollToLatest]);
+
+  /** 阶段切换时逐行累加：上一阶段定格为一行耗时，当前阶段继续转圈计时。 */
+  const advanceStage = useCallback((requestId: string, stage: AssistantRuntimeStage, base: {
+    messageCreatedAt: number;
+    runtimeStartedAt: number;
+  }) => {
+    const existing = stageSegmentsRef.current.get(requestId) ?? [];
+    const last = existing.at(-1);
+    if (last && last.stage === stage) return;
+    const now = Date.now();
+    const next = [...existing];
+    if (last) next[next.length - 1] = { ...last, endedAt: now };
+    next.push({ stage, startedAt: now, endedAt: null });
+    stageSegmentsRef.current.set(requestId, next);
+    updateStreamingReply({
+      requestId,
+      messageCreatedAt: base.messageCreatedAt,
+      runtimeStartedAt: base.runtimeStartedAt,
+      stage,
+      stageSegments: next,
+    });
+  }, [updateStreamingReply]);
+
+  const clearStageSegments = useCallback((requestId: string) => {
+    stageSegmentsRef.current.delete(requestId);
+  }, []);
 
   const clearStreamingReply = useCallback((requestId: string) => {
     setStreamingReplies((current) => {
@@ -252,12 +282,7 @@ export default function AssistantScreen() {
     const runtimeStartedAt = Date.now();
     if (mountedRef.current) {
       setMessages(current => mergeAssistantMessages(current, [userMessage]));
-      updateStreamingReply({
-        requestId,
-        messageCreatedAt: userMessage.createdAt,
-        runtimeStartedAt,
-        stage: 'thinking',
-      });
+      advanceStage(requestId, 'planning', { messageCreatedAt: userMessage.createdAt, runtimeStartedAt });
       followEndRef.current = true;
       scrollToLatest(true);
     }
@@ -279,13 +304,11 @@ export default function AssistantScreen() {
         messageCreatedAt: userMessage.createdAt,
         runtimeStartedAt,
         reasoningContent: text,
-        stage: 'thinking',
+        stage: 'planning',
       }),
-      onProgress: stage => updateStreamingReply({
-        requestId,
+      onProgress: stage => advanceStage(requestId, stage, {
         messageCreatedAt: userMessage.createdAt,
         runtimeStartedAt,
-        stage,
       }),
     });
     void job
@@ -308,6 +331,7 @@ export default function AssistantScreen() {
       })
       .finally(async () => {
         clearStreamingReply(requestId);
+        clearStageSegments(requestId);
         await loadLatest(true).catch(() => {});
       });
   }
@@ -338,7 +362,7 @@ export default function AssistantScreen() {
           requestId,
           messageCreatedAt: userMessage?.createdAt ?? runtimeStartedAt,
           runtimeStartedAt,
-          stage: 'thinking',
+          stage: 'planning',
         });
         const job = retryAssistantTurn({
           requestId,
@@ -356,7 +380,7 @@ export default function AssistantScreen() {
             messageCreatedAt: userMessage?.createdAt ?? runtimeStartedAt,
             runtimeStartedAt,
             reasoningContent: text,
-            stage: 'thinking',
+            stage: 'planning',
           }),
           onProgress: stage => updateStreamingReply({
             requestId,
@@ -384,6 +408,7 @@ export default function AssistantScreen() {
         // 错误状态由对应消息承载，不再重复显示页面级错误。
       } finally {
         clearStreamingReply(requestId);
+        clearStageSegments(requestId);
         await loadLatest(true).catch(() => {});
       }
     })();
@@ -424,6 +449,17 @@ export default function AssistantScreen() {
             <Text style={styles.title}>小知</Text>
             <Text style={styles.caption}>连续对话 · 自动保存</Text>
           </View>
+          {__DEV__ ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="打开决策日志调试页"
+              onPress={() => router.push('/debug/decisions')}
+              hitSlop={8}
+              style={({ pressed }) => [styles.debugEntry, pressed && styles.pressed]}
+            >
+              <Ionicons name="terminal-outline" size={20} color={theme.colors.textDim} />
+            </Pressable>
+          ) : null}
         </View>
 
         {engineStatus === 'unconfigured' && initialLoad === 'ready' ? (
@@ -537,7 +573,8 @@ export default function AssistantScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   flex: { flex: 1 },
-  header: { minHeight: 62, paddingHorizontal: theme.spacing.md, paddingTop: 7, paddingBottom: 8, justifyContent: 'center' },
+  header: { minHeight: 62, paddingHorizontal: theme.spacing.md, paddingTop: 7, paddingBottom: 8, justifyContent: 'space-between', alignItems: 'center', flexDirection: 'row' },
+  debugEntry: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   title: { color: theme.colors.text, fontSize: theme.font.title, fontWeight: theme.fontWeight.semibold },
   caption: { color: theme.colors.textDim, fontSize: 12, marginTop: 1 },
   configBanner: { minHeight: 44, marginHorizontal: theme.spacing.md, marginBottom: 6, paddingHorizontal: 12, borderRadius: 12, backgroundColor: theme.colors.goldSoft, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },

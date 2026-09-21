@@ -75,7 +75,7 @@ async function main() {
       UNIQUE(request_id, sequence)
     );
     INSERT INTO conversation_segments VALUES ('segment-old', '', 'current', 1, NULL, 1);
-    INSERT INTO assistant_messages VALUES ('message-old', 'request-old', 'user', '旧待办', 'text', 'saved', 'segment-old', NULL, 1, 1);
+    INSERT INTO assistant_messages VALUES ('message-old', 'request-old', 'user', '旧待办', 'text', 'saved', 'segment-old', NULL, '{}', 1, 1);
     INSERT INTO assistant_requests VALUES ('request-old', 'message-old', 'succeeded', NULL, 1, 1, 1);
     INSERT INTO assistant_operations VALUES (
       'operation-old', 'request-old', 'todo', 'create_todo', 'todo', 'todo-old',

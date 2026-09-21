@@ -92,6 +92,9 @@ export async function loadAssistantActionContext(input: {
   query: string;
   launchContext?: AssistantLaunchContext | null;
   currentSegmentId?: string | null;
+  readEventIds?: string[];
+  readTodoIds?: string[];
+  selectionMode?: 'ranked' | 'read-set';
 }): Promise<AssistantActionContext> {
   // 保持纯匹配函数可在 Node 测试中独立运行；仅实际读库时加载 Expo 数据层。
   const { withDatabaseConnection } = await import('../db');
@@ -159,7 +162,8 @@ export async function loadAssistantActionContext(input: {
       score: 0,
     }));
 
-    const segmentBinding = input.currentSegmentId
+    const strictReadSet = input.selectionMode === 'read-set';
+    const segmentBinding = !strictReadSet && input.currentSegmentId
       ? await database.getFirstAsync<{ event_id: string }>(
         `SELECT r.to_id AS event_id
          FROM assistant_object_relations r
@@ -169,10 +173,19 @@ export async function loadAssistantActionContext(input: {
         input.currentSegmentId,
       )
       : null;
-    const explicitEventId = input.launchContext?.kind === 'event' ? input.launchContext.id : null;
-    let events = rankEventCandidates(input.query, allEvents);
-    events = forceCandidate(events, allEvents, segmentBinding?.event_id ?? null);
-    events = forceCandidate(events, allEvents, explicitEventId);
+    const explicitEventId = !strictReadSet && input.launchContext?.kind === 'event' ? input.launchContext.id : null;
+    const readEventIdSet = new Set(input.readEventIds ?? []);
+    let events = strictReadSet
+      ? allEvents.filter(event => readEventIdSet.has(event.id))
+      : rankEventCandidates(input.query, allEvents);
+    if (!strictReadSet) {
+      events = forceCandidate(events, allEvents, segmentBinding?.event_id ?? null);
+      events = forceCandidate(events, allEvents, explicitEventId);
+      events = [
+        ...allEvents.filter(event => readEventIdSet.has(event.id)),
+        ...events.filter(event => !readEventIdSet.has(event.id)),
+      ].slice(0, 12);
+    }
 
     const todoRows = await database.getAllAsync<any>(
       `SELECT id, summary, raw_text, due_at, done, revision_at, updated_at
@@ -188,7 +201,7 @@ export async function loadAssistantActionContext(input: {
       updatedAt: Number(row.updated_at),
       score: 0,
     }));
-    const segmentTodoBinding = input.currentSegmentId
+    const segmentTodoBinding = !strictReadSet && input.currentSegmentId
       ? await database.getFirstAsync<{ todo_id: string }>(
         `SELECT r.to_id AS todo_id
          FROM assistant_object_relations r
@@ -198,25 +211,33 @@ export async function loadAssistantActionContext(input: {
         input.currentSegmentId,
       )
       : null;
-    let todos = rankTodoCandidates(input.query, allTodos);
-    const explicitTodoId = input.launchContext?.kind === 'todo' ? input.launchContext.id : null;
-    todos = forceCandidate(todos, allTodos, segmentTodoBinding?.todo_id ?? null);
-    todos = forceCandidate(todos, allTodos, explicitTodoId);
+    const explicitTodoId = !strictReadSet && input.launchContext?.kind === 'todo' ? input.launchContext.id : null;
+    const readTodoIdSet = new Set(input.readTodoIds ?? []);
+    let todos = strictReadSet
+      ? allTodos.filter(todo => readTodoIdSet.has(todo.id))
+      : rankTodoCandidates(input.query, allTodos);
+    if (!strictReadSet) {
+      todos = forceCandidate(todos, allTodos, segmentTodoBinding?.todo_id ?? null);
+      todos = forceCandidate(todos, allTodos, explicitTodoId);
+      todos = [
+        ...allTodos.filter(todo => readTodoIdSet.has(todo.id)),
+        ...todos.filter(todo => !readTodoIdSet.has(todo.id)),
+      ].slice(0, 20);
+    }
     const selectedLinkedTodoIds = new Set(events.flatMap(event => (
       event.linkedTodos ?? []
     )).map(todo => todo.id));
     const selectedLinkedTodos = allTodos.filter(todo => selectedLinkedTodoIds.has(todo.id));
-    todos = [
-      ...selectedLinkedTodos,
-      ...todos.filter(todo => !selectedLinkedTodoIds.has(todo.id)),
-    ].slice(0, 12);
+    todos = strictReadSet
+      ? [...selectedLinkedTodos, ...todos.filter(todo => !selectedLinkedTodoIds.has(todo.id))]
+      : [...selectedLinkedTodos, ...todos.filter(todo => !selectedLinkedTodoIds.has(todo.id))].slice(0, 20);
 
     return {
       events,
       todos,
       explicitEventId,
-      segmentEventId: segmentBinding?.event_id ?? null,
-      segmentTodoId: segmentTodoBinding?.todo_id ?? null,
+      segmentEventId: strictReadSet ? null : segmentBinding?.event_id ?? null,
+      segmentTodoId: strictReadSet ? null : segmentTodoBinding?.todo_id ?? null,
     };
   });
 }

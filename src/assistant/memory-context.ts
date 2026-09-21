@@ -25,11 +25,15 @@ function relevance(query: string, memory: AssistantMemory): number {
 }
 
 function selectActive(query: string, memories: AssistantMemory[]): AssistantMemory[] {
-  const ranked = [...memories].sort((left, right) => (
-    relevance(query, right) - relevance(query, left)
-    || right.updatedAt - left.updatedAt
-    || right.id.localeCompare(left.id)
-  ));
+  const ranked = memories
+    .map(memory => ({ memory, score: relevance(query, memory) }))
+    .filter(item => item.score > 0)
+    .sort((left, right) => (
+      right.score - left.score
+      || right.memory.updatedAt - left.memory.updatedAt
+      || right.memory.id.localeCompare(left.memory.id)
+    ))
+    .map(item => item.memory);
   const selected: AssistantMemory[] = [];
   let tokens = 0;
   for (const memory of ranked) {

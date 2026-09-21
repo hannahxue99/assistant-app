@@ -97,6 +97,7 @@ export interface AssistantMemoryRejection {
   action: AssistantMemoryDeltaProposal['action'];
   reason:
     | 'evidence_not_in_user_message'
+    | 'missing_evidence'
     | 'candidate_not_allowed'
     | 'revision_conflict'
     | 'duplicate_content'

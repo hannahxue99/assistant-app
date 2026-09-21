@@ -4,6 +4,7 @@ import type { AssistantEventDelta } from './event-delta-types';
 import type { AssistantMemoryDeltaProposal } from './memory-types';
 import type { AssistantProviderAttempt, AssistantProviderMetadata } from './provider';
 import type { AssistantProtocolWarning } from './protocol';
+import type { AssistantExecutionResult } from './execution-result';
 
 export interface AssistantDecisionContextRefs {
   recentMessageIds: string[];
@@ -28,6 +29,13 @@ export interface AssistantDecisionLog {
   providerAttemptCount: number;
   providerAttempts: AssistantProviderAttempt[];
   protocolWarnings: AssistantProtocolWarning[];
+  toolReadEventIds: string[];
+  toolReadTodoIds: string[];
+  toolReadMemoryIds: string[];
+  toolCalls: Array<Record<string, unknown>>;
+  executionOutcome: string;
+  executionRejected: Array<Record<string, unknown>>;
+  narration: Record<string, unknown>;
 }
 
 function boundedErrorDetail(value: string | null | undefined): string | null {
@@ -70,7 +78,9 @@ export async function beginAssistantDecisionLog(input: {
          finish_reason=NULL, prompt_tokens=NULL, completion_tokens=NULL, total_tokens=NULL,
          error_code=NULL, error_detail=NULL, repair_count=0, repair_status='not_needed',
          provider_attempt_count=0, provider_attempts_json='[]',
-         protocol_warnings_json='[]', updated_at=excluded.updated_at`,
+         protocol_warnings_json='[]', tool_read_event_ids_json='[]', tool_read_todo_ids_json='[]',
+         tool_read_memory_ids_json='[]', tool_calls_json='[]',
+         execution_outcome='pending', execution_rejected_json='[]', narration_json='{}', updated_at=excluded.updated_at`,
       input.requestId, input.userMessageId, input.promptVersion, input.model,
       input.referenceAt, input.timeZone, JSON.stringify(input.contextRefs), createdAt, createdAt,
     );
@@ -89,6 +99,10 @@ export async function recordAssistantModelDecision(input: {
   eventDeltas?: AssistantEventDelta[];
   memoryDeltas?: AssistantMemoryDeltaProposal[];
   metadata?: AssistantProviderMetadata;
+  toolReadEventIds?: string[];
+  toolReadTodoIds?: string[];
+  toolReadMemoryIds?: string[];
+  toolCalls?: Array<Record<string, unknown>>;
   updatedAt?: number;
 }): Promise<void> {
   const updatedAt = input.updatedAt ?? Date.now();
@@ -97,7 +111,9 @@ export async function recordAssistantModelDecision(input: {
        proposed_operations_json=?, proposed_event_deltas_json=?, proposed_memory_deltas_json=?, status='model_received',
        provider_started_at=?, provider_completed_at=?, finish_reason=?,
        prompt_tokens=?, completion_tokens=?, total_tokens=?,
-       provider_attempt_count=?, provider_attempts_json=?, protocol_warnings_json=?, updated_at=?
+       provider_attempt_count=?, provider_attempts_json=?, protocol_warnings_json=?,
+       tool_read_event_ids_json=?, tool_read_todo_ids_json=?, tool_read_memory_ids_json=?,
+       tool_calls_json=?, updated_at=?
      WHERE request_id=?`,
     JSON.stringify(input.operations), JSON.stringify(input.eventDeltas ?? []), JSON.stringify(input.memoryDeltas ?? []),
     input.metadata?.startedAt ?? null,
@@ -106,8 +122,22 @@ export async function recordAssistantModelDecision(input: {
     input.metadata?.totalTokens ?? null, input.metadata?.attemptCount ?? 0,
     JSON.stringify(boundedAttempts(input.metadata?.attempts)),
     JSON.stringify(input.metadata?.protocolWarnings ?? []),
+    JSON.stringify(input.toolReadEventIds ?? []),
+    JSON.stringify(input.toolReadTodoIds ?? []),
+    JSON.stringify(input.toolReadMemoryIds ?? []),
+    JSON.stringify(boundedToolCalls(input.toolCalls)),
     updatedAt, input.requestId,
   ));
+}
+
+function boundedToolCalls(toolCalls: Array<Record<string, unknown>> | undefined): Array<Record<string, unknown>> {
+  return (toolCalls ?? []).slice(0, 12).map(call => {
+    const argumentsJson = typeof call.argumentsJson === 'string' ? call.argumentsJson : '';
+    return {
+      ...call,
+      argumentsJson: argumentsJson.length <= 200 ? argumentsJson : `${argumentsJson.slice(0, 199)}…`,
+    };
+  });
 }
 
 export async function recordAssistantValidation(input: {
@@ -143,9 +173,52 @@ export async function recordAssistantDecisionCommit(input: {
 }): Promise<void> {
   const completedAt = input.completedAt ?? Date.now();
   await withDatabaseConnection(async database => database.runAsync(
-    `UPDATE assistant_decision_logs SET committed_operation_ids_json=?, status='committed',
+    `UPDATE assistant_decision_logs SET committed_operation_ids_json=?, status='committed', execution_outcome='committed',
        commit_completed_at=?, error_code=NULL, updated_at=? WHERE request_id=?`,
     JSON.stringify(input.operations.map(operation => operation.id)), completedAt, completedAt, input.requestId,
+  ));
+}
+
+export async function recordAssistantExecutionOutcome(input: {
+  requestId: string;
+  result: AssistantExecutionResult;
+  updatedAt?: number;
+}): Promise<void> {
+  const updatedAt = input.updatedAt ?? Date.now();
+  await withDatabaseConnection(async database => database.runAsync(
+    `UPDATE assistant_decision_logs SET execution_outcome=?, execution_rejected_json=?, error_detail=COALESCE(error_detail, ?), updated_at=?
+     WHERE request_id=?`,
+    input.result.outcome,
+    JSON.stringify(input.result.rejected),
+    input.result.error ? boundedErrorDetail(input.result.error) : null,
+    updatedAt,
+    input.requestId,
+  ));
+}
+
+export async function recordAssistantNarration(input: {
+  requestId: string;
+  narration: {
+    source: 'model' | 'fallback' | 'skipped';
+    startedAt: number;
+    completedAt: number;
+    totalTokens?: number | null;
+    errorCode?: string | null;
+  };
+  updatedAt?: number;
+}): Promise<void> {
+  const updatedAt = input.updatedAt ?? Date.now();
+  await withDatabaseConnection(async database => database.runAsync(
+    `UPDATE assistant_decision_logs SET narration_json=?, updated_at=? WHERE request_id=?`,
+    JSON.stringify({
+      source: input.narration.source,
+      startedAt: input.narration.startedAt,
+      completedAt: input.narration.completedAt,
+      totalTokens: input.narration.totalTokens ?? null,
+      errorCode: input.narration.errorCode ?? null,
+    }),
+    updatedAt,
+    input.requestId,
   ));
 }
 
@@ -156,6 +229,7 @@ export async function recordAssistantDecisionFailure(input: {
   providerAttemptCount?: number;
   providerAttempts?: AssistantProviderAttempt[];
   protocolWarnings?: AssistantProtocolWarning[];
+  toolCalls?: Array<Record<string, unknown>>;
   updatedAt?: number;
 }): Promise<void> {
   const updatedAt = input.updatedAt ?? Date.now();
@@ -163,12 +237,15 @@ export async function recordAssistantDecisionFailure(input: {
     `UPDATE assistant_decision_logs SET status='failed', error_code=?, error_detail=?,
        provider_attempt_count=COALESCE(?, provider_attempt_count),
        provider_attempts_json=COALESCE(?, provider_attempts_json),
-       protocol_warnings_json=COALESCE(?, protocol_warnings_json), updated_at=? WHERE request_id=?`,
+       protocol_warnings_json=COALESCE(?, protocol_warnings_json),
+       tool_calls_json=CASE WHEN ? THEN tool_calls_json ELSE ? END, updated_at=? WHERE request_id=?`,
     input.errorCode,
     boundedErrorDetail(input.errorDetail),
     input.providerAttemptCount ?? null,
     input.providerAttempts ? JSON.stringify(boundedAttempts(input.providerAttempts)) : null,
     input.protocolWarnings ? JSON.stringify(input.protocolWarnings) : null,
+    input.toolCalls ? 0 : 1,
+    input.toolCalls ? JSON.stringify(boundedToolCalls(input.toolCalls)) : null,
     updatedAt,
     input.requestId,
   ));
@@ -191,6 +268,13 @@ export async function getAssistantDecisionLog(requestId: string): Promise<Assist
       providerAttemptCount: Number(row.provider_attempt_count ?? 0),
       providerAttempts: JSON.parse(row.provider_attempts_json || '[]'),
       protocolWarnings: JSON.parse(row.protocol_warnings_json || '[]'),
+      toolReadEventIds: JSON.parse(row.tool_read_event_ids_json || '[]'),
+      toolReadTodoIds: JSON.parse(row.tool_read_todo_ids_json || '[]'),
+      toolReadMemoryIds: JSON.parse(row.tool_read_memory_ids_json || '[]'),
+      toolCalls: JSON.parse(row.tool_calls_json || '[]'),
+      executionOutcome: row.execution_outcome ?? 'pending',
+      executionRejected: JSON.parse(row.execution_rejected_json || '[]'),
+      narration: JSON.parse(row.narration_json || '{}'),
     };
   });
 }

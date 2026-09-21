@@ -1,0 +1,550 @@
+export const ASSISTANT_READ_TOOL_NAMES = [
+  'search_events',
+  'get_event',
+  'search_todos',
+  'get_todo',
+  'search_memories',
+  'get_memory',
+  'list_events',
+  'list_todos',
+  'list_memories',
+] as const;
+
+export type AssistantReadToolName = typeof ASSISTANT_READ_TOOL_NAMES[number];
+
+export interface AssistantReadToolCall {
+  id: string;
+  name: AssistantReadToolName;
+  argumentsJson: string;
+}
+
+export interface AssistantReadToolExecution {
+  toolCallId: string;
+  name: AssistantReadToolName;
+  result: Record<string, unknown>;
+  readEventIds: string[];
+  readTodoIds: string[];
+  readMemoryIds: string[];
+}
+
+export interface AssistantReadSet {
+  eventIds: string[];
+  todoIds: string[];
+  memoryIds: string[];
+}
+
+type DatabaseLike = {
+  getAllAsync<T>(sql: string, ...args: any[]): Promise<T[]>;
+  getFirstAsync<T>(sql: string, ...args: any[]): Promise<T | null>;
+};
+
+const MAX_SEARCH_RESULTS = 8;
+
+export const ASSISTANT_READ_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'search_events',
+      description: '按标题、别名、当前状态、近期进展或关联待办搜索用户的真实事件。需要确认事件 ID 时先调用。',
+      parameters: {
+        type: 'object',
+        properties: { query: { type: 'string', description: '从对话提炼的事件关键词' } },
+        required: ['query'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_event',
+      description: '按精确 ID 读取事件的真实状态、版本、近期进展及全部关联待办摘要。更新事件前调用。',
+      parameters: {
+        type: 'object',
+        properties: { event_id: { type: 'string' } },
+        required: ['event_id'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_todos',
+      description: '按内容搜索用户的真实待办。需要确认待办 ID 时先调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: '从对话提炼的待办关键词' },
+          include_done: { type: 'boolean', description: '是否包含已完成待办，默认否' },
+        },
+        required: ['query'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_todo',
+      description: '按精确 ID 读取待办的真实内容、日期、完成状态、版本和关联事件。更新待办前调用。',
+      parameters: {
+        type: 'object',
+        properties: { todo_id: { type: 'string' } },
+        required: ['todo_id'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_memories',
+      description: '按内容搜索用户的真实长期记忆。需要确认记忆 ID 时先调用；搜索结果本身不能授权修改或删除。',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: '从对话提炼的记忆关键词' },
+          status: {
+            type: 'string',
+            enum: ['active', 'candidate'],
+            description: '可选；只搜索已生效或待确认记忆，默认两者都搜索',
+          },
+        },
+        required: ['query'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_memory',
+      description: '按精确 ID 读取长期记忆的真实内容、状态和版本。激活、更新或删除既有记忆前调用。',
+      parameters: {
+        type: 'object',
+        properties: { memory_id: { type: 'string' } },
+        required: ['memory_id'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_events',
+      description: '列出全部活跃事件的 ID 和标题（不含正文，紧凑总览）。用户要求总览或全部列出时调用；需要某条的完整状态再按 ID 调 get_event。',
+      parameters: {
+        type: 'object',
+        properties: {
+          pinned_only: { type: 'boolean', description: '可选；只列置顶事件，默认否' },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_todos',
+      description: '列出待办的 ID 和摘要（不含正文）。include_done 控制是否包含已完成，默认只列未完成；需要完整详情再按 ID 调 get_todo。',
+      parameters: {
+        type: 'object',
+        properties: {
+          include_done: { type: 'boolean', description: '可选；包含已完成待办，默认否' },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_memories',
+      description: '列出长期记忆的 ID、类别和内容（不含元数据）。用户要求查看全部记忆时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          status: {
+            type: 'string',
+            enum: ['active', 'candidate'],
+            description: '可选；只列已生效或待确认记忆，默认两者都列',
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+] as const;
+
+function isReadToolName(value: unknown): value is AssistantReadToolName {
+  return typeof value === 'string' && (ASSISTANT_READ_TOOL_NAMES as readonly string[]).includes(value);
+}
+
+function parseArguments(value: string): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value || '{}');
+  } catch {
+    throw Object.assign(new Error('数据工具参数不是有效 JSON'), { code: 'invalid_tool_arguments' });
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw Object.assign(new Error('数据工具参数必须是对象'), { code: 'invalid_tool_arguments' });
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function requiredString(args: Record<string, unknown>, key: string): string {
+  const value = args[key];
+  if (typeof value !== 'string' || !value.trim()) {
+    throw Object.assign(new Error(`数据工具缺少 ${key}`), { code: 'invalid_tool_arguments' });
+  }
+  return value.trim().slice(0, 120);
+}
+
+function escapedLike(value: string): string {
+  return `%${value.replace(/[\\%_]/g, match => `\\${match}`)}%`;
+}
+
+/**
+ * 工具结果给人读模型看的时间一律用 ISO 字符串：毫秒数字的任意数字串
+ * 会与敏感词组合触发上游内容风控（实测"北京"+含特定数字组合的时间戳 → 400），
+ * ISO 表示从根上消除这类巧合，且对模型语义无损。revision 是本地写入校验
+ * 必需的小整数，保留数字。
+ */
+function isoTime(value: unknown): string | null {
+  const ms = Number(value);
+  return Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : null;
+}
+
+function todoSnapshot(row: any) {
+  return {
+    id: row.id,
+    text: row.summary || row.raw_text,
+    dueAt: isoTime(row.due_at),
+    done: Boolean(row.done),
+    revision: Number(row.revision_at ?? row.updated_at ?? 0),
+    updatedAt: isoTime(row.updated_at ?? row.created_at),
+  };
+}
+
+function eventSnapshot(row: any) {
+  return {
+    id: row.id,
+    title: row.title,
+    currentState: row.current_state,
+    status: row.status,
+    revision: Number(row.revision),
+    updatedAt: isoTime(row.updated_at),
+  };
+}
+
+function memorySnapshot(row: any) {
+  return {
+    id: row.id,
+    content: row.content,
+    category: row.category,
+    status: row.status,
+    sensitivity: row.sensitivity,
+    admissionBasis: row.admission_basis,
+    revision: Number(row.revision),
+    createdAt: isoTime(row.created_at),
+    updatedAt: isoTime(row.updated_at),
+    activatedAt: isoTime(row.activated_at),
+    supersededAt: isoTime(row.superseded_at),
+    forgottenAt: isoTime(row.forgotten_at),
+    supersededById: row.superseded_by_id ?? null,
+  };
+}
+
+export function mergeAssistantReadSets(executions: AssistantReadToolExecution[]): AssistantReadSet {
+  return {
+    eventIds: [...new Set(executions.flatMap(item => item.readEventIds))],
+    todoIds: [...new Set(executions.flatMap(item => item.readTodoIds))],
+    memoryIds: [...new Set(executions.flatMap(item => item.readMemoryIds))],
+  };
+}
+
+export async function executeAssistantReadToolWithDatabase(
+  database: DatabaseLike,
+  call: { id: string; name: string; argumentsJson: string },
+): Promise<AssistantReadToolExecution> {
+  if (!isReadToolName(call.name)) {
+    throw Object.assign(new Error(`不允许的数据工具：${call.name}`), { code: 'tool_not_allowed' });
+  }
+  const args = parseArguments(call.argumentsJson);
+  if (call.name === 'search_events') {
+    const query = requiredString(args, 'query');
+    const like = escapedLike(query);
+    const rows = await database.getAllAsync<any>(
+      `SELECT DISTINCT e.* FROM assistant_events e
+       LEFT JOIN assistant_event_aliases a ON a.event_id=e.id
+       LEFT JOIN assistant_event_updates u ON u.event_id=e.id AND u.undone_at IS NULL
+       LEFT JOIN assistant_object_relations r ON r.to_type='event' AND r.to_id=e.id
+         AND r.from_type='todo' AND r.relation_type='belongs_to' AND r.undone_at IS NULL
+       LEFT JOIN entries t ON t.id=r.from_id
+       WHERE e.status='active' AND (
+         e.title LIKE ? ESCAPE '\\' OR e.current_state LIKE ? ESCAPE '\\'
+         OR a.alias LIKE ? ESCAPE '\\' OR u.content LIKE ? ESCAPE '\\'
+         OR t.summary LIKE ? ESCAPE '\\' OR t.raw_text LIKE ? ESCAPE '\\'
+       )
+       ORDER BY e.updated_at DESC LIMIT ?`,
+      like, like, like, like, like, like, MAX_SEARCH_RESULTS,
+    );
+    const events = rows.map(eventSnapshot);
+    return {
+      toolCallId: call.id,
+      name: call.name,
+      result: { query, events },
+      readEventIds: [],
+      readTodoIds: [],
+      readMemoryIds: [],
+    };
+  }
+
+  if (call.name === 'get_event') {
+    const eventId = requiredString(args, 'event_id');
+    const row = await database.getFirstAsync<any>('SELECT * FROM assistant_events WHERE id=?', eventId);
+    if (!row || row.status !== 'active') {
+      return {
+        toolCallId: call.id,
+        name: call.name,
+        result: { eventId, found: false },
+        readEventIds: [],
+        readTodoIds: [],
+        readMemoryIds: [],
+      };
+    }
+    const [updates, todos, aliases] = await Promise.all([
+      database.getAllAsync<any>(
+        `SELECT id, content, occurred_at, source_message_id FROM assistant_event_updates
+         WHERE event_id=? AND undone_at IS NULL ORDER BY occurred_at DESC, id DESC LIMIT 12`,
+        eventId,
+      ),
+      database.getAllAsync<any>(
+        `SELECT t.* FROM assistant_object_relations r JOIN entries t ON t.id=r.from_id
+         WHERE r.from_type='todo' AND r.to_type='event' AND r.to_id=?
+           AND r.relation_type='belongs_to' AND r.undone_at IS NULL
+         ORDER BY t.done ASC, t.due_at IS NULL, t.due_at, t.updated_at DESC LIMIT 50`,
+        eventId,
+      ),
+      database.getAllAsync<{ alias: string }>('SELECT alias FROM assistant_event_aliases WHERE event_id=?', eventId),
+    ]);
+    return {
+      toolCallId: call.id,
+      name: call.name,
+      result: {
+        found: true,
+        event: eventSnapshot(row),
+        aliases: aliases.map(item => item.alias),
+        updates: updates.map(item => ({
+          id: item.id,
+          content: item.content,
+          occurredAt: isoTime(item.occurred_at),
+          sourceMessageId: item.source_message_id ?? null,
+        })),
+        todos: todos.map(todoSnapshot),
+      },
+      readEventIds: [eventId],
+      readTodoIds: todos.map(todo => todo.id),
+      readMemoryIds: [],
+    };
+  }
+
+  if (call.name === 'search_todos') {
+    const query = requiredString(args, 'query');
+    const includeDone = args.include_done === true;
+    const like = escapedLike(query);
+    const rows = await database.getAllAsync<any>(
+      `SELECT * FROM entries WHERE kind='task' AND (?=1 OR done=0)
+       AND (summary LIKE ? ESCAPE '\\' OR raw_text LIKE ? ESCAPE '\\')
+       ORDER BY done ASC, updated_at DESC LIMIT ?`,
+      includeDone ? 1 : 0, like, like, MAX_SEARCH_RESULTS,
+    );
+    const todos = rows.map(todoSnapshot);
+    return {
+      toolCallId: call.id,
+      name: call.name,
+      result: { query, includeDone, todos },
+      readEventIds: [],
+      readTodoIds: [],
+      readMemoryIds: [],
+    };
+  }
+
+  if (call.name === 'search_memories') {
+    const query = requiredString(args, 'query');
+    const status = args.status;
+    if (status !== undefined && status !== 'active' && status !== 'candidate') {
+      throw Object.assign(new Error('数据工具的 status 无效'), { code: 'invalid_tool_arguments' });
+    }
+    const like = escapedLike(query);
+    const rows = status
+      ? await database.getAllAsync<any>(
+        `SELECT * FROM assistant_memories WHERE status=?
+         AND (content LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\')
+         ORDER BY updated_at DESC, id DESC LIMIT ?`,
+        status, like, like, MAX_SEARCH_RESULTS,
+      )
+      : await database.getAllAsync<any>(
+        `SELECT * FROM assistant_memories WHERE status IN ('active','candidate')
+         AND (content LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\')
+         ORDER BY updated_at DESC, id DESC LIMIT ?`,
+        like, like, MAX_SEARCH_RESULTS,
+      );
+    return {
+      toolCallId: call.id,
+      name: call.name,
+      result: {
+        query,
+        status: status ?? null,
+        memories: rows.map(row => {
+          const memory = memorySnapshot(row);
+          return {
+            id: memory.id,
+            content: memory.content,
+            category: memory.category,
+            status: memory.status,
+            revision: memory.revision,
+          };
+        }),
+      },
+      readEventIds: [],
+      readTodoIds: [],
+      readMemoryIds: [],
+    };
+  }
+
+  if (call.name === 'get_memory') {
+    const memoryId = requiredString(args, 'memory_id');
+    const row = await database.getFirstAsync<any>('SELECT * FROM assistant_memories WHERE id=?', memoryId);
+    return row
+      ? {
+        toolCallId: call.id,
+        name: call.name,
+        result: { found: true, memory: memorySnapshot(row) },
+        readEventIds: [],
+        readTodoIds: [],
+        readMemoryIds: [memoryId],
+      }
+      : {
+        toolCallId: call.id,
+        name: call.name,
+        result: { memoryId, found: false },
+        readEventIds: [],
+        readTodoIds: [],
+        readMemoryIds: [],
+      };
+  }
+
+  if (call.name === 'list_events') {
+    const pinnedOnly = args.pinned_only === true;
+    const rows = await database.getAllAsync<any>(
+      `SELECT id, title, status, pinned_at, revision FROM assistant_events
+       WHERE status='active' ${pinnedOnly ? 'AND pinned_at IS NOT NULL' : ''}
+       ORDER BY pinned_at IS NOT NULL DESC, updated_at DESC`,
+    );
+    return {
+      toolCallId: call.id,
+      name: call.name,
+      result: {
+        pinnedOnly,
+        events: rows.map(row => ({
+          id: row.id,
+          title: row.title,
+          pinned: row.pinned_at != null,
+          revision: Number(row.revision),
+        })),
+      },
+      readEventIds: [],
+      readTodoIds: [],
+      readMemoryIds: [],
+    };
+  }
+
+  if (call.name === 'list_todos') {
+    const includeDone = args.include_done === true;
+    const rows = await database.getAllAsync<any>(
+      `SELECT id, summary, raw_text, done FROM entries
+       WHERE kind='task' ${includeDone ? '' : 'AND done=0'}
+       ORDER BY done ASC, updated_at DESC`,
+    );
+    return {
+      toolCallId: call.id,
+      name: call.name,
+      result: {
+        includeDone,
+        todos: rows.map(row => ({
+          id: row.id,
+          text: row.summary || row.raw_text,
+          done: Boolean(row.done),
+        })),
+      },
+      readEventIds: [],
+      readTodoIds: [],
+      readMemoryIds: [],
+    };
+  }
+
+  if (call.name === 'list_memories') {
+    const status = args.status;
+    if (status !== undefined && status !== 'active' && status !== 'candidate') {
+      throw Object.assign(new Error('数据工具的 status 无效'), { code: 'invalid_tool_arguments' });
+    }
+    const rows = status
+      ? await database.getAllAsync<any>(
+        `SELECT id, category, content, status FROM assistant_memories WHERE status=? ORDER BY updated_at DESC`,
+        status,
+      )
+      : await database.getAllAsync<any>(
+        `SELECT id, category, content, status FROM assistant_memories WHERE status IN ('active','candidate') ORDER BY updated_at DESC`,
+      );
+    return {
+      toolCallId: call.id,
+      name: call.name,
+      result: {
+        status: status ?? null,
+        memories: rows,
+      },
+      readEventIds: [],
+      readTodoIds: [],
+      readMemoryIds: [],
+    };
+  }
+
+  const todoId = requiredString(args, 'todo_id');
+  const row = await database.getFirstAsync<any>("SELECT * FROM entries WHERE id=? AND kind='task'", todoId);
+  if (!row) {
+    return {
+      toolCallId: call.id,
+      name: call.name,
+      result: { todoId, found: false },
+      readEventIds: [],
+      readTodoIds: [],
+      readMemoryIds: [],
+    };
+  }
+  const eventRows = await database.getAllAsync<any>(
+    `SELECT e.* FROM assistant_object_relations r JOIN assistant_events e ON e.id=r.to_id
+     WHERE r.from_type='todo' AND r.from_id=? AND r.to_type='event'
+       AND r.relation_type='belongs_to' AND r.undone_at IS NULL AND e.status='active'
+     ORDER BY e.updated_at DESC`,
+    todoId,
+  );
+  const events = eventRows.map(eventSnapshot);
+  return {
+    toolCallId: call.id,
+    name: call.name,
+    result: { found: true, todo: todoSnapshot(row), events },
+    readEventIds: events.map(event => event.id),
+    readTodoIds: [todoId],
+    readMemoryIds: [],
+  };
+}
+
+export async function executeAssistantReadTool(
+  call: { id: string; name: string; argumentsJson: string },
+): Promise<AssistantReadToolExecution> {
+  const { withDatabaseConnection } = await import('../db');
+  return withDatabaseConnection(database => executeAssistantReadToolWithDatabase(database, call));
+}

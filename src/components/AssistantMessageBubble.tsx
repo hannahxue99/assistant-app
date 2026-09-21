@@ -4,12 +4,15 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import {
   assistantCompletedRuntimeLabel,
   assistantRuntimeLabel,
+  assistantStageLineLabel,
+  assistantStageSummaryLabel,
   formatAssistantRuntimeDuration,
 } from '../assistant/runtime-state';
 import { formatAssistantMessageTime } from '../assistant/message-time';
 import type { AssistantReasoning } from '../assistant/reasoning-store';
 import { assistantFailureLabel } from '../assistant/ui-state';
 import type { AssistantMessage } from '../assistant/types';
+import type { AssistantRuntimeStage } from '../assistant/runtime-state';
 import { theme } from '../theme';
 import { AssistantActionReceipt } from './AssistantActionReceipt';
 
@@ -84,9 +87,39 @@ export function AssistantMessageBubble({
     }
   }
 
-  const runtimeStage = message.runtimeStage ?? 'thinking';
+  const runtimeStage = message.runtimeStage ?? 'planning';
+  // 运行中逐行累加：同阶段多段合并耗时，已定格的行不带转圈。
+  const completedStageLines = (message.stageSegments ?? [])
+    .slice(0, -1)
+    .reduce<Array<{ stage: AssistantRuntimeStage; ms: number }>>((acc, segment, index, all) => {
+      const next = all[index + 1];
+      const ms = Math.max(0, (next?.startedAt ?? segment.endedAt ?? 0) - segment.startedAt);
+      const existing = acc.find(item => item.stage === segment.stage);
+      if (existing) {
+        existing.ms += ms;
+        return acc;
+      }
+      acc.push({ stage: segment.stage, ms });
+      return acc;
+    }, [])
+    .filter(item => item.ms >= 1000);
+  const finalSummaryLabel = !isUser && !isStreaming
+    ? assistantStageSummaryLabel(
+      message.stageDurations,
+      reasoningStartedAt !== undefined && reasoningCompletedAt !== undefined
+        ? reasoningCompletedAt - reasoningStartedAt
+        : undefined,
+    )
+    : null;
   return (
     <View style={[styles.row, isUser ? styles.userRow : styles.assistantRow]}>
+      {isStreaming && completedStageLines.length > 0 ? (
+        <View style={styles.stageLinesWrap} accessibilityLabel="已完成的处理阶段">
+          {completedStageLines.map(line => (
+            <Text key={line.stage} style={styles.stageLine}>{assistantStageLineLabel(line.stage, line.ms)}</Text>
+          ))}
+        </View>
+      ) : null}
       {hasReasoning ? (
         <Pressable
           accessibilityRole="button"
@@ -95,13 +128,13 @@ export function AssistantMessageBubble({
           onPress={() => { void toggleReasoning(); }}
           style={({ pressed }) => [styles.reasoningHeader, pressed && styles.retryPressed]}
         >
-          {isStreaming && runtimeStage === 'thinking' ? (
+          {isStreaming ? (
             <ActivityIndicator size="small" color={theme.colors.accent} />
           ) : null}
           <Text style={styles.reasoningHeaderText}>
-            {isStreaming && runtimeStage === 'thinking' && startedAt !== undefined
-              ? assistantRuntimeLabel('thinking', elapsedMs)
-              : `思考了 ${reasoningDuration ?? formatAssistantRuntimeDuration(elapsedMs)}`}
+            {isStreaming && startedAt !== undefined
+              ? assistantRuntimeLabel(runtimeStage, elapsedMs)
+              : finalSummaryLabel ?? `思考了 ${reasoningDuration ?? formatAssistantRuntimeDuration(elapsedMs)}`}
           </Text>
           <Text style={styles.reasoningChevron}>{reasoningExpanded ? '⌃' : '›'}</Text>
         </Pressable>
@@ -117,12 +150,6 @@ export function AssistantMessageBubble({
           {reasoningText ? <Text selectable style={styles.reasoningText}>{reasoningText}</Text> : null}
           {reasoningError ? <Text style={styles.reasoningError}>思考过程暂时无法加载</Text> : null}
           {reasoningText ? <Text style={styles.reasoningNote}>模型生成的思考过程，仅供参考</Text> : null}
-        </View>
-      ) : null}
-      {isStreaming && hasReasoning && runtimeStage !== 'thinking' && startedAt !== undefined ? (
-        <View style={styles.answeringStatus}>
-          <ActivityIndicator size="small" color={theme.colors.accent} />
-          <Text style={styles.runtimeText}>{assistantRuntimeLabel(runtimeStage, elapsedMs)}</Text>
         </View>
       ) : null}
       {message.content ? (
@@ -194,7 +221,8 @@ const styles = StyleSheet.create({
   reasoningText: { color: theme.colors.textDim, fontSize: 13, lineHeight: 20 },
   reasoningNote: { color: theme.colors.textDim, fontSize: 11, marginTop: 2 },
   reasoningError: { color: theme.colors.red, fontSize: 12 },
-  answeringStatus: { minHeight: 30, maxWidth: '86%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 7, marginBottom: 3 },
+  stageLinesWrap: { maxWidth: '86%', gap: 3, paddingHorizontal: 12, marginBottom: 3 },
+  stageLine: { color: theme.colors.textDim, fontSize: 12 },
   statusRow: { minHeight: 24, flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3, paddingHorizontal: 3 },
   statusText: { color: theme.colors.textDim, fontSize: 12 },
   retry: { minHeight: 32, justifyContent: 'center', marginTop: 2, paddingHorizontal: 4 },

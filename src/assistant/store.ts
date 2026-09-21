@@ -31,6 +31,7 @@ type CompleteTurnInput = {
   reply: string;
   segment: AssistantSegmentDecision;
   createdAt?: number;
+  stageDurations?: AssistantMessage['stageDurations'];
 };
 
 function makeId(prefix: string, now: number): string {
@@ -38,6 +39,13 @@ function makeId(prefix: string, now: number): string {
 }
 
 function rowToMessage(row: any): AssistantMessage {
+  let stageDurations: AssistantMessage['stageDurations'];
+  try {
+    const parsed = JSON.parse(row.stage_durations_json || '{}');
+    if (parsed && typeof parsed === 'object') stageDurations = parsed;
+  } catch {
+    // 旧库或损坏数据缺省：落定展示退回思考时长，不阻断消息渲染。
+  }
   return {
     id: row.id,
     requestId: row.request_id,
@@ -53,6 +61,7 @@ function rowToMessage(row: any): AssistantMessage {
     reasoningAvailable: Boolean(row.reasoning_available),
     reasoningStartedAt: row.reasoning_started_at ?? undefined,
     reasoningCompletedAt: row.reasoning_completed_at ?? undefined,
+    stageDurations,
   };
 }
 
@@ -141,6 +150,30 @@ export async function completeTurn(input: CompleteTurnInput): Promise<AssistantM
   return withExclusiveDatabaseTransaction(txn => completeTurnWithDatabase(txn, input));
 }
 
+export async function updateAssistantReply(
+  requestId: string,
+  reply: string,
+  updatedAt = Date.now(),
+): Promise<AssistantMessage> {
+  const content = reply.trim();
+  if (!content) throw new Error('助手回复不能为空');
+  return withExclusiveDatabaseTransaction(async (txn) => {
+    const existing = await txn.getFirstAsync<any>(
+      "SELECT * FROM assistant_messages WHERE request_id=? AND role='assistant'",
+      requestId,
+    );
+    if (!existing) throw new Error('找不到助手回复');
+    await txn.runAsync(
+      "UPDATE assistant_messages SET content=?, updated_at=? WHERE request_id=? AND role='assistant'",
+      content, updatedAt, requestId,
+    );
+    return rowToMessage(await txn.getFirstAsync<any>(
+      "SELECT * FROM assistant_messages WHERE request_id=? AND role='assistant'",
+      requestId,
+    ));
+  });
+}
+
 /** 在调用方事务内完成分段和回复，用于把对象操作与成功回执原子提交。 */
 export async function completeTurnWithDatabase(
   txn: SQLiteDatabase,
@@ -198,9 +231,10 @@ export async function completeTurnWithDatabase(
     await txn.runAsync(
       `INSERT INTO assistant_messages (
          id, request_id, role, content, source, status, segment_id,
-         legacy_entry_id, created_at, updated_at
-       ) VALUES (?, ?, 'assistant', ?, 'assistant', 'saved', ?, NULL, ?, ?)`,
-      replyId, input.requestId, reply, replySegmentId, createdAt, createdAt,
+         legacy_entry_id, stage_durations_json, created_at, updated_at
+       ) VALUES (?, ?, 'assistant', ?, 'assistant', 'saved', ?, NULL, ?, ?, ?)`,
+      replyId, input.requestId, reply, replySegmentId,
+      JSON.stringify(input.stageDurations ?? {}), createdAt, createdAt,
     );
     await txn.runAsync(
       "UPDATE assistant_messages SET status='saved', updated_at=? WHERE id=?",

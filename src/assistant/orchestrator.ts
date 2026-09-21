@@ -4,17 +4,31 @@ import { buildAssistantContext, type AssistantLaunchContext } from './context';
 import { loadAssistantActionContext } from './action-context';
 import { completeAssistantTurnWithActions, listCommittedOperationsByRequest } from './action-store';
 import { prepareAssistantActions } from './event-delta';
-import { requestAssistantTurn, type AssistantProviderProgressStage } from './provider';
-import type { AssistantRuntimeStage } from './runtime-state';
+import {
+  requestAssistantFinalReply,
+  requestAssistantTurn,
+  type AssistantProviderProgressStage,
+} from './provider';
+import {
+  executeAssistantReadTool,
+  mergeAssistantReadSets,
+  type AssistantReadToolExecution,
+  type AssistantReadToolName,
+} from './data-tools';
+import { buildAssistantExecutionResult, fallbackReplyForExecution } from './execution-result';
+import { assistantStageDurationsFromTimeline, type AssistantRuntimeStage } from './runtime-state';
 import { getAssistantReasoning, type AssistantReasoning } from './reasoning-store';
 import { ASSISTANT_PROMPT_VERSION } from './prompt';
 import { loadAssistantMemoryContext } from './memory-retrieval';
+import { listMemoriesByIds } from './memory-store';
 import { validateAssistantMemoryDeltas } from './memory-validator';
 import {
   beginAssistantDecisionLog,
   recordAssistantDecisionCommit,
   recordAssistantDecisionFailure,
+  recordAssistantExecutionOutcome,
   recordAssistantModelDecision,
+  recordAssistantNarration,
   recordAssistantValidation,
 } from './decision-log';
 import { rankRelevantEntries, rankRelevantSegments } from './retrieval';
@@ -27,9 +41,15 @@ import {
   listClosedSegments,
   listMessages,
   saveUserTurn,
+  updateAssistantReply,
 } from './store';
 import type { AssistantMessage } from './types';
 import type { AssistantOperation } from './action-types';
+import {
+  loadValidAssistantWorkingSnapshots,
+  readSetFromAssistantWorkingSnapshots,
+  rememberAssistantWorkingSnapshots,
+} from './working-snapshots';
 
 export interface AssistantTurnResult {
   userMessage: AssistantMessage;
@@ -101,7 +121,9 @@ async function findRelatedEntries(query: string) {
       listByKeyword(keyword, 20).catch(() => []),
       listEntries({ query: '', kind: 'all', showDone: true }, 500),
     ]);
-    const unique = new Map([...fts, ...fallback, ...recent].map(entry => [entry.id, entry]));
+    const unique = new Map([...fts, ...fallback, ...recent]
+      .filter(entry => entry.kind !== 'task')
+      .map(entry => [entry.id, entry]));
     return rankRelevantEntries(keyword, [...unique.values()]);
   } catch {
     return [];
@@ -134,19 +156,15 @@ async function runSavedTurn(input: {
     };
   }
 
-  const [messages, currentSegment, closedSegments, relevantEntries, settings, memoryContext] = await Promise.all([
+  const currentSegment = await getCurrentSegment();
+  const [messages, closedSegments, relevantEntries, settings, memoryContext, validWorkingSnapshots] = await Promise.all([
     listMessages({ limit: 12 }),
-    getCurrentSegment(),
     listClosedSegments(100),
     findRelatedEntries(state.userMessage.content),
     input.settings ? Promise.resolve(input.settings) : getSettings(),
     loadAssistantMemoryContext(state.userMessage.content),
+    loadValidAssistantWorkingSnapshots(currentSegment?.id),
   ]);
-  const actionContext = await loadAssistantActionContext({
-    query: state.userMessage.content,
-    launchContext: input.launchContext,
-    currentSegmentId: currentSegment?.id,
-  });
   const recentLegacyIds = new Set(messages.map(item => item.legacyEntryId).filter(Boolean));
   const context = buildAssistantContext({
     recentMessages: messages.map(item => ({
@@ -159,10 +177,12 @@ async function runSavedTurn(input: {
     retrievedSegments: rankRelevantSegments(state.userMessage.content, closedSegments),
     relevantEntries: relevantEntries.filter(item => !recentLegacyIds.has(item.id)),
     launchContext: input.launchContext,
-    actionContext,
     memoryContext,
+    workingSnapshots: validWorkingSnapshots,
     inputBudget: 6000,
   });
+  const selectedSnapshotIdSet = new Set(context.selectedWorkingSnapshotIds);
+  const selectedWorkingSnapshots = validWorkingSnapshots.filter(snapshot => selectedSnapshotIdSet.has(snapshot.id));
   console.log('[assistant-context]', {
     estimatedTokens: context.estimatedTokens,
     recentMessages: context.recentMessages.length,
@@ -183,36 +203,120 @@ async function runSavedTurn(input: {
       recentMessageIds: context.recentMessages.map(message => message.id),
       segmentIds: context.selectedSegmentIds,
       entryIds: context.selectedEntryIds,
-      eventCandidateIds: actionContext.events.map(event => event.id),
-      todoCandidateIds: actionContext.todos.map(todo => todo.id),
+      eventCandidateIds: selectedWorkingSnapshots.flatMap(snapshot => snapshot.readEventIds),
+      todoCandidateIds: selectedWorkingSnapshots.flatMap(snapshot => snapshot.readTodoIds),
       memoryIds: context.selectedMemoryIds,
       launchContextId: input.launchContext?.id ?? null,
     },
     createdAt: state.userMessage.createdAt,
   }));
 
+  // 工具轨迹提到 try 外：失败轮也能落库，调试页才能回溯失败前的读取过程。
+  const toolCallTrace: Array<Record<string, unknown>> = [];
+  // 阶段切换时间线：落定后合并成各阶段实际耗时，持久化到助手消息。
+  const stageTimeline: Array<{ stage: AssistantRuntimeStage; at: number }> = [];
+  const emitProgress = (stage: AssistantRuntimeStage) => {
+    const last = stageTimeline.at(-1);
+    if (!last || last.stage !== stage) stageTimeline.push({ stage, at: Date.now() });
+    input.onProgress?.(stage);
+  };
   try {
     throwIfCancelled(input.signal);
+    const readExecutions: AssistantReadToolExecution[] = [];
+    const readExecutionCache = new Map<string, Promise<AssistantReadToolExecution>>();
+    const summarizeToolExecution = (
+      call: { name: string; argumentsJson: string },
+      execution: AssistantReadToolExecution,
+    ): Record<string, unknown> => {
+      const result = execution.result;
+      if (typeof result.error === 'string') {
+        return {
+          name: call.name, argumentsJson: call.argumentsJson,
+          ok: false, errorCode: result.error, summary: String(result.message ?? ''),
+        };
+      }
+      let summary = 'ok';
+      if (Array.isArray(result.events)) summary = `events:${result.events.length}`;
+      else if (Array.isArray(result.todos)) summary = `todos:${result.todos.length}`;
+      else if (Array.isArray(result.memories)) summary = `memories:${result.memories.length}`;
+      else if (result.found === true) {
+        const primary = result.event ?? result.todo ?? result.memory;
+        summary = `found:${(primary as { id?: unknown } | undefined)?.id ?? ''}`;
+      } else if (result.found === false) summary = 'not_found';
+      return { name: call.name, argumentsJson: call.argumentsJson, ok: true, errorCode: null, summary };
+    };
+    const executeReadTool = async (call: {
+      id: string;
+      name: string;
+      argumentsJson: string;
+    }): Promise<AssistantReadToolExecution> => {
+      const cacheKey = `${call.name}:${call.argumentsJson}`;
+      let pending = readExecutionCache.get(cacheKey);
+      if (!pending) {
+        // 工具失败不炸整轮：把结构化错误作为工具结果回传，让模型自行纠正参数。
+        pending = executeAssistantReadTool(call).catch((error: any) => ({
+          toolCallId: call.id,
+          name: call.name as AssistantReadToolName,
+          result: {
+            error: typeof error?.code === 'string' ? error.code : 'tool_error',
+            message: error instanceof Error ? error.message : String(error),
+          },
+          readEventIds: [],
+          readTodoIds: [],
+          readMemoryIds: [],
+        }));
+        readExecutionCache.set(cacheKey, pending);
+        readExecutions.push(await pending);
+      }
+      const execution = await pending;
+      toolCallTrace.push(summarizeToolExecution(call, execution));
+      return execution.toolCallId === call.id ? execution : { ...execution, toolCallId: call.id };
+    };
     const output = await requestAssistantTurn({
       settings,
       context,
       referenceAt: state.userMessage.createdAt,
       timeZone,
       signal: input.signal,
-      onReplyText: input.onReplyText,
       onReasoningText: input.onReasoningText,
-      onProgress: (stage: AssistantProviderProgressStage) => input.onProgress?.(stage),
+      onProgress: (stage: AssistantProviderProgressStage) => emitProgress(
+        stage === 'reading' ? 'reading' : 'planning',
+      ),
+      executeReadTool,
     });
     throwIfCancelled(input.signal);
-    input.onProgress?.('finalizing');
+    emitProgress('planning');
+    const cachedReadSet = readSetFromAssistantWorkingSnapshots(selectedWorkingSnapshots);
+    const executedReadSet = mergeAssistantReadSets(readExecutions);
+    const grounding = output.grounding ?? { eventIds: [], todoIds: [], memoryIds: [] };
+    const readEventIds = [...new Set([
+      ...cachedReadSet.eventIds, ...executedReadSet.eventIds, ...grounding.eventIds,
+    ])];
+    const readTodoIds = [...new Set([
+      ...cachedReadSet.todoIds, ...executedReadSet.todoIds, ...grounding.todoIds,
+    ])];
+    const readMemoryIds = [...new Set([
+      ...cachedReadSet.memoryIds, ...executedReadSet.memoryIds, ...grounding.memoryIds,
+    ])];
+    const groundedActionContext = await loadAssistantActionContext({
+      query: '',
+      readEventIds,
+      readTodoIds,
+      selectionMode: 'read-set',
+    });
     const eventDeltas = output.eventDeltas ?? [];
     const memoryDeltas = output.memoryDeltas ?? [];
+    const parseRejections = output.memoryRejections ?? [];
     await safelyLog(() => recordAssistantModelDecision({
       requestId: input.requestId,
       operations: output.operations ?? [],
       eventDeltas,
       memoryDeltas,
       metadata: output.providerMetadata,
+      toolReadEventIds: readEventIds,
+      toolReadTodoIds: readTodoIds,
+      toolReadMemoryIds: readMemoryIds,
+      toolCalls: toolCallTrace,
     }));
     const recentEvidence = messages
       .filter(message => message.role === 'user' && message.id !== state.userMessage.id)
@@ -221,17 +325,25 @@ async function runSavedTurn(input: {
     const validation = prepareAssistantActions({
       operations: output.operations ?? [],
       eventDeltas,
-      actionContext,
+      actionContext: groundedActionContext,
       currentMessage: state.userMessage.content,
       recentEvidence,
       referenceAt: state.userMessage.createdAt,
     });
-    const selectedMemoryIdSet = new Set(context.selectedMemoryIds);
+    const selectedMemoryIdSet = new Set([...context.selectedMemoryIds, ...readMemoryIds]);
+    const toolReadMemories = await listMemoriesByIds(readMemoryIds);
+    const memoryById = new Map([
+      ...memoryContext.active,
+      ...memoryContext.candidates,
+      ...toolReadMemories,
+    ].map(memory => [memory.id, memory]));
     const memoryValidation = await validateAssistantMemoryDeltas({
       deltas: memoryDeltas,
       context: {
-        active: memoryContext.active.filter(memory => selectedMemoryIdSet.has(memory.id)),
-        candidates: memoryContext.candidates.filter(memory => selectedMemoryIdSet.has(memory.id)),
+        active: [...memoryById.values()]
+          .filter(memory => memory.status === 'active' && selectedMemoryIdSet.has(memory.id)),
+        candidates: [...memoryById.values()]
+          .filter(memory => memory.status === 'candidate' && selectedMemoryIdSet.has(memory.id)),
       },
       userMessage: state.userMessage.content,
       userMessageId: state.userMessage.id,
@@ -245,19 +357,16 @@ async function runSavedTurn(input: {
       rejectedMemoryDeltas: memoryValidation.rejected,
     }));
     throwIfCancelled(input.signal);
-    const replyForCommit = output.providerMetadata?.protocolWarnings.includes('reply_execution_claim')
-      && validation.accepted.length === 0
-      && memoryValidation.accepted.length === 0
-      ? '我理解了，但这次没有形成可保存的操作。请再告诉我一次要记录什么。'
-      : output.reply;
+    emitProgress('updating');
     const completed = await completeAssistantTurnWithActions({
       requestId: input.requestId,
       userMessageId: state.userMessage.id,
       userSource: state.userMessage.source,
-      reply: replyForCommit,
+      reply: '我已经收到，正在确认这次处理结果。',
       segment: output.segment,
       operations: validation.accepted,
       memoryDeltas: memoryValidation.accepted,
+      stageDurations: assistantStageDurationsFromTimeline(stageTimeline, Date.now()),
       reasoning: output.reasoning
         ? {
           requestId: input.requestId,
@@ -267,12 +376,127 @@ async function runSavedTurn(input: {
           createdAt: Date.now(),
         }
         : null,
-      actionContext,
+      actionContext: groundedActionContext,
     });
-    await safelyLog(() => recordAssistantDecisionCommit({
-      requestId: input.requestId,
+    const completedState = await getRequestState(input.requestId);
+    rememberAssistantWorkingSnapshots(
+      completedState?.userMessage.segmentId ?? currentSegment?.id ?? '',
+      readExecutions,
+    );
+    if (completed.operations.length > 0) {
+      await safelyLog(() => recordAssistantDecisionCommit({
+        requestId: input.requestId,
+        operations: completed.operations,
+      }));
+    }
+    const proposedWriteCount = validation.accepted.length + memoryValidation.accepted.length;
+    const executionRejected: Array<{ type: string; reason: string; detail?: string }> = [
+      ...validation.rejected.map(item => ({
+        type: item.type,
+        reason: item.reason,
+        ...('detail' in item && item.detail ? { detail: item.detail } : {}),
+      })),
+      ...memoryValidation.rejected.map(item => ({
+        type: item.action,
+        reason: item.reason,
+      })),
+      ...parseRejections.map(item => ({
+        type: item.action,
+        reason: item.reason,
+        detail: '模型返回的该项缺少 evidence，已降级拒绝',
+      })),
+    ];
+    if (proposedWriteCount > completed.operations.length) {
+      executionRejected.push({
+        type: 'execution',
+        reason: 'one_or_more_operations_not_committed',
+        detail: `planned=${proposedWriteCount}, committed=${completed.operations.length}`,
+      });
+    }
+    if (completed.operations.length === 0
+      && output.providerMetadata?.protocolWarnings.includes('reply_execution_claim')) {
+      executionRejected.push({
+        type: 'reply',
+        reason: 'unverified_execution_claim',
+      });
+    }
+    const parseTruncations = output.truncations
+      ?? { operations: 0, eventDeltas: 0, memoryDeltas: 0, todos: [], progress: [] };
+    const executionResult = buildAssistantExecutionResult({
       operations: completed.operations,
+      rejected: executionRejected,
+      truncated: (parseTruncations.operations || parseTruncations.eventDeltas
+        || parseTruncations.memoryDeltas || parseTruncations.todos.length || parseTruncations.progress.length)
+        ? {
+          operations: parseTruncations.operations,
+          eventDeltas: parseTruncations.eventDeltas,
+          memoryDeltas: parseTruncations.memoryDeltas,
+          todos: parseTruncations.todos.reduce((sum, item) => sum + item.dropped, 0),
+          progress: parseTruncations.progress.reduce((sum, item) => sum + item.dropped, 0),
+        }
+        : undefined,
+    });
+    await safelyLog(() => recordAssistantExecutionOutcome({
+      requestId: input.requestId,
+      result: executionResult,
     }));
+    const fallbackReply = fallbackReplyForExecution(executionResult, output.reply);
+    let assistantMessage = await updateAssistantReply(input.requestId, fallbackReply);
+    emitProgress('answering');
+    const needsGroundedNarration = completed.operations.length > 0
+      || proposedWriteCount > 0
+      || executionRejected.length > 0;
+    const narrationStartedAt = Date.now();
+    if (needsGroundedNarration) {
+      try {
+        const finalReply = await requestAssistantFinalReply({
+          settings,
+          userMessage: state.userMessage.content,
+          draftReply: output.reply,
+          executionResult,
+          signal: input.signal,
+          onReplyText: input.onReplyText,
+          onProgress: () => emitProgress('answering'),
+        });
+        assistantMessage = await updateAssistantReply(input.requestId, finalReply.reply);
+        await safelyLog(() => recordAssistantNarration({
+          requestId: input.requestId,
+          narration: {
+            source: 'model',
+            startedAt: narrationStartedAt,
+            completedAt: Date.now(),
+            totalTokens: finalReply.providerMetadata.totalTokens ?? null,
+            errorCode: null,
+          },
+        }));
+      } catch (narrationError) {
+        console.warn('[assistant-final-reply] 使用本地真实回执文案', narrationError);
+        input.onReplyText?.(fallbackReply);
+        await safelyLog(() => recordAssistantNarration({
+          requestId: input.requestId,
+          narration: {
+            source: 'fallback',
+            startedAt: narrationStartedAt,
+            completedAt: Date.now(),
+            totalTokens: null,
+            errorCode: typeof (narrationError as any)?.code === 'string' ? (narrationError as any).code : 'unknown',
+          },
+        }));
+      }
+    } else {
+      input.onReplyText?.(fallbackReply);
+      await safelyLog(() => recordAssistantNarration({
+        requestId: input.requestId,
+        narration: {
+          source: 'skipped',
+          startedAt: narrationStartedAt,
+          completedAt: Date.now(),
+          totalTokens: null,
+          errorCode: null,
+        },
+      }));
+    }
+    emitProgress('finalizing');
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       console.log('[assistant-decision]', {
         requestId: input.requestId,
@@ -293,7 +517,7 @@ async function runSavedTurn(input: {
     }
     return {
       userMessage: (await getRequestState(input.requestId))?.userMessage ?? state.userMessage,
-      assistantMessage: completed.assistantMessage,
+      assistantMessage,
       operations: completed.operations,
       reasoning: output.reasoning
         ? {
@@ -323,6 +547,7 @@ async function runSavedTurn(input: {
       providerAttemptCount: diagnostics?.attemptCount,
       providerAttempts: diagnostics?.attempts,
       protocolWarnings: diagnostics?.protocolWarnings,
+      toolCalls: toolCallTrace,
     }));
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       console.warn('[assistant-decision]', {

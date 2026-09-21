@@ -76,6 +76,7 @@ async function main() {
   const actionStore = load('src/assistant/action-store.ts');
   const actionContext = load('src/assistant/action-context.ts');
   const actionUndo = load('src/assistant/action-undo.ts');
+  const decisionLog = load('src/assistant/decision-log.ts');
   await db.initDatabase();
 
   const expectedTables = [
@@ -92,21 +93,25 @@ async function main() {
   }
   const decisionLogColumns = new Set(sqlite.prepare('PRAGMA table_info(assistant_decision_logs)').all().map(row => row.name));
   for (const column of [
-    'error_detail', 'repair_count', 'repair_status',
+    'error_code', 'error_detail', 'repair_count', 'repair_status',
     'provider_attempt_count', 'provider_attempts_json', 'protocol_warnings_json',
     'proposed_event_deltas_json',
+    'tool_read_event_ids_json', 'tool_read_todo_ids_json', 'tool_read_memory_ids_json', 'execution_outcome',
+    'tool_calls_json', 'execution_rejected_json', 'narration_json',
   ]) {
     assert.ok(decisionLogColumns.has(column), `决策日志必须包含 ${column}`);
   }
+  const requestColumns = new Set(sqlite.prepare('PRAGMA table_info(assistant_requests)').all().map(row => row.name));
+  assert.ok(requestColumns.has('error_code'), '历史助手请求表升级后必须补齐 error_code');
 
   sqlite.prepare(`INSERT INTO conversation_segments (
     id, summary, status, started_at, ended_at, updated_at
   ) VALUES ('segment-1', '', 'current', 1000, NULL, 1000)`).run();
   sqlite.prepare(`INSERT INTO assistant_messages (
     id, request_id, role, content, source, status, segment_id,
-    legacy_entry_id, created_at, updated_at
+    legacy_entry_id, stage_durations_json, created_at, updated_at
   ) VALUES ('message-1', 'request-1', 'user', '整理照片', 'text', 'saved',
-    'segment-1', NULL, 1000, 1000)`).run();
+    'segment-1', NULL, '{}', 1000, 1000)`).run();
   sqlite.prepare(`INSERT INTO assistant_requests (
     id, user_message_id, status, error_code, attempt_count, created_at, updated_at
   ) VALUES ('request-1', 'message-1', 'succeeded', NULL, 1, 1000, 1000)`).run();
@@ -125,6 +130,42 @@ async function main() {
     'operation-2', 'request-1', 'todo-1', 'create_todo', 'todo', 'entry-2',
     '{}', '重复操作', 1, 1001,
   ), /UNIQUE/, '同一请求内的操作键必须唯一');
+
+  await decisionLog.beginAssistantDecisionLog({
+    requestId: 'request-1', userMessageId: 'message-1', promptVersion: 'test', model: 'fixture',
+    referenceAt: 1000, timeZone: 'Asia/Shanghai',
+    contextRefs: {
+      recentMessageIds: ['message-1'], segmentIds: [], entryIds: [], eventCandidateIds: [],
+      todoCandidateIds: [], memoryIds: [], launchContextId: null,
+    },
+    createdAt: 1000,
+  });
+  await decisionLog.recordAssistantModelDecision({
+    requestId: 'request-1', operations: [], toolReadEventIds: ['event-trip'],
+    toolReadTodoIds: ['todo-train'], toolReadMemoryIds: ['memory-cycle'],
+    toolCalls: [
+      { name: 'search_events', argumentsJson: '{"query":"哈尔滨"}', ok: true, errorCode: null, summary: 'events:1' },
+      { name: 'get_event', argumentsJson: '{"event_id":"missing"}', ok: false, errorCode: 'invalid_tool_arguments', summary: '数据工具缺少 event_id' },
+    ],
+  });
+  await decisionLog.recordAssistantExecutionOutcome({
+    requestId: 'request-1', result: { outcome: 'rejected', committed: [], rejected: [{ type: 'event', reason: 'revision_conflict' }] },
+  });
+  await decisionLog.recordAssistantNarration({
+    requestId: 'request-1',
+    narration: { source: 'fallback', startedAt: 1000, completedAt: 1200, totalTokens: null, errorCode: 'network' },
+  });
+  const groundedLog = await decisionLog.getAssistantDecisionLog('request-1');
+  assert.deepEqual([...groundedLog.toolReadEventIds], ['event-trip']);
+  assert.deepEqual([...groundedLog.toolReadTodoIds], ['todo-train']);
+  assert.deepEqual([...groundedLog.toolReadMemoryIds], ['memory-cycle']);
+  assert.equal(groundedLog.executionOutcome, 'rejected', '零写入拒绝不得记录为 committed');
+  assert.deepEqual(groundedLog.executionRejected, [{ type: 'event', reason: 'revision_conflict' }],
+    '执行拒绝明细必须落库，支持问题回溯');
+  assert.equal(groundedLog.toolCalls[0].name, 'search_events');
+  assert.equal(groundedLog.toolCalls[1].ok, false, '工具调用轨迹必须记录失败和错误码');
+  assert.equal(groundedLog.narration.source, 'fallback');
+  assert.equal(groundedLog.narration.errorCode, 'network', '叙述兜底必须可从日志回溯');
 
   const firstEvent = await eventStore.createEvent({
     id: 'event-mortgage',
@@ -270,6 +311,27 @@ async function main() {
     '显式事件上下文必须带入最近完成的相关待办');
   assert.ok(loadedActionContext.todos.some(todo => todo.id === hiddenRelatedTodo.id),
     '事件关联的未完成待办必须进入可修改候选');
+  const strictEmptyContext = await actionContext.loadAssistantActionContext({
+    query: '住房贷款',
+    launchContext: { kind: 'event', id: firstEvent.id, label: '住房贷款' },
+    selectionMode: 'read-set',
+  });
+  assert.equal(strictEmptyContext.events.length, 0,
+    '只读授权模式不得把搜索命中或显式入口自动视为已读取事件');
+  assert.equal(strictEmptyContext.todos.length, 0,
+    '只读授权模式不得把关联待办自动视为已读取待办');
+  assert.equal(strictEmptyContext.explicitEventId, null,
+    '显式入口只提供模型读取指针，不能绕过精确读取授权写入');
+  const strictReadContext = await actionContext.loadAssistantActionContext({
+    query: '',
+    readEventIds: [firstEvent.id],
+    readTodoIds: [hiddenRelatedTodo.id],
+    selectionMode: 'read-set',
+  });
+  assert.deepEqual(strictReadContext.events.map(event => event.id), [firstEvent.id],
+    '只读授权模式只能装载精确读取过的事件');
+  assert.ok(strictReadContext.todos.some(todo => todo.id === hiddenRelatedTodo.id),
+    '精确读取过的待办必须进入版本校验上下文');
   const relink = await eventStore.linkObjects({
     fromType: 'todo', fromId: hiddenRelatedTodo.id, relationType: 'related',
     toType: 'event', toId: firstEvent.id, createdAt: 3500,
