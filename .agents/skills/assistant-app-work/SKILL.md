@@ -1,0 +1,41 @@
+---
+name: assistant-app-work
+description: Route development work in the assistant-app repository with bounded context. Use for new features, continuing PRs, verification, device acceptance, release closeout, or repository knowledge lookup in this project.
+---
+
+# Assistant App Work
+
+Keep context proportional to the task. Do not repeat `AGENTS.md`.
+
+## Start
+
+1. Read [`docs/CURRENT.md`](../../../docs/CURRENT.md).
+2. Run `node scripts/agent-context.cjs --query "<keywords>"`; add `--pr <number>` for a known PR or `--no-pr` for local-only work.
+3. Select one mode and load only its sources.
+
+## New product or feature work
+
+- Read `PRD.md` only for product scope or status.
+- Inspect the relevant screen, domain module, tests, and at most the newest matching plan.
+- Obey the design-confirmation gate.
+
+## Continue an existing PR
+
+- Inspect PR description, commits, comments, checks, changed files, branch, and linked design.
+- Continue usable work; do not load unrelated plans or recreate it.
+
+## Device acceptance
+
+Only here, read the Dev/Release sections of `docs/DEVELOPMENT_WORKFLOW.md`, the Reload flow in `docs/knowledge/agent-dev-playbook.md`, and one relevant indexed topic. Verify their required endpoint, build, device, and runtime evidence before claiming delivery.
+
+## Release closeout
+
+Only after acceptance, read `docs/RELEASE_CHECKLIST.md` and the matching knowledge topic, then follow the repository closeout order.
+
+## Context limits
+
+- Exclude `docs/archive/**` unless history is requested.
+- Search the knowledge index first; never begin with an unscoped document scan.
+- Prefer focused tests; use `ci:agent` for concise local output and `ci` before delivery.
+- Do not use multiple agents unless requested.
+- Refine over-limit results instead of expanding them.
