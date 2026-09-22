@@ -1,0 +1,88 @@
+<!-- Historical exploration archived 2026-09-22; see README.md. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="920" viewBox="0 0 1280 920">
+  <defs>
+    <style>
+      .bg{fill:#F6F3EE}.panel{fill:#FFF;stroke:#DED7CE;stroke-width:2}.old{fill:#F4EEE7;stroke:#CFC4B8;stroke-width:2}.new{fill:#FFF8E8;stroke:#D6A52B;stroke-width:2}.node{fill:#FFF;stroke:#D9D2C8;stroke-width:1.5}.model{fill:#2D2925}.rule{fill:#F1EAE1;stroke:#C9BFB2;stroke-width:1.5}.ok{fill:#E9F4EA;stroke:#78A87D;stroke-width:1.5}.warn{fill:#FFF1E8;stroke:#D97943;stroke-width:1.5}.title{font:700 30px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#2D2925}.h2{font:700 20px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#2D2925}.h3{font:600 16px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#2D2925}.body{font:14px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#514B45}.small{font:13px -apple-system,BlinkMacSystemFont,'PingFang SC';fill:#817970}.white{fill:#FFF}.gold{fill:#B88710}.orange{fill:#C65E27}.green{fill:#397548}.line{stroke:#9A9188;stroke-width:2;fill:none;marker-end:url(#arrow)}.goldline{stroke:#C99922;stroke-width:2.5;fill:none;marker-end:url(#arrowGold)}
+    </style>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#9A9188"/></marker>
+    <marker id="arrowGold" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#C99922"/></marker>
+  </defs>
+  <rect width="1280" height="920" class="bg"/>
+  <text x="54" y="55" class="title">待办日期识别：从“规则独占”改为“一次模型完整理解”</text>
+  <text x="54" y="85" class="small">目标：模型一次返回日期、标题、主题和类型；本地规则继续保障即时、离线和异常降级</text>
+
+  <rect x="42" y="115" width="455" height="318" rx="24" class="old"/>
+  <text x="70" y="153" class="h2">现在</text>
+  <text x="424" y="153" text-anchor="end" class="small">日期只能来自规则</text>
+  <rect x="76" y="180" width="150" height="58" rx="14" class="node"/>
+  <text x="151" y="214" text-anchor="middle" class="h3">用户原声</text>
+  <rect x="76" y="278" width="150" height="82" rx="14" class="rule"/>
+  <text x="151" y="309" text-anchor="middle" class="h3">本地日期规则</text>
+  <text x="151" y="333" text-anchor="middle" class="small">输出 dueAt</text>
+  <rect x="300" y="278" width="160" height="82" rx="14" class="model"/>
+  <text x="380" y="309" text-anchor="middle" class="h3 white">LLM 一次调用</text>
+  <text x="380" y="333" text-anchor="middle" class="small white">标题 / 主题 / 类型</text>
+  <path d="M151 238 L151 278" class="line"/>
+  <path d="M205 238 C280 248 330 248 380 278" class="line"/>
+  <text x="70" y="400" class="body">问题：规则无法理解更口语、更语义化的日期表达；</text>
+  <text x="70" y="422" class="body">即使模型知道日期，也会被代码明确忽略。</text>
+
+  <rect x="522" y="115" width="716" height="318" rx="24" class="new"/>
+  <text x="552" y="153" class="h2">建议方案</text>
+  <text x="1204" y="153" text-anchor="end" class="gold">模型负责完整理解，规则负责保底与校验</text>
+  <rect x="556" y="180" width="134" height="58" rx="14" class="node"/>
+  <text x="623" y="214" text-anchor="middle" class="h3">用户原声</text>
+  <rect x="754" y="166" width="218" height="116" rx="16" class="model"/>
+  <text x="863" y="196" text-anchor="middle" class="h3 white">LLM 一次调用</text>
+  <text x="863" y="220" text-anchor="middle" class="small white">dueDate + dueTime + precision</text>
+  <text x="863" y="242" text-anchor="middle" class="small white">summary + topic + kind</text>
+  <text x="863" y="264" text-anchor="middle" class="small white">dateEvidence（原文证据）</text>
+  <rect x="754" y="315" width="218" height="76" rx="16" class="rule"/>
+  <text x="863" y="345" text-anchor="middle" class="h3">本地规则（并行）</text>
+  <text x="863" y="369" text-anchor="middle" class="small">即时首帧 / 离线 / 兜底</text>
+  <rect x="1030" y="220" width="170" height="112" rx="16" class="ok"/>
+  <text x="1115" y="252" text-anchor="middle" class="h3 green">统一裁决</text>
+  <text x="1115" y="276" text-anchor="middle" class="small">校验日期证据</text>
+  <text x="1115" y="298" text-anchor="middle" class="small">一次事务落库</text>
+  <text x="1115" y="320" text-anchor="middle" class="small">同步通知 / 日历</text>
+  <path d="M690 209 L754 209" class="goldline"/>
+  <path d="M623 238 C650 338 690 353 754 353" class="line"/>
+  <path d="M972 224 L1030 254" class="goldline"/>
+  <path d="M972 353 L1030 305" class="line"/>
+  <text x="552" y="410" class="body">模型不是第二次调用；只是把同一次响应扩展为完整结构。</text>
+
+  <rect x="42" y="463" width="1196" height="392" rx="24" class="panel"/>
+  <text x="70" y="504" class="h2">日期裁决规则</text>
+
+  <rect x="70" y="531" width="258" height="124" rx="16" class="ok"/>
+  <text x="92" y="563" class="h3">① 模型日期有效</text>
+  <text x="92" y="589" class="body">原文存在对应日期证据</text>
+  <text x="92" y="612" class="body">格式、时区、精度均合法</text>
+  <text x="92" y="637" class="green">→ 采用模型日期</text>
+
+  <rect x="354" y="531" width="258" height="124" rx="16" class="warn"/>
+  <text x="376" y="563" class="h3">② 模型日期缺失或非法</text>
+  <text x="376" y="589" class="body">但本地规则识别成功</text>
+  <text x="376" y="612" class="body">例如模型超时、空日期</text>
+  <text x="376" y="637" class="orange">→ 使用规则日期</text>
+
+  <rect x="638" y="531" width="258" height="124" rx="16" class="node"/>
+  <text x="660" y="563" class="h3">③ 两边都没有日期</text>
+  <text x="660" y="589" class="body">仍可识别为无日期待办</text>
+  <text x="660" y="612" class="body">不凭空生成具体日期</text>
+  <text x="660" y="637" class="body">→ dueAt = null</text>
+
+  <rect x="922" y="531" width="288" height="124" rx="16" class="warn"/>
+  <text x="944" y="563" class="h3">④ 模型与规则冲突</text>
+  <text x="944" y="589" class="body">明确日期：可信规则兜底</text>
+  <text x="944" y="612" class="body">语义日期：采用模型但记录来源</text>
+  <text x="944" y="637" class="orange">→ 禁止静默制造无依据日期</text>
+
+  <text x="70" y="707" class="h3">示例</text>
+  <text x="70" y="740" class="body">“明天买牛肉”　→ 模型：2026-09-14，规则：2026-09-14　→ 使用 9 月 14 日</text>
+  <text x="70" y="772" class="body">“国庆后给车保养” → 模型若无法给出唯一证据日期，则保留无日期待办，不擅自猜某一天</text>
+  <text x="70" y="804" class="body">LLM 超时 / JSON 错误 → 原文与规则结果已保存；稍后重试仍只更新原记录</text>
+
+  <rect x="42" y="875" width="1196" height="1" fill="#DED7CE"/>
+  <text x="54" y="902" class="small">验收核心：一次模型请求 · 日期/标题/主题一致 · 离线可用 · 失败不丢记录 · 通知与苹果日历不重复</text>
+</svg>

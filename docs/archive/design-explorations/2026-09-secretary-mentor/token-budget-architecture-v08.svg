@@ -1,0 +1,97 @@
+<!-- Historical exploration archived 2026-09-22; see README.md. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="930" viewBox="0 0 1200 930">
+  <rect width="1200" height="930" fill="#F6F3EE"/>
+  <style>
+    .font { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; fill: #2B2622; }
+    .title { font-size: 28px; font-weight: 700; }
+    .h2 { font-size: 20px; font-weight: 700; }
+    .h3 { font-size: 15px; font-weight: 650; }
+    .body { font-size: 13px; }
+    .small { font-size: 11px; }
+    .muted { fill: #817A72; }
+    .hot { fill: #C75442; }
+    .good { fill: #3E7A5E; }
+  </style>
+
+  <text x="600" y="44" text-anchor="middle" class="font title">Token 消耗：真正的问题是“上下文搬运”，不是回答本身</text>
+  <text x="600" y="72" text-anchor="middle" class="font body muted">现状审计 + 秘书 / 导师能力上线后的建议链路</text>
+
+  <!-- Current -->
+  <rect x="42" y="104" width="1116" height="258" rx="24" fill="#FFFFFF" stroke="#DDD6CC"/>
+  <text x="68" y="140" class="font h2">A. 当前真实链路</text>
+  <rect x="70" y="169" width="164" height="82" rx="15" fill="#F3F0EB"/>
+  <text x="91" y="199" class="font h3">每条随手记</text>
+  <text x="91" y="224" class="font body muted">规则先解析时间</text>
+  <path d="M244 210 L294 210" stroke="#C99A2E" stroke-width="3"/>
+  <polygon points="294,210 283,204 283,216" fill="#C99A2E"/>
+  <rect x="304" y="155" width="314" height="110" rx="15" fill="#FBE8E4" stroke="#DFA89E"/>
+  <text x="326" y="185" class="font h3 hot">最大热点：全量主题目录</text>
+  <text x="326" y="211" class="font body">固定提示词 + 最多 100 个活跃主题</text>
+  <text x="326" y="235" class="font body">每个主题还附带最近 30 字原文</text>
+  <text x="326" y="254" class="font small hot">主题多时，输入可从几百涨到数千 token</text>
+  <path d="M628 210 L678 210" stroke="#C99A2E" stroke-width="3"/>
+  <polygon points="678,210 667,204 667,216" fill="#C99A2E"/>
+  <rect x="688" y="169" width="176" height="82" rx="15" fill="#F9E8DD"/>
+  <text x="709" y="199" class="font h3">一次 LLM 调用</text>
+  <text x="709" y="224" class="font body muted">输出短 JSON</text>
+  <path d="M874 210 L924 210" stroke="#C99A2E" stroke-width="3"/>
+  <polygon points="924,210 913,204 913,216" fill="#C99A2E"/>
+  <rect x="934" y="169" width="190" height="82" rx="15" fill="#F3F0EB"/>
+  <text x="955" y="199" class="font h3">结构化记录</text>
+  <text x="955" y="224" class="font body muted">类型 / 标题 / 主题 / 人物</text>
+  <rect x="70" y="286" width="1054" height="47" rx="13" fill="#FFF7E9"/>
+  <text x="91" y="315" class="font body"><tspan font-weight="650">隐藏放大器：</tspan>启动时最多重试 50 条失败记录；没有 attemptCount / nextRetryAt，解析类失败可能在以后每次启动再次消耗。</text>
+
+  <!-- Future danger -->
+  <rect x="42" y="390" width="1116" height="178" rx="24" fill="#FFFFFF" stroke="#DDD6CC"/>
+  <text x="68" y="426" class="font h2">B. 如果直接做对话，最容易踩的坑</text>
+  <rect x="70" y="452" width="238" height="82" rx="15" fill="#FBE8E4"/>
+  <text x="91" y="480" class="font h3 hot">每轮重发完整历史</text>
+  <text x="91" y="505" class="font body">第 20 轮包含前 19 轮</text>
+  <text x="91" y="524" class="font small muted">整段会话总量接近二次增长</text>
+  <text x="334" y="497" class="font h2 hot">＋</text>
+  <rect x="375" y="452" width="238" height="82" rx="15" fill="#FBE8E4"/>
+  <text x="396" y="480" class="font h3 hot">每轮塞入全部记忆</text>
+  <text x="396" y="505" class="font body">任务、主题、人物、画像全带</text>
+  <text x="396" y="524" class="font small muted">长期使用越久，单轮越贵</text>
+  <text x="639" y="497" class="font h2 hot">＋</text>
+  <rect x="680" y="452" width="238" height="82" rx="15" fill="#FBE8E4"/>
+  <text x="701" y="480" class="font h3 hot">一条输入调用三次</text>
+  <text x="701" y="505" class="font body">分类 → 回答 → 提炼记忆</text>
+  <text x="701" y="524" class="font small muted">延迟、费用和失败面都乘三</text>
+  <text x="944" y="497" class="font h2 hot">＝ 失控</text>
+
+  <!-- Recommended -->
+  <rect x="42" y="596" width="1116" height="280" rx="24" fill="#FFFFFF" stroke="#DDD6CC"/>
+  <text x="68" y="632" class="font h2">C. 推荐链路：固定预算的“工作记忆”</text>
+  <rect x="70" y="662" width="154" height="82" rx="15" fill="#F3F0EB"/>
+  <text x="91" y="691" class="font h3">自然输入</text>
+  <text x="91" y="716" class="font body muted">记录 / 事务 / 困惑</text>
+  <path d="M234 703 L274 703" stroke="#4F8B6C" stroke-width="3"/>
+  <polygon points="274,703 263,697 263,709" fill="#4F8B6C"/>
+  <rect x="284" y="648" width="183" height="110" rx="15" fill="#E9F3ED"/>
+  <text x="305" y="679" class="font h3 good">本地路由优先</text>
+  <text x="305" y="704" class="font body">清晰记录：直接保存</text>
+  <text x="305" y="727" class="font body">清晰事务：规则 + 执行</text>
+  <text x="305" y="748" class="font small muted">只有需思考时进入对话</text>
+  <path d="M477 703 L517 703" stroke="#4F8B6C" stroke-width="3"/>
+  <polygon points="517,703 506,697 506,709" fill="#4F8B6C"/>
+  <rect x="527" y="643" width="303" height="120" rx="15" fill="#E9F3ED" stroke="#A8C9B6"/>
+  <text x="548" y="673" class="font h3 good">Context Builder（设硬预算）</text>
+  <text x="548" y="697" class="font body">① 当前状态快照：3–5 条主线</text>
+  <text x="548" y="720" class="font body">② 按需检索：5–8 条相关记忆</text>
+  <text x="548" y="743" class="font body">③ 滚动摘要 + 最近 4–6 轮原话</text>
+  <path d="M840 703 L880 703" stroke="#4F8B6C" stroke-width="3"/>
+  <polygon points="880,703 869,697 869,709" fill="#4F8B6C"/>
+  <rect x="890" y="662" width="234" height="82" rx="15" fill="#2B2622"/>
+  <text x="911" y="691" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="15" font-weight="650" fill="#FFFFFF">一次主对话调用</text>
+  <text x="911" y="716" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="13" fill="#FFFFFF">回答 + 动作 + 引用依据</text>
+
+  <rect x="284" y="790" width="840" height="55" rx="14" fill="#F9E8DD"/>
+  <text x="305" y="813" class="font h3">会话结束或空闲时再增量沉淀</text>
+  <text x="305" y="835" class="font body muted">只处理“上次摘要之后的新内容”，生成候选记忆；不在每轮重复扫描全部对话。</text>
+  <path d="M1007 755 L1007 785" stroke="#C99A2E" stroke-width="3"/>
+  <polygon points="1007,785 1001,774 1013,774" fill="#C99A2E"/>
+
+  <text x="600" y="909" text-anchor="middle" class="font body muted">目标：对话轮数和使用年限增长时，单轮输入仍基本稳定；原始内容只作为可追溯来源，不默认全部进 prompt。</text>
+</svg>
