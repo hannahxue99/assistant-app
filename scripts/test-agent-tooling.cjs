@@ -12,11 +12,16 @@ const {
 } = require('./agent-context.cjs');
 const { runQuietCommand } = require('./ci-summary.cjs');
 
-function gitStatus() {
-  return spawnSync('/usr/bin/git', ['status', '--porcelain=v1'], {
-    cwd: path.join(__dirname, '..'),
+function gitStatus(cwd = path.join(__dirname, '..')) {
+  return spawnSync('git', ['status', '--porcelain=v1'], {
+    cwd,
     encoding: 'utf8',
   }).stdout;
+}
+
+function runGit(cwd, args) {
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr || `git ${args.join(' ')} failed`);
 }
 
 async function main() {
@@ -52,7 +57,6 @@ async function main() {
   const after = gitStatus();
   assert.equal(after, before, 'Context snapshot must not modify the worktree');
   assert.ok(rendered.includes('Assistant App context snapshot'));
-  assert.ok(snapshot.changedFiles.includes('AGENTS.md'), 'Snapshot must include tracked worktree edits');
   assert.ok(!rendered.includes('docs/archive/'));
   assert.ok(rendered.split('\n').length <= 40, 'Context snapshot output must stay bounded');
 
@@ -78,12 +82,35 @@ async function main() {
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'assistant-agent-tooling-'));
   try {
+    const repoDir = path.join(tempDir, 'repo');
+    fs.mkdirSync(repoDir);
+    runGit(repoDir, ['init']);
+    runGit(repoDir, ['config', 'user.name', 'Agent Tooling Test']);
+    runGit(repoDir, ['config', 'user.email', 'agent-tooling@example.invalid']);
+    fs.writeFileSync(path.join(repoDir, 'AGENTS.md'), 'base\n');
+    runGit(repoDir, ['add', 'AGENTS.md']);
+    runGit(repoDir, ['commit', '-m', 'base']);
+    runGit(repoDir, ['branch', '-M', 'main']);
+    fs.writeFileSync(path.join(repoDir, 'AGENTS.md'), 'changed\n');
+
+    const tempStatusBefore = gitStatus(repoDir);
+    const worktreeSnapshot = buildSnapshot({
+      cwd: repoDir,
+      includePr: false,
+      gitBinary: 'git',
+    });
+    assert.ok(worktreeSnapshot.changedFiles.includes('AGENTS.md'),
+      'Snapshot must include tracked worktree edits');
+    assert.equal(gitStatus(repoDir), tempStatusBefore,
+      'Snapshot must leave tracked worktree edits untouched');
+
+    const logDir = path.join(tempDir, 'logs');
     const successOutput = [];
     const success = await runQuietCommand({
       cwd: path.join(__dirname, '..'),
       command: process.execPath,
       args: ['-e', 'console.log("fixture passed")'],
-      logDir: tempDir,
+      logDir,
       testGroups: 35,
       output: (line) => successOutput.push(line),
     });
@@ -97,7 +124,7 @@ async function main() {
       cwd: path.join(__dirname, '..'),
       command: process.execPath,
       args: ['-e', 'console.error("fixture failed clearly"); process.exit(7)'],
-      logDir: tempDir,
+      logDir,
       output: (line) => failureOutput.push(line),
     });
     assert.equal(failure.exitCode, 7, 'CI summary must preserve child exit codes');
