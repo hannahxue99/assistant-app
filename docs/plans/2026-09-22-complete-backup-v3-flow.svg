@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900">
+  <rect width="1280" height="900" fill="#F6F3EE"/>
+  <style>
+    .title { font: 700 34px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #2D2926; }
+    .subtitle { font: 400 17px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #756E68; }
+    .h2 { font: 700 22px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #2D2926; }
+    .h3 { font: 700 17px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #2D2926; }
+    .body { font: 400 14px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #514B46; }
+    .small { font: 400 12px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #756E68; }
+    .accent { fill: #E9793D; }
+    .accentText { font: 700 14px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #E9793D; }
+    .phone { fill: #FFFFFF; stroke: #DDD3C8; stroke-width: 2; rx: 28; }
+    .card { fill: #FBF9F6; stroke: #E2DAD1; stroke-width: 1.5; rx: 14; }
+    .soft { fill: #FCE8DC; rx: 14; }
+    .warn { fill: #FFF5DD; stroke: #E7C16C; stroke-width: 1.5; rx: 14; }
+    .flow { fill: #FFFFFF; stroke: #D8CFC5; stroke-width: 1.5; rx: 14; }
+    .arrow { stroke: #D09A26; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#D09A26"/>
+    </marker>
+  </defs>
+
+  <text x="60" y="58" class="title">完整备份 V3：先看清，再一次性恢复</text>
+  <text x="60" y="88" class="subtitle">用户流程保持三步；后台按语义数据图校验、事务合并、重建本机投影</text>
+
+  <text x="60" y="132" class="h2">用户流程</text>
+
+  <rect x="60" y="158" width="340" height="360" class="phone"/>
+  <text x="88" y="198" class="small">我的 · 数据管理</text>
+  <text x="88" y="230" class="h2">备份与恢复</text>
+  <rect x="88" y="258" width="284" height="76" class="card"/>
+  <text x="108" y="286" class="h3">导出完整备份</text>
+  <text x="108" y="310" class="small">记录、对话、事件、关系与记忆</text>
+  <rect x="88" y="350" width="284" height="76" class="card"/>
+  <text x="108" y="378" class="h3">从备份恢复</text>
+  <text x="108" y="402" class="small">选择 V2 或 V3 Markdown 文件</text>
+  <rect x="88" y="446" width="284" height="48" class="soft"/>
+  <text x="230" y="476" text-anchor="middle" class="accentText">选择备份文件</text>
+
+  <path d="M 412 338 L 450 338" class="arrow"/>
+
+  <rect x="462" y="158" width="340" height="360" class="phone"/>
+  <text x="490" y="198" class="small">恢复预览</text>
+  <text x="490" y="230" class="h2">将恢复这些内容</text>
+  <rect x="490" y="254" width="284" height="128" class="card"/>
+  <text x="510" y="282" class="body">对话 268 条 · 事件 12 个</text>
+  <text x="510" y="308" class="body">待办 43 条 · 进展 67 条</text>
+  <text x="510" y="334" class="body">关系 104 条 · 记忆 18 条</text>
+  <text x="510" y="360" class="small">新增 311 · 更新 9 · 冲突 2</text>
+  <rect x="490" y="398" width="284" height="58" class="warn"/>
+  <text x="510" y="422" class="small">备份包含私人对话与长期记忆</text>
+  <text x="510" y="442" class="small">冲突不会静默覆盖本机较新内容</text>
+  <rect x="490" y="470" width="284" height="34" class="soft"/>
+  <text x="632" y="492" text-anchor="middle" class="accentText">确认恢复</text>
+
+  <path d="M 814 338 L 852 338" class="arrow"/>
+
+  <rect x="864" y="158" width="340" height="360" class="phone"/>
+  <text x="892" y="198" class="small">恢复结果</text>
+  <text x="892" y="230" class="h2">恢复完成</text>
+  <rect x="892" y="258" width="284" height="116" class="soft"/>
+  <text x="912" y="288" class="h3">320 项已恢复</text>
+  <text x="912" y="316" class="body">2 项保留了本机较新版本</text>
+  <text x="912" y="342" class="body">1 条历史回执未恢复撤销能力</text>
+  <rect x="892" y="390" width="284" height="72" class="card"/>
+  <text x="912" y="418" class="body">通知与日历将在后台重建</text>
+  <text x="912" y="442" class="small">失败会在下次启动继续，不影响数据</text>
+  <text x="1034" y="492" text-anchor="middle" class="accentText">完成</text>
+
+  <text x="60" y="574" class="h2">后台数据流</text>
+
+  <rect x="60" y="606" width="210" height="128" class="flow"/>
+  <text x="82" y="636" class="h3">语义事实</text>
+  <text x="82" y="662" class="body">entries / messages</text>
+  <text x="82" y="686" class="body">events / updates</text>
+  <text x="82" y="710" class="body">relations / memories</text>
+
+  <path d="M 282 670 L 332 670" class="arrow"/>
+
+  <rect x="344" y="606" width="224" height="128" class="flow"/>
+  <text x="366" y="636" class="h3">V3 完整校验</text>
+  <text x="366" y="662" class="body">类型、长度、版本</text>
+  <text x="366" y="686" class="body">ID 唯一、引用完整</text>
+  <text x="366" y="710" class="body">失败则不接触数据库</text>
+
+  <path d="M 580 670 L 630 670" class="arrow"/>
+
+  <rect x="642" y="606" width="224" height="128" class="flow"/>
+  <text x="664" y="636" class="h3">事务合并</text>
+  <text x="664" y="662" class="body">按 revision 决定赢家</text>
+  <text x="664" y="686" class="body">冲突保留两侧快照</text>
+  <text x="664" y="710" class="body">任一写入失败则全回滚</text>
+
+  <path d="M 878 670 L 928 670" class="arrow"/>
+
+  <rect x="940" y="606" width="264" height="128" class="flow"/>
+  <text x="962" y="636" class="h3">提交后重建</text>
+  <text x="962" y="662" class="body">FTS 搜索索引</text>
+  <text x="962" y="686" class="body">通知与苹果日历队列</text>
+  <text x="962" y="710" class="body">可失败、可补跑、事实不回滚</text>
+
+  <rect x="60" y="776" width="1144" height="70" class="warn"/>
+  <text x="84" y="806" class="h3">隐私边界</text>
+  <text x="84" y="832" class="body">不导出 API Key、接口地址、reasoning、决策日志、工具轨迹、设备日历 ID 或通知 ID；V3 文件本身仍是敏感文件。</text>
+</svg>
