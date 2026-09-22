@@ -52,6 +52,15 @@ export interface BackupV3ImportPreview {
   conflicts: number;
   operationSkipped: number;
   profileWillImport: boolean;
+  objectCounts: {
+    conversations: number;
+    todos: number;
+    events: number;
+    eventUpdates: number;
+    relations: number;
+    memories: number;
+  };
+  conversationRange: { firstAt: number; lastAt: number } | null;
 }
 
 export interface BackupV3ImportPlan {
@@ -225,6 +234,64 @@ function effectiveById<T extends { id: string }>(decisions: BackupV3MergeDecisio
   return result;
 }
 
+function relationSnapshotMatches(target: unknown, snapshot: unknown): boolean {
+  if (!target || !snapshot || typeof target !== 'object' || typeof snapshot !== 'object') return false;
+  const current = target as AssistantObjectRelation;
+  const saved = snapshot as Record<string, unknown>;
+  return current.id === saved.id
+    && current.fromType === (saved.fromType ?? saved.from_type)
+    && current.fromId === (saved.fromId ?? saved.from_id)
+    && current.relationType === (saved.relationType ?? saved.relation_type)
+    && current.toType === (saved.toType ?? saved.to_type)
+    && current.toId === (saved.toId ?? saved.to_id)
+    && current.sourceMessageId === (saved.sourceMessageId ?? saved.source_message_id ?? null)
+    && current.createdAt === Number(saved.createdAt ?? saved.created_at)
+    && current.undoneAt === (saved.undoneAt ?? saved.undone_at ?? null);
+}
+
+function operationTargetMatches(
+  operation: AssistantOperation,
+  snapshot: unknown,
+  targets: Record<OperationTargetType, Map<string, unknown>>,
+): boolean {
+  if (operation.objectType === 'message') return false;
+  const target = targets[operation.objectType].get(operation.objectId);
+  if (operation.status === 'undone') return true;
+  if (!snapshot || typeof snapshot !== 'object') return false;
+  const value = snapshot as Record<string, unknown>;
+
+  if (operation.operationType === 'delete_todo') {
+    return target === undefined && value.deleted === true && value.todoId === operation.objectId;
+  }
+  if (operation.operationType === 'delete_event') {
+    const deletedTodoIds = Array.isArray(value.deletedTodoIds) ? value.deletedTodoIds : [];
+    return same(target, value.event)
+      && deletedTodoIds.every(id => typeof id === 'string' && !targets.todo.has(id));
+  }
+  if (operation.operationType === 'append_event_update') {
+    const event = value.event as { id?: unknown } | undefined;
+    return same(target, value.update)
+      && typeof event?.id === 'string'
+      && same(targets.event.get(event.id), event);
+  }
+  if (operation.operationType === 'delete_event_update') {
+    const event = value.event as { id?: unknown } | undefined;
+    const update = target as AssistantEventUpdate | undefined;
+    return !!update?.undoneAt
+      && typeof event?.id === 'string'
+      && same(targets.event.get(event.id), event);
+  }
+  if (operation.operationType === 'supersede_memory') {
+    const oldMemory = value.old as { id?: unknown } | undefined;
+    const successor = value.successor as { id?: unknown } | undefined;
+    return same(target, oldMemory)
+      && typeof successor?.id === 'string'
+      && same(targets.memory.get(successor.id), successor);
+  }
+  if (operation.objectType === 'relation') return relationSnapshotMatches(target, snapshot);
+  return same(target, snapshot);
+}
+
 function buildOperationDecisions(
   incoming: AssistantOperation[],
   local: AssistantOperation[],
@@ -244,14 +311,13 @@ function buildOperationDecisions(
     if (operation.objectType === 'message') {
       return { action: 'skip', incoming: operation, local: null, reason: 'unsupported_operation_target' };
     }
-    const target = targets[operation.objectType].get(operation.objectId);
     let afterSnapshot: unknown;
     try {
       afterSnapshot = JSON.parse(operation.afterSnapshot);
     } catch {
       return { action: 'skip', incoming: operation, local: null, reason: 'invalid_after_snapshot' };
     }
-    if (!target || !same(target, afterSnapshot)) {
+    if (!operationTargetMatches(operation, afterSnapshot, targets)) {
       return { action: 'skip', incoming: operation, local: null, reason: 'target_snapshot_mismatch' };
     }
     return { action: 'add', incoming: operation, local: null, reason: 'target_matches_after_snapshot' };
@@ -317,6 +383,18 @@ export function buildBackupV3ImportPlan(
     conflicts: conflicts.length,
     operationSkipped: operations.filter(decision => decision.action === 'skip').length,
     profileWillImport: isDefaultProfile(local.profile) && !isDefaultProfile(incoming.profile),
+    objectCounts: {
+      conversations: incoming.assistantMessages.length,
+      todos: incoming.entries.filter(entry => entry.kind === 'task').length,
+      events: incoming.events.length,
+      eventUpdates: incoming.eventUpdates.length,
+      relations: incoming.objectRelations.length,
+      memories: incoming.memories.length,
+    },
+    conversationRange: incoming.assistantMessages.length === 0 ? null : {
+      firstAt: Math.min(...incoming.assistantMessages.map(message => message.createdAt)),
+      lastAt: Math.max(...incoming.assistantMessages.map(message => message.createdAt)),
+    },
   };
 
   return {

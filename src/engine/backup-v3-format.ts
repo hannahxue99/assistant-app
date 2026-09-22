@@ -428,8 +428,10 @@ function validateEnvelope(value: unknown): BackupEnvelopeV3 {
     memory: new Set(memories.keys()),
   };
   for (const relation of payload.objectRelations) {
-    assertRelationTarget(relation.fromType, relation.fromId, targetSets, `关系 ${relation.id} 起点`);
-    assertRelationTarget(relation.toType, relation.toId, targetSets, `关系 ${relation.id} 终点`);
+    if (relation.undoneAt === null) {
+      assertRelationTarget(relation.fromType, relation.fromId, targetSets, `关系 ${relation.id} 起点`);
+      assertRelationTarget(relation.toType, relation.toId, targetSets, `关系 ${relation.id} 终点`);
+    }
     if (relation.sourceMessageId && !messages.has(relation.sourceMessageId)) invalid(`关系来源消息不存在：${relation.sourceMessageId}`);
   }
 
@@ -443,7 +445,19 @@ function validateEnvelope(value: unknown): BackupEnvelopeV3 {
     if (operationSequences.has(sequence)) invalid(`请求包含重复操作序号：${sequence}`);
     operationKeys.add(key);
     operationSequences.add(sequence);
-    assertRelationTarget(operation.objectType, operation.objectId, targetSets, `操作 ${operation.id}`);
+    if (operation.operationType !== 'delete_todo') {
+      assertRelationTarget(operation.objectType, operation.objectId, targetSets, `操作 ${operation.id}`);
+    } else {
+      let after: unknown;
+      try {
+        after = JSON.parse(operation.afterSnapshot);
+      } catch {
+        invalid(`操作 ${operation.id} 的删除快照无效`);
+      }
+      if (!isObject(after) || after.deleted !== true || after.todoId !== operation.objectId) {
+        invalid(`操作 ${operation.id} 的删除快照无效`);
+      }
+    }
   }
 
   if (!isObject(value.counts)) invalid('V3 备份缺少数量摘要');

@@ -155,6 +155,82 @@ check('操作仅在目标等于 afterSnapshot 时恢复', () => {
   equal(plan.preview.operationSkipped, 1);
 });
 
+check('真实删除、事件进展和记忆替代快照按语义状态恢复', () => {
+  const incoming = emptyPayload();
+  const event = {
+    id: 'event-1', title: '报告', currentState: '已结束', status: 'closed' as const,
+    pinnedAt: null, revision: 3, createdAt: 100, updatedAt: 300,
+  };
+  const appendedUpdate = {
+    id: 'update-appended', eventId: event.id, content: '已提交', occurredAt: 250,
+    sourceMessageId: 'message-user', stableKey: 'request-1:append', createdAt: 250, undoneAt: null,
+  };
+  const deletedUpdate = {
+    id: 'update-deleted', eventId: event.id, content: '旧进展', occurredAt: 150,
+    sourceMessageId: 'message-user', stableKey: 'request-1:delete-update', createdAt: 150, undoneAt: 300,
+  };
+  const oldMemory = {
+    id: 'memory-old', category: 'preference' as const, content: '旧偏好', normalizedContent: '旧偏好',
+    status: 'superseded' as const, sensitivity: 'ordinary' as const, admissionBasis: 'explicit' as const,
+    supersededById: 'memory-new', revision: 2, createdAt: 100, updatedAt: 300,
+    activatedAt: 100, supersededAt: 300, forgottenAt: null,
+  };
+  const successor = {
+    ...oldMemory, id: 'memory-new', content: '新偏好', normalizedContent: '新偏好',
+    status: 'active' as const, supersededById: null, revision: 1, createdAt: 300,
+    activatedAt: 300, supersededAt: null,
+  };
+  incoming.conversationSegments = [{
+    id: 'segment-1', summary: '', status: 'closed', startedAt: 100, endedAt: 300, updatedAt: 300,
+  }];
+  incoming.assistantRequests = [{
+    id: 'request-1', userMessageId: 'message-user', status: 'succeeded', errorCode: null,
+    attemptCount: 1, createdAt: 100, updatedAt: 300,
+  }];
+  incoming.assistantMessages = [{
+    id: 'message-user', requestId: 'request-1', role: 'user', content: '整理这些内容', source: 'text',
+    status: 'saved', segmentId: 'segment-1', legacyEntryId: null, stageDurations: {}, createdAt: 100, updatedAt: 100,
+  }];
+  incoming.events = [event];
+  incoming.eventUpdates = [appendedUpdate, deletedUpdate];
+  incoming.memories = [oldMemory, successor];
+  incoming.operations = [
+    {
+      id: 'operation-delete-todo', requestId: 'request-1', operationKey: 'delete-todo', operationType: 'delete_todo',
+      objectType: 'todo', objectId: 'todo-deleted', beforeSnapshot: null,
+      afterSnapshot: JSON.stringify({ deleted: true, todoId: 'todo-deleted', revisionAt: 100 }),
+      receiptSummary: '删除待办', status: 'committed', sequence: 0, createdAt: 300, undoneAt: null,
+    },
+    {
+      id: 'operation-delete-event', requestId: 'request-1', operationKey: 'delete-event', operationType: 'delete_event',
+      objectType: 'event', objectId: event.id, beforeSnapshot: null,
+      afterSnapshot: JSON.stringify({ event, deletedTodoIds: ['todo-deleted'] }),
+      receiptSummary: '删除事件', status: 'committed', sequence: 1, createdAt: 300, undoneAt: null,
+    },
+    {
+      id: 'operation-append', requestId: 'request-1', operationKey: 'append', operationType: 'append_event_update',
+      objectType: 'event_update', objectId: appendedUpdate.id, beforeSnapshot: null,
+      afterSnapshot: JSON.stringify({ update: appendedUpdate, event }),
+      receiptSummary: '追加进展', status: 'committed', sequence: 2, createdAt: 300, undoneAt: null,
+    },
+    {
+      id: 'operation-delete-update', requestId: 'request-1', operationKey: 'delete-update', operationType: 'delete_event_update',
+      objectType: 'event_update', objectId: deletedUpdate.id, beforeSnapshot: null,
+      afterSnapshot: JSON.stringify({ event }),
+      receiptSummary: '删除进展', status: 'committed', sequence: 3, createdAt: 300, undoneAt: null,
+    },
+    {
+      id: 'operation-supersede', requestId: 'request-1', operationKey: 'supersede', operationType: 'supersede_memory',
+      objectType: 'memory', objectId: oldMemory.id, beforeSnapshot: null,
+      afterSnapshot: JSON.stringify({ old: oldMemory, successor }),
+      receiptSummary: '更新记忆', status: 'committed', sequence: 4, createdAt: 300, undoneAt: null,
+    },
+  ];
+  const plan = buildBackupV3ImportPlan(incoming, localState());
+  equal(plan.operations.map(item => item.action).join(','), 'add,add,add,add,add');
+  equal(plan.preview.operationSkipped, 0);
+});
+
 check('重复导入相同 V3 全部忽略', () => {
   const incoming = emptyPayload();
   incoming.entries = [todo()];

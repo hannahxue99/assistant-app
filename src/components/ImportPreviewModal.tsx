@@ -10,9 +10,12 @@ import {
 
 import type { ImportPreview } from '../engine/import-merge';
 import type { LegacyImportPreview } from '../assistant/legacy-import';
+import type { BackupV3ImportPreview } from '../engine/backup-v3-import';
+import { buildBackupV3PreviewModel } from '../engine/backup-v3-ui';
 import { theme } from '../theme';
 
 export type ImportPreviewData =
+  | { kind: 'v3'; value: BackupV3ImportPreview }
   | { kind: 'v2'; value: ImportPreview }
   | { kind: 'legacy'; value: LegacyImportPreview };
 
@@ -42,6 +45,8 @@ export function ImportPreviewModal({
 }: Props) {
   const legacy = preview?.kind === 'legacy' ? preview.value : null;
   const current = preview?.kind === 'v2' ? preview.value : null;
+  const v3 = preview?.kind === 'v3' ? preview.value : null;
+  const v3Model = v3 ? buildBackupV3PreviewModel(v3) : null;
   const metrics = legacy
     ? [
       { value: legacy.conversations, label: '对话' },
@@ -50,10 +55,10 @@ export function ImportPreviewModal({
       { value: legacy.duplicates, label: '重复' },
     ]
     : [
-      { value: current?.added ?? 0, label: '新增' },
-      { value: current?.updated ?? 0, label: '更新' },
-      { value: current?.ignored ?? 0, label: '忽略' },
-      { value: current?.conflicts ?? 0, label: '冲突' },
+      { value: v3?.added ?? current?.added ?? 0, label: '新增' },
+      { value: v3?.updated ?? current?.updated ?? 0, label: '更新' },
+      { value: v3?.ignored ?? current?.ignored ?? 0, label: '忽略' },
+      { value: v3?.conflicts ?? current?.conflicts ?? 0, label: '冲突' },
     ];
   return (
     <Modal
@@ -81,6 +86,17 @@ export function ImportPreviewModal({
             <Text style={styles.fileName} numberOfLines={2}>{fileName}</Text>
           </View>
 
+          {!!v3Model && (
+            <View style={styles.contentSummary}>
+              {v3Model.contentLines.map(line => (
+                <Text key={line} style={styles.contentLine}>{line}</Text>
+              ))}
+              {!!v3Model.conversationRangeLabel && (
+                <Text style={styles.rangeLine}>对话日期　{v3Model.conversationRangeLabel}</Text>
+              )}
+            </View>
+          )}
+
           <View style={styles.metrics}>
             {metrics.map(metric => (
               <View key={metric.label} style={styles.metric}>
@@ -97,11 +113,17 @@ export function ImportPreviewModal({
           )}
 
           <View style={styles.noteRow}>
-            <Ionicons name="shield-checkmark-outline" size={17} color={theme.colors.green} />
+            <Ionicons
+              name={v3 ? 'alert-circle-outline' : 'shield-checkmark-outline'}
+              size={17}
+              color={v3 ? theme.colors.accent : theme.colors.green}
+            />
             <Text style={styles.note}>
               {legacy
                 ? '旧原文按原时间进入小知；待办和事件直接恢复。不会调用模型，也不会生成助手回复。'
-                : `本地已有内容不会因备份缺失而删除；冲突记录将保留历史版本。${current?.profileWillImport ? ' 默认画像将从备份恢复。' : ''}`}
+                : v3Model
+                  ? `${v3Model.warnings.join('\n')}\n冲突不会静默覆盖本机较新内容。${v3?.profileWillImport ? ' 默认画像将从备份恢复。' : ''}`
+                  : `本地已有内容不会因备份缺失而删除；冲突记录将保留历史版本。${current?.profileWillImport ? ' 默认画像将从备份恢复。' : ''}`}
             </Text>
           </View>
 
@@ -160,6 +182,9 @@ const styles = StyleSheet.create({
   subtitle: { color: theme.colors.textDim, fontSize: theme.font.small },
   fileBox: { backgroundColor: theme.colors.bg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   fileName: { color: theme.colors.text, fontSize: theme.font.small },
+  contentSummary: { gap: 5, paddingHorizontal: 2 },
+  contentLine: { color: theme.colors.text, fontSize: theme.font.small, lineHeight: 19 },
+  rangeLine: { color: theme.colors.textDim, fontSize: 11, lineHeight: 17 },
   metrics: { flexDirection: 'row', gap: 6 },
   metric: { flex: 1, alignItems: 'center', backgroundColor: theme.colors.bg, borderRadius: 10, paddingVertical: 9 },
   metricValue: { color: theme.colors.text, fontSize: 18, fontWeight: '700' },

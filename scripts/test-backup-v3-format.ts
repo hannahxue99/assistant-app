@@ -136,6 +136,21 @@ check('拒绝长期记忆替代环', () => {
   expectCode(() => buildBackupV3Markdown('# 备份', cyclic), 'INVALID_DATA');
 });
 
+check('删除待办后的历史关系与删除回执仍可进入完整备份', () => {
+  const deleted = payload();
+  deleted.entries = [];
+  deleted.objectRelations[0] = { ...deleted.objectRelations[0], undoneAt: 1600 };
+  deleted.operations[0] = {
+    ...deleted.operations[0],
+    operationType: 'delete_todo',
+    objectId: 'todo-1',
+    afterSnapshot: JSON.stringify({ deleted: true, todoId: 'todo-1', revisionAt: 1000 }),
+  };
+  const parsed = parseBackupV3Markdown(buildBackupV3Markdown('# 备份', deleted, 2000));
+  if (parsed.payload.operations[0].operationType !== 'delete_todo') throw new Error('删除回执丢失');
+  if (parsed.payload.objectRelations[0].undoneAt !== 1600) throw new Error('历史关系丢失');
+});
+
 check('拒绝损坏计数且不包含敏感运行字段', () => {
   const markdown = buildBackupV3Markdown('# 备份', payload(), 2000);
   const damaged = markdown.replace('"entries":1', '"entries":2');
