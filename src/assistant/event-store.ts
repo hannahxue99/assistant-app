@@ -24,6 +24,15 @@ function compact(value: string, limit: number): string {
   return normalized.length <= limit ? normalized : normalized.slice(0, limit);
 }
 
+export function compactMultiline(value: string, limit: number): string {
+  const normalized = value
+    .replace(/\r\n/g, '\n')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return normalized.length <= limit ? normalized : normalized.slice(0, limit);
+}
+
 function rowToEvent(row: any): AssistantEvent {
   return {
     id: row.id,
@@ -87,7 +96,7 @@ export async function createEvent(input: {
 }, database?: SQLiteDatabase): Promise<AssistantEvent> {
   const title = compact(input.title, 120);
   if (!title) throw new Error('事件标题不能为空');
-  const currentState = compact(input.currentState ?? '', 600);
+  const currentState = compactMultiline(input.currentState ?? '', 600);
   const createdAt = input.createdAt ?? Date.now();
   const id = input.id ?? makeId('event', createdAt);
   return writeWith(database, async (connection) => {
@@ -138,7 +147,7 @@ export function updateEventState(input: {
   expectedRevision?: number;
   updatedAt?: number;
 }, database?: SQLiteDatabase): Promise<AssistantEvent | null> {
-  const currentState = compact(input.currentState, 600);
+  const currentState = compactMultiline(input.currentState, 600);
   if (!currentState) throw new Error('事件当前状态不能为空');
   const updatedAt = input.updatedAt ?? Date.now();
   return writeWith(database, async (connection) => {
