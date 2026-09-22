@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Export and import the `assistant-app-export-v3` semantic backup format while preserving V2 and legacy import compatibility.
+**Goal:** Export and import one canonical `assistant-app-export-v3` semantic backup format while preserving the existing V2 and legacy import entry points without duplicating legacy projections in V3.
 
 **Architecture:** Keep V2 unchanged and add isolated V3 format and merge-planning modules. A dedicated V3 database module reads one consistent SQLite snapshot, recomputes merge decisions inside one exclusive write transaction, and leaves FTS, notification, and calendar work as durable post-commit projections. The existing Profile screen remains the only user entry and dispatches by detected format.
 
@@ -126,6 +126,8 @@ Use an in-memory SQLite adapter with foreign keys enabled. Seed a complete seman
 - Snapshot reads use the transaction handle for every table.
 - `pending` requests and `sending` messages export as retryable failed states with `interrupted_at_export`.
 - The export fails on an orphan request without its user message.
+- Legacy-projected messages without requests do not fail export: their source `entries` remain, the projection messages and now-unused segments are omitted, and references from retained facts are normalized safely.
+- Relations whose message endpoint is an omitted legacy projection are omitted; other retained relations only lose an invalid `sourceMessageId`.
 - Reimport is idempotent.
 - Local-newer conflicts persist both snapshots in `assistant_import_conflicts`.
 - A deliberately injected write failure rolls back all facts and conflict rows.
@@ -152,6 +154,8 @@ Conflict rows contain object kind, object ID, local/incoming JSON, winner, reaso
 **Step 4: Implement consistent export**
 
 Read all V3 tables through one `withExclusiveTransactionAsync` callback and the provided transaction object. Map rows to semantic camelCase types, normalize interrupted runtime states in memory, build the readable summary, and emit the V3 capsule. Never read `settings`, reasoning, decision logs, calendar mappings, notification identifiers, or migration tables.
+
+Treat `entries` as the canonical representation of old records. Before validating the snapshot, exclude messages with `source='legacy'` or a non-null `legacyEntryId`, keep only segments referenced by exported messages, clear retained facts' `sourceMessageId` when it points outside the exported message set, and omit relations whose `fromType` or `toType` is `message` with an omitted endpoint. Do not create synthetic requests and do not mutate SQLite.
 
 **Step 5: Implement preview and exclusive import**
 

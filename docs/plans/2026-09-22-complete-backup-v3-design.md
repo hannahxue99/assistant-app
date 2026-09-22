@@ -53,6 +53,18 @@ V3 的目标是修复数据主权，不顺带实现云同步、端到端加密�
 | 回执与撤销 | `assistant_operations` | 历史消息中的“已处理”回执依赖操作记录 |
 | 长期记忆 | `assistant_memories`、`assistant_memory_sources` | 恢复已生效、候选、替代和忘记状态及来源 |
 
+### 旧记录在 V3 中的唯一表达
+
+V3 必须全量保留旧记录，但同一份事实只表达一次：
+
+- `entries` 是旧记录和待办的权威导出内容，全部进入 V3。
+- 为了在新版小知历史中展示旧记录而生成的 `source='legacy'` 或 `legacy_entry_id != null` 消息只是投影，不作为第二份对话导出。
+- 只服务这些投影、且不再被任何导出消息引用的 `legacy-history` 分段不导出。
+- 事件进展、关系、记忆来源等真实对象继续保留；若它们的 `sourceMessageId` 只指向被排除的投影，V3 快照中将该引用归一化为 `null`。
+- 任一端点直接指向被排除消息的纯消息关系不具备独立事实含义，需从快照中排除，避免产生悬空引用。
+
+以上归一化只发生在导出快照中，不改写手机数据库，也不伪造不存在的 `assistant_requests`。最终仍只生成一个 `assistant-app-export-v3` Markdown 文件。
+
 ### 明确不导出
 
 - `settings` 中的 LLM Key、Base URL、模型名和启用状态。
@@ -104,6 +116,7 @@ interface BackupEnvelopeV3 {
 - `assistant_requests.status='pending'` 导出为可重试的 `failed`，错误码为 `interrupted_at_export`。
 - 对应用户消息的 `sending` 导出为 `failed`，确保恢复后不会永久转圈。
 - 不导出只有请求但没有用户消息的孤儿数据；发现此情况时导出失败并提示先修复数据库。
+- 不把旧 `entries` 的 legacy 展示投影当作真实对话导出；保留的请求与消息仍必须满足完整引用约束。
 - `counts` 必须与各数组长度一致，解析时逐项验证。
 
 ## 6. 引用完整性
@@ -215,6 +228,7 @@ interface BackupEnvelopeV3 {
 9. 通知或日历重建失败时，恢复数据仍存在，并在下次启动补跑。
 10. 新增测试全部登记在 `npm test`，`npm run ci` 和 GitHub `CI / validate` 通过。
 11. 使用真实 Release 数据副本完成“导出 → 全新安装环境导入 → 对象计数及关键关系抽查”；不在唯一生产数据库上做首次演练。
+12. 只有 legacy 投影、没有对应 request 的历史数据仍能成功导出；原始 `entries` 和真实派生对象完整保留，V3 中不出现重复投影或悬空消息引用。
 
 ## 12. 发布、迁移与回滚
 

@@ -173,21 +173,52 @@ async function readBackupV3State(database: Database): Promise<BackupPayloadV3> {
     database.getAllAsync<any>('SELECT * FROM assistant_memories ORDER BY created_at,id'),
     database.getAllAsync<any>('SELECT * FROM assistant_memory_sources ORDER BY created_at,id'),
   ]);
-  const assistantMessages = messageRows.map(rowToMessage);
+  const assistantMessages = messageRows
+    .map(rowToMessage)
+    .filter(message => message.source !== 'legacy' && message.legacyEntryId === null);
+  const exportedMessageIds = new Set(assistantMessages.map(message => message.id));
+  const exportedSegmentIds = new Set(assistantMessages.map(message => message.segmentId));
   const userMessageIds = new Set(assistantMessages.filter(message => message.role === 'user').map(message => message.id));
   const assistantRequests = requestRows.map(rowToRequest);
   for (const request of assistantRequests) {
     if (!userMessageIds.has(request.userMessageId)) throw new Error(`请求 ${request.id} 缺少用户消息，无法生成完整备份`);
   }
+  const eventUpdates = updateRows.map(rowToUpdate).map(update => ({
+    ...update,
+    sourceMessageId: update.sourceMessageId && exportedMessageIds.has(update.sourceMessageId)
+      ? update.sourceMessageId
+      : null,
+  }));
+  const objectRelations = relationRows
+    .map(rowToRelation)
+    .filter(relation => (
+      (relation.fromType !== 'message' || exportedMessageIds.has(relation.fromId))
+      && (relation.toType !== 'message' || exportedMessageIds.has(relation.toId))
+    ))
+    .map(relation => ({
+      ...relation,
+      sourceMessageId: relation.sourceMessageId && exportedMessageIds.has(relation.sourceMessageId)
+        ? relation.sourceMessageId
+        : null,
+    }));
+  const memorySources = memorySourceRows.map(rowToMemorySource).map(source => ({
+    ...source,
+    sourceMessageId: source.sourceMessageId && exportedMessageIds.has(source.sourceMessageId)
+      ? source.sourceMessageId
+      : null,
+  }));
   return {
     entries: entryRows.map(rowToEntry),
     profile: rowToProfile(profileRow),
     topicPreferences: preferenceRows.map((row: any): TopicPreference => ({ topic: row.topic, pinnedAt: Number(row.pinned_at) })),
-    conversationSegments: segmentRows.map(rowToSegment), assistantRequests, assistantMessages,
+    conversationSegments: segmentRows.map(rowToSegment).filter(segment => exportedSegmentIds.has(segment.id)),
+    assistantRequests,
+    assistantMessages,
     events: eventRows.map(rowToEvent), eventAliases: aliasRows.map(rowToAlias),
-    eventUpdates: updateRows.map(rowToUpdate), objectRelations: relationRows.map(rowToRelation),
+    eventUpdates,
+    objectRelations,
     operations: operationRows.map(rowToOperation), memories: memoryRows.map(rowToMemory),
-    memorySources: memorySourceRows.map(rowToMemorySource),
+    memorySources,
   };
 }
 
