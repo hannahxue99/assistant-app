@@ -142,6 +142,26 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
     );
     CREATE INDEX IF NOT EXISTS idx_import_conflicts_entry ON import_conflicts(entry_id);
 
+    CREATE TABLE IF NOT EXISTS assistant_import_conflicts (
+      id TEXT PRIMARY KEY,
+      object_kind TEXT NOT NULL,
+      object_id TEXT NOT NULL,
+      local_snapshot TEXT,
+      incoming_snapshot TEXT NOT NULL,
+      winner TEXT NOT NULL CHECK (winner IN ('local', 'incoming')),
+      reason TEXT NOT NULL,
+      imported_at INTEGER NOT NULL,
+      source_exported_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_assistant_import_conflicts_object
+      ON assistant_import_conflicts(object_kind, object_id, imported_at DESC);
+
+    CREATE TABLE IF NOT EXISTS assistant_projection_jobs (
+      kind TEXT PRIMARY KEY CHECK (kind IN ('fts')),
+      queued_at INTEGER NOT NULL,
+      retry_at INTEGER NOT NULL DEFAULT 0
+    );
+
     -- 数据已导入但本地提醒尚未重建时保留队列，启动后自动补偿。
     CREATE TABLE IF NOT EXISTS notification_sync_queue (
       entry_id TEXT PRIMARY KEY,
@@ -246,6 +266,21 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
     UPDATE entries SET revision_at = updated_at WHERE revision_at IS NULL;
     CREATE INDEX IF NOT EXISTS idx_entries_updated ON entries(updated_at);
   `);
+  const pendingFts = await database.getFirstAsync<{ kind: string }>(
+    "SELECT kind FROM assistant_projection_jobs WHERE kind='fts' AND retry_at<=?",
+    Date.now(),
+  );
+  if (pendingFts) {
+    try {
+      await rebuildFtsWithDatabase(database);
+      await database.runAsync("DELETE FROM assistant_projection_jobs WHERE kind='fts'");
+    } catch {
+      await database.runAsync(
+        "UPDATE assistant_projection_jobs SET retry_at=? WHERE kind='fts'",
+        Date.now() + 60_000,
+      );
+    }
+  }
   return database;
 }
 

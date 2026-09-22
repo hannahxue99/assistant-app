@@ -14,6 +14,7 @@ const { runQuietCommand } = require('./ci-summary.cjs');
 
 const REPO_ROOT = path.join(__dirname, '..');
 const PROJECT_SKILL = path.join(REPO_ROOT, '.agents', 'skills', 'assistant-app-work', 'SKILL.md');
+const DEV_PLAYBOOK = path.join(REPO_ROOT, 'docs', 'knowledge', 'agent-dev-playbook.md');
 
 function gitStatus(cwd = path.join(__dirname, '..')) {
   return spawnSync('git', ['status', '--porcelain=v1'], {
@@ -41,6 +42,17 @@ async function main() {
     assert.ok(fs.existsSync(path.resolve(path.dirname(PROJECT_SKILL), linkedPath)),
       `Project skill link must resolve: ${linkedPath}`);
   }
+  const devPlaybookText = fs.readFileSync(DEV_PLAYBOOK, 'utf8');
+  assert.match(skillText, /Dev unavailable or not loading/,
+    'Project skill must route Dev availability incidents');
+  assert.match(devPlaybookText, /npm run ios:dev/,
+    'Dev recovery must include signed overlay installation');
+  assert.match(devPlaybookText, /lsof -a -p <pid> -d cwd -Fn/,
+    'Dev recovery must verify the Metro worktree');
+  assert.match(devPlaybookText, /--payload-url '<DEV_URL>'/,
+    'Dev recovery must reconnect the physical device to the verified endpoint');
+  assert.match(devPlaybookText, /iOS Bundled/,
+    'Dev recovery must require runtime bundle evidence');
 
   assert.deepEqual(parseArgs(['--query', 'backup v3', '--pr', '27']), {
     query: 'backup v3',

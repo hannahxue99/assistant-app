@@ -28,6 +28,10 @@ Keep context proportional to the task. Do not repeat `AGENTS.md`.
 
 Only here, read the Dev/Release sections of `docs/DEVELOPMENT_WORKFLOW.md`, the Reload flow in `docs/knowledge/agent-dev-playbook.md`, and one relevant indexed topic. Verify their required endpoint, build, device, and runtime evidence before claiming delivery.
 
+### Dev unavailable or not loading
+
+For iOS “不再可用”, a Dev launcher loading failure, or `Error loading app`, follow the recovery flow in [`docs/knowledge/agent-dev-playbook.md`](../../../docs/knowledge/agent-dev-playbook.md). Treat signing/install and Metro/runtime as separate gates. Do not report recovery until the expected worktree owns the verified tunnel endpoint, that URL has been opened on the physical device, and Metro records the device request plus a completed iOS bundle. Never delete the App as a signing fix.
+
 ## Release closeout
 
 Only after acceptance, read `docs/RELEASE_CHECKLIST.md` and the matching knowledge topic, then follow the repository closeout order.

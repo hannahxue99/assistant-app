@@ -24,8 +24,6 @@ import { ImportFeedbackModal } from '../../src/components/ImportFeedbackModal';
 import { ImportPreviewModal, type ImportPreviewData } from '../../src/components/ImportPreviewModal';
 import {
   clearPendingNotificationSync,
-  countEntries,
-  exportMarkdown,
   firstEntryAt,
   getProfile,
   getSettings,
@@ -34,6 +32,20 @@ import {
   saveProfile,
 } from '../../src/db';
 import { BackupFormatError, parseImportableMarkdown } from '../../src/engine/backup-format';
+import {
+  BackupV3FormatError,
+  parseBackupV3Markdown,
+  type BackupEnvelopeV3,
+} from '../../src/engine/backup-v3-format';
+import {
+  exportBackupV3Markdown,
+  importBackupV3,
+  previewBackupV3Import,
+} from '../../src/engine/backup-v3-database';
+import {
+  BACKUP_V3_PRIVATE_CONTENT_WARNING,
+  buildBackupV3ResultMessage,
+} from '../../src/engine/backup-v3-ui';
 import {
   LegacyBackupFormatError,
   parseLegacyExportMarkdown,
@@ -62,6 +74,7 @@ import { theme } from '../../src/theme';
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 
 type ImportCandidate =
+  | { kind: 'v3'; envelope: BackupEnvelopeV3; preview: ImportPreviewData }
   | { kind: 'v2'; envelope: BackupEnvelope; preview: ImportPreviewData }
   | { kind: 'legacy'; envelope: LegacyBackupEnvelope; preview: ImportPreviewData };
 
@@ -69,7 +82,6 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [total, setTotal] = useState(0);
   const [days, setDays] = useState(0);
   const [memories, setMemories] = useState<AssistantMemory[]>([]);
   const [memoryLoadedOnce, setMemoryLoadedOnce] = useState(false);
@@ -100,12 +112,11 @@ export default function ProfileScreen() {
 
   const load = useCallback(async () => {
     void loadMemories();
-    const results = await Promise.allSettled([getSettings(), getProfile(), countEntries(), firstEntryAt()]);
+    const results = await Promise.allSettled([getSettings(), getProfile(), firstEntryAt()]);
     if (results[0].status === 'fulfilled') setSettings(results[0].value);
     if (results[1].status === 'fulfilled') setProfile(results[1].value);
-    if (results[2].status === 'fulfilled') setTotal(results[2].value);
-    if (results[3].status === 'fulfilled') {
-      const first = results[3].value;
+    if (results[2].status === 'fulfilled') {
+      const first = results[2].value;
       setDays(first ? Math.max(1, Math.floor((Date.now() - first) / 86400000) + 1) : 0);
     }
   }, [loadMemories]);
@@ -182,13 +193,20 @@ export default function ProfileScreen() {
     await scheduleDailyNotifications();
   }
 
-  async function doExport() {
+  async function performExport() {
     try {
-      const md = await exportMarkdown();
+      const md = await exportBackupV3Markdown();
       // 写成 .md 文件再分享：微信等应用不接受纯文本分享，文件形式全平台可用
       const stamp = new Date().toISOString().slice(0, 10);
       const uri = `${FileSystem.cacheDirectory}私人助手备份-${stamp}.md`;
       await FileSystem.writeAsStringAsync(uri, md);
+      const info = await FileSystem.getInfoAsync(uri);
+      if (!info.exists || typeof info.size !== 'number') {
+        throw new Error('无法确认备份文件大小，请稍后重试');
+      }
+      if (info.size > MAX_IMPORT_BYTES) {
+        throw new Error('完整备份超过 10 MB，当前版本无法安全导出可重新导入的文件');
+      }
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: 'text/markdown',
@@ -203,7 +221,24 @@ export default function ProfileScreen() {
     }
   }
 
+  function doExport() {
+    Alert.alert(
+      '导出完整备份',
+      BACKUP_V3_PRIVATE_CONTENT_WARNING,
+      [
+        { text: '取消', style: 'cancel' },
+        { text: '继续导出', onPress: () => void performExport() },
+      ],
+    );
+  }
+
   function importErrorMessage(error: unknown): string {
+    if (error instanceof BackupV3FormatError) {
+      if (error.code === 'UNSUPPORTED_VERSION') {
+        return '该备份由更新版本的 App 生成，请升级「私人助手」后再导入。';
+      }
+      return `备份文件无效：${error.message}`;
+    }
     if (error instanceof BackupFormatError) {
       if (error.code === 'UNSUPPORTED_VERSION') {
         return '该备份由更新版本的 App 生成，请升级「私人助手」后再导入。';
@@ -242,14 +277,23 @@ export default function ProfileScreen() {
       const markdown = await FileSystem.readAsStringAsync(asset.uri);
       let candidate: ImportCandidate;
       try {
-        const envelope = parseImportableMarkdown(markdown);
-        const preview = await previewBackupImport(envelope.payload);
-        candidate = { kind: 'v2', envelope, preview: { kind: 'v2', value: preview } };
+        const envelope = parseBackupV3Markdown(markdown);
+        const preview = await previewBackupV3Import(envelope.payload);
+        candidate = { kind: 'v3', envelope, preview: { kind: 'v3', value: preview } };
       } catch (error) {
-        if (!(error instanceof BackupFormatError) || error.code !== 'LEGACY_OR_UNKNOWN') throw error;
-        const envelope = parseLegacyExportMarkdown(markdown);
-        const preview = await previewLegacyImport(envelope);
-        candidate = { kind: 'legacy', envelope, preview: { kind: 'legacy', value: preview } };
+        if (!(error instanceof BackupV3FormatError) || error.code !== 'LEGACY_OR_UNKNOWN') throw error;
+        try {
+          const envelope = parseImportableMarkdown(markdown);
+          const preview = await previewBackupImport(envelope.payload);
+          candidate = { kind: 'v2', envelope, preview: { kind: 'v2', value: preview } };
+        } catch (fallbackError) {
+          if (!(fallbackError instanceof BackupFormatError) || fallbackError.code !== 'LEGACY_OR_UNKNOWN') {
+            throw fallbackError;
+          }
+          const envelope = parseLegacyExportMarkdown(markdown);
+          const preview = await previewLegacyImport(envelope);
+          candidate = { kind: 'legacy', envelope, preview: { kind: 'legacy', value: preview } };
+        }
       }
       setImportFileName(asset.name);
       setImportCandidate(candidate);
@@ -269,7 +313,7 @@ export default function ProfileScreen() {
         const result = await importLegacyExport(importCandidate.envelope);
         affectedEntries = result.affectedEntries;
         summary = `导入对话 ${result.conversations} 条、待办 ${result.todos} 条、事件 ${result.events} 个；跳过重复 ${result.duplicates} 条。`;
-      } else {
+      } else if (importCandidate.kind === 'v2') {
         const result = await importBackup(importCandidate.envelope);
         affectedEntries = result.affectedEntries;
         const memorySummary = result.memoryAdded + result.memoryUpdated + result.memoryIgnored + result.memoryConflicts > 0
@@ -282,6 +326,10 @@ export default function ProfileScreen() {
         } catch {
           projectionWarning = true;
         }
+      } else {
+        const result = await importBackupV3(importCandidate.envelope);
+        affectedEntries = result.affectedEntries;
+        summary = buildBackupV3ResultMessage(result);
       }
     } catch (error) {
       setImportFeedback({ kind: 'error', message: `${importErrorMessage(error)}\n现有数据没有发生变化。` });
@@ -381,15 +429,14 @@ export default function ProfileScreen() {
         <Text style={styles.sectionLabel}>数据管理</Text>
         <View style={styles.dataCard}>
           <Pressable
-            style={[styles.dataRow, total === 0 && memories.length === 0 && { opacity: 0.45 }]}
+            style={styles.dataRow}
             onPress={doExport}
-            disabled={total === 0 && memories.length === 0}
           >
-            <Text style={styles.rowLabel}>导出数据</Text>
+            <Text style={styles.rowLabel}>导出完整备份</Text>
             <Text style={styles.rowValue}>Markdown ⤴</Text>
           </Pressable>
           <Pressable style={[styles.dataRow, styles.dataRowBorder]} onPress={chooseImportFile}>
-            <Text style={styles.rowLabel}>导入数据</Text>
+            <Text style={styles.rowLabel}>从备份恢复</Text>
             <Text style={styles.rowValue}>选择备份文件 ›</Text>
           </Pressable>
         </View>

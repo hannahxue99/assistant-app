@@ -28,6 +28,24 @@
 4. 主动触发 Reload，等待启动动作之后的真机请求与完整打包成功。Simulator 同时在线时，单独一条 `iOS Bundled` 不能证明手机已运行新版。
 5. 保持已验证的 tunnel 进程运行；如果 tunnel URL 确实变化，优先通过 USB 自动传入新 URL，不把切换成本交给用户。
 
+### Dev 签名过期与加载失败恢复
+
+把两个故障分开处理，不能以其中一个成功代替整体恢复：
+
+- iOS 在启动前提示“私人助手 Dev 不再可用”：通常是 Personal Team 七天签名过期，需要重新签名并覆盖安装。
+- Dev App 能启动但一直加载、进入 launcher 或显示 `Error loading app`：通常是 Metro/tunnel 端点失效、端口被旧 worktree 占用，或手机仍记着旧 URL。
+
+固定恢复流程：
+
+1. 先确认目标分支/worktree、物理设备、Dev Bundle ID `com.huanxue.assistantapp.dev` 和当前工作区干净状态。不要删除 App；删除会清空 Dev 独立数据。
+2. 连接并解锁 iPhone，执行 `npm run ios:dev` 覆盖安装。`BUILD SUCCEEDED` 与 `Installed com.huanxue.assistantapp.dev` 只证明签名和安装恢复，不证明业务界面可用。
+3. 启动 Metro 前先执行 `lsof -nP -iTCP:8081 -sTCP:LISTEN`，再对监听 PID 执行 `lsof -a -p <pid> -d cwd -Fn`。工作目录不是目标 worktree 时，只停止这个已确认的旧进程；不要接受 8082 作为替代端口，也不要保留来源不明的 8081。
+4. 从目标 worktree 执行 `npm run start:dev`，确认输出同时包含 `Tunnel connected`、`Tunnel ready` 和新的 `exp+assistant-app://...exp.direct` URL。企业网真机默认不改用 LAN。
+5. 优先用 USB 将该 URL 直接交给手机：`xcrun devicectl device process launch --device <UDID> --terminate-existing --payload-url '<DEV_URL>' com.huanxue.assistantapp.dev`。不要让用户扫描二维码或手工选择历史地址，除非自动启动确实不可用。
+6. 只有同时看到手机启动成功、Metro 在启动后收到 iOS 请求、`iOS Bundled ...` 完成，并由用户确认业务界面出现，才能报告恢复。保持这个已验证的 tunnel 会话运行。
+
+权限确认应围绕真实系统边界合并：先批量完成只读诊断；只在停止精确识别的旧进程、启动联网 tunnel 或操作物理设备时请求必要授权。不要为每个观察步骤逐项确认，也不要重复请求已经持久授权的同类命令。
+
 ## 三、设计协作流程（走通了的一套）
 
 1. **提案先行**：四方向提案（含论点/优劣/真机尺寸条/对比矩阵/推荐）→ 用户选方向。设计文档 = HTML（`design/*.html`），双主题、含 60px/29px 等比缩放列——**用户在浏览器里缩小窗口看小尺寸列**，比口头描述高效百倍。
