@@ -11,7 +11,7 @@ import {
   requestAssistantTurn,
 } from '../src/assistant/provider';
 import { extractPartialJsonStringField } from '../src/assistant/streaming-json';
-import { compactMultiline } from '../src/assistant/event-store';
+import { normalizeMultilineText } from '../src/assistant/text-normalization';
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -150,11 +150,17 @@ check(deletionOperations.operations[0].type === 'delete_todo', '应解析删除�
 check(deletionOperations.operations[1].type === 'delete_event'
   && deletionOperations.operations[1].linkedTodoPolicy === 'keep', '应解析删除事件及关联待办策略');
 
-// 回归：事件当前状态支持多行文本与换行，不被暴力压平为单行
-check(compactMultiline('- 一\r\n- 二\n\n\n\n- 三') === '- 一\n- 二\n\n- 三',
-  'compactMultiline 必须统一换行符并压缩多余空行');
-check(compactMultiline('   第一行   文本   \n   第二行   ') === '第一行 文本\n第二行',
-  'compactMultiline 必须压缩行内多余空格但保留换行');
+// 回归：事件当前状态支持多行文本与换行，不被暴力压平为单行。
+check(normalizeMultilineText('- 一\r\n- 二\n\n\n\n- 三') === '- 一\n- 二\n\n- 三',
+  'normalizeMultilineText 必须统一 CRLF 并压缩多余空行');
+check(normalizeMultilineText('第一行\r第二行') === '第一行\n第二行',
+  'normalizeMultilineText 必须统一旧式 CR 换行');
+check(normalizeMultilineText('   第一行   文本   \n   第二行   ') === '第一行 文本\n第二行',
+  'normalizeMultilineText 必须压缩行内多余空格并清理每行边缘空格');
+check(normalizeMultilineText('  • 现状：进行中  \n\n  • 下一步：验收  ') === '• 现状：进行中\n\n• 下一步：验收',
+  'normalizeMultilineText 必须保留列表符号和一个视觉空行');
+check(normalizeMultilineText(' \r\n ') === '',
+  'normalizeMultilineText 必须把纯空白多行归一化为空字符串');
 
 const multilineEventOperations = parseAssistantTurnOutput(JSON.stringify({
   reply: '已为你更新事件状态。',

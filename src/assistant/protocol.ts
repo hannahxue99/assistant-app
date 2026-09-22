@@ -16,6 +16,7 @@ import type {
   AssistantMemoryDeltaProposal,
   AssistantMemorySensitivity,
 } from './memory-types';
+import { normalizeMultilineText } from './text-normalization';
 
 export interface AssistantTurnOutput {
   reply: string;
@@ -85,11 +86,7 @@ function requiredMultilineText(value: unknown, field: string, limit: number): st
   if (typeof value !== 'string' || !value.trim()) {
     throw new AssistantProtocolError(`模型返回缺少 ${field}`);
   }
-  const normalized = value
-    .replace(/\r\n/g, '\n')
-    .replace(/[^\S\n]+/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  const normalized = normalizeMultilineText(value);
   if (normalized.length > limit) throw new AssistantProtocolError(`${field} 超过长度限制`);
   return normalized;
 }

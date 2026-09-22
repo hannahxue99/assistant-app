@@ -100,4 +100,3 @@ Expected: typecheck and every command registered under `npm test` pass.
 **Step 4:** Verify GitHub `CI / validate` passes.
 
 **Step 5:** Report that this JavaScript-only change is ready for Metro Reload acceptance; do not merge until the user accepts it.
-

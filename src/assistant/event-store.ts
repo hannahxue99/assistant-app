@@ -12,6 +12,7 @@ import type {
   AssistantObjectType,
   AssistantRelationType,
 } from './action-types';
+import { normalizeMultilineText } from './text-normalization';
 
 type EventWrite<T> = (database: SQLiteDatabase) => Promise<T>;
 
@@ -24,12 +25,8 @@ function compact(value: string, limit: number): string {
   return normalized.length <= limit ? normalized : normalized.slice(0, limit);
 }
 
-export function compactMultiline(value: string, limit: number): string {
-  const normalized = value
-    .replace(/\r\n/g, '\n')
-    .replace(/[^\S\n]+/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+function compactMultiline(value: string, limit: number): string {
+  const normalized = normalizeMultilineText(value);
   return normalized.length <= limit ? normalized : normalized.slice(0, limit);
 }
 
