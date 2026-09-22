@@ -23,6 +23,13 @@
 - iOS bundle/export：
 - 原生编译：`不需要 / 已通过`
 
+## 发布前原生工具预检
+
+- 本次是否触发干净 prebuild 或 Hermes 源码构建：
+- 实际 CMake 路径（`command -v cmake`）：
+- CMake 版本（`cmake --version`）：
+- 如使用 `CMAKE_BINARY`，已验证的绝对路径与版本：
+
 ## 真机验收
 
 - 设备与系统：

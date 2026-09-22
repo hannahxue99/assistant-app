@@ -64,6 +64,21 @@
 - 免费证书 7 天过期是硬规则，到期重签 = 连 Mac 覆盖安装一次。
 - 用户说「App 打不开/要加载页」时，先分辨他要的是哪种形态，别在 Debug 模式里折腾「去启动页」。
 
+### Release 原生构建与交付故障
+
+干净 prebuild 可能使 Hermes 和其他原生依赖从源码重新编译，耗时会明显长于命中缓存的历史构建。首次执行前先运行 `command -v cmake` 和 `cmake --version`，记录构建实际会调用的可执行文件；不要根据 PATH 配置、安装记录或过去成功的缓存构建推断版本。
+
+React Native 0.86 的 Hermes 构建会使用 CMake 的 `-S`/`-B` 参数。旧版 CMake 可能把这些参数错误解析成源码目录，进而报出“目录不包含 `CMakeLists.txt`”这类误导信息。遇到该错误时先核对 CMake 路径和版本，再检查真实源码目录；不要先改 Hermes、Pods 或项目路径。
+
+如果系统默认 CMake 不满足当前 Hermes 构建要求，可以先验证一个受信任的现代 CMake，再用绝对路径显式执行：`CMAKE_BINARY=/absolute/path/to/cmake npm run ios:release`。临时下载目录和某次成功的具体版本不是项目契约，不应写死进脚本或 Skill；也不要为了单次发布直接覆盖系统的 `/usr/local/bin/cmake`。
+
+交付证据必须分层记录：
+
+1. `BUILD SUCCEEDED` 只证明 Release 产物构建完成。
+2. `Installed com.huanxue.assistantapp` 证明正式 Bundle ID 已覆盖安装；同 Bundle ID 覆盖安装保留生产沙盒数据。
+3. `devicectl` 启动成功或用户实际打开 App，才证明启动完成。安装后发生 CoreDevice 服务初始化超时属于启动通道故障，不应重新构建或删除 App；有限重试后改由用户直接点击已安装 App，并如实保留“未自动启动核验”的状态。
+4. 只有目标业务界面和关键场景得到确认，才能宣称 Release 真机验收完成。
+
 ## 五、流程纪律的取舍（本案的实际执行偏差）
 
 AGENTS.md 规定「用户验收 → 知识沉淀 → PR 合并」，本案曾抢跑被用户叫停——**这是对的修正**。经验：
