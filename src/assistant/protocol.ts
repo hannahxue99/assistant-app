@@ -16,6 +16,7 @@ import type {
   AssistantMemoryDeltaProposal,
   AssistantMemorySensitivity,
 } from './memory-types';
+import { normalizeMultilineText } from './text-normalization';
 
 export interface AssistantTurnOutput {
   reply: string;
@@ -77,6 +78,15 @@ function requiredText(value: unknown, field: string, limit: number): string {
     throw new AssistantProtocolError(`模型返回缺少 ${field}`);
   }
   const normalized = value.trim().replace(/\s+/g, ' ');
+  if (normalized.length > limit) throw new AssistantProtocolError(`${field} 超过长度限制`);
+  return normalized;
+}
+
+function requiredMultilineText(value: unknown, field: string, limit: number): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new AssistantProtocolError(`模型返回缺少 ${field}`);
+  }
+  const normalized = normalizeMultilineText(value);
   if (normalized.length > limit) throw new AssistantProtocolError(`${field} 超过长度限制`);
   return normalized;
 }
@@ -196,14 +206,14 @@ function parseOperation(value: unknown): AssistantOperationProposal {
         type: raw.type,
         eventRef: localRef(raw.event_ref, 'event_ref', EVENT_REF),
         title: requiredText(raw.title, 'event.title', 120),
-        currentState: requiredText(raw.current_state, 'event.current_state', 600),
+        currentState: requiredMultilineText(raw.current_state, 'event.current_state', 600),
       };
     case 'update_event':
       return {
         key,
         type: raw.type,
         eventId: identifier(raw.event_id, 'event_id'),
-        currentState: requiredText(raw.current_state, 'event.current_state', 600),
+        currentState: requiredMultilineText(raw.current_state, 'event.current_state', 600),
       };
     case 'append_event_update':
       return {
@@ -332,7 +342,7 @@ function parseEventDeltaState(value: unknown): AssistantEventDeltaState {
     return {
       action,
       changeType: parseChangeType(raw.change_type, 'event_delta.state.change_type'),
-      value: requiredText(raw.value, 'event_delta.state.value', 600),
+      value: requiredMultilineText(raw.value, 'event_delta.state.value', 600),
     };
   }
   throw new AssistantProtocolError('event_delta.state.action 非法');

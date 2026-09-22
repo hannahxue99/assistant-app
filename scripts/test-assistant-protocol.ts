@@ -11,6 +11,7 @@ import {
   requestAssistantTurn,
 } from '../src/assistant/provider';
 import { extractPartialJsonStringField } from '../src/assistant/streaming-json';
+import { normalizeMultilineText } from '../src/assistant/text-normalization';
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -148,6 +149,58 @@ const deletionOperations = parseAssistantTurnOutput(JSON.stringify({
 check(deletionOperations.operations[0].type === 'delete_todo', '应解析删除待办');
 check(deletionOperations.operations[1].type === 'delete_event'
   && deletionOperations.operations[1].linkedTodoPolicy === 'keep', '应解析删除事件及关联待办策略');
+
+// 回归：事件当前状态支持多行文本与换行，不被暴力压平为单行。
+check(normalizeMultilineText('- 一\r\n- 二\n\n\n\n- 三') === '- 一\n- 二\n\n- 三',
+  'normalizeMultilineText 必须统一 CRLF 并压缩多余空行');
+check(normalizeMultilineText('第一行\r第二行') === '第一行\n第二行',
+  'normalizeMultilineText 必须统一旧式 CR 换行');
+check(normalizeMultilineText('   第一行   文本   \n   第二行   ') === '第一行 文本\n第二行',
+  'normalizeMultilineText 必须压缩行内多余空格并清理每行边缘空格');
+check(normalizeMultilineText('  • 现状：进行中  \n\n  • 下一步：验收  ') === '• 现状：进行中\n\n• 下一步：验收',
+  'normalizeMultilineText 必须保留列表符号和一个视觉空行');
+check(normalizeMultilineText(' \r\n ') === '',
+  'normalizeMultilineText 必须把纯空白多行归一化为空字符串');
+
+const multilineEventOperations = parseAssistantTurnOutput(JSON.stringify({
+  reply: '已为你更新事件状态。',
+  segment: { action: 'continue' },
+  operations: [
+    {
+      key: 'create-multi',
+      type: 'create_event',
+      event_ref: 'event_1',
+      title: '看房计划',
+      current_state: '- 方案已确定\r\n- 预算暂定10w以内\n\n\n- 下一步：实地看房  ',
+    },
+    {
+      key: 'update-multi',
+      type: 'update_event',
+      event_id: 'event-existing',
+      current_state: '第一阶段已完成\n第二阶段进行中',
+    },
+  ],
+  event_deltas: [{
+    target: { action: 'update_existing', event_id: 'event-loan' },
+    evidence: ['多行原话'],
+    state: {
+      action: 'replace',
+      change_type: 'fact',
+      value: '• 现状：还款中\n• 计划：提前还款',
+    },
+    progress: [{ type: 'fact', content: '更新多行状态' }],
+    todos: [],
+  }],
+}));
+const createdEvent = multilineEventOperations.operations[0] as any;
+const updatedEvent = multilineEventOperations.operations[1] as any;
+check(createdEvent.currentState === '- 方案已确定\n- 预算暂定10w以内\n\n- 下一步：实地看房',
+  '创建事件的 current_state 必须支持换行，且连续空行最多保留两个');
+check(updatedEvent.currentState === '第一阶段已完成\n第二阶段进行中',
+  '更新事件的 current_state 必须保留换行');
+check(multilineEventOperations.eventDeltas[0].state.action === 'replace'
+  && (multilineEventOperations.eventDeltas[0].state as any).value === '• 现状：还款中\n• 计划：提前还款',
+  'event_delta.state.value 必须保留多行换行');
 
 const withEventDelta = parseAssistantTurnOutput(JSON.stringify({
   reply: '这条还款主线会持续很长时间。',

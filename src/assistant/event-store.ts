@@ -12,6 +12,7 @@ import type {
   AssistantObjectType,
   AssistantRelationType,
 } from './action-types';
+import { normalizeMultilineText } from './text-normalization';
 
 type EventWrite<T> = (database: SQLiteDatabase) => Promise<T>;
 
@@ -21,6 +22,11 @@ function makeId(prefix: string, now: number): string {
 
 function compact(value: string, limit: number): string {
   const normalized = value.trim().replace(/\s+/g, ' ');
+  return normalized.length <= limit ? normalized : normalized.slice(0, limit);
+}
+
+function compactMultiline(value: string, limit: number): string {
+  const normalized = normalizeMultilineText(value);
   return normalized.length <= limit ? normalized : normalized.slice(0, limit);
 }
 
@@ -87,7 +93,7 @@ export async function createEvent(input: {
 }, database?: SQLiteDatabase): Promise<AssistantEvent> {
   const title = compact(input.title, 120);
   if (!title) throw new Error('事件标题不能为空');
-  const currentState = compact(input.currentState ?? '', 600);
+  const currentState = compactMultiline(input.currentState ?? '', 600);
   const createdAt = input.createdAt ?? Date.now();
   const id = input.id ?? makeId('event', createdAt);
   return writeWith(database, async (connection) => {
@@ -138,7 +144,7 @@ export function updateEventState(input: {
   expectedRevision?: number;
   updatedAt?: number;
 }, database?: SQLiteDatabase): Promise<AssistantEvent | null> {
-  const currentState = compact(input.currentState, 600);
+  const currentState = compactMultiline(input.currentState, 600);
   if (!currentState) throw new Error('事件当前状态不能为空');
   const updatedAt = input.updatedAt ?? Date.now();
   return writeWith(database, async (connection) => {
