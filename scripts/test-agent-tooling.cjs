@@ -15,6 +15,7 @@ const { runQuietCommand } = require('./ci-summary.cjs');
 const REPO_ROOT = path.join(__dirname, '..');
 const PROJECT_SKILL = path.join(REPO_ROOT, '.agents', 'skills', 'assistant-app-work', 'SKILL.md');
 const DEV_PLAYBOOK = path.join(REPO_ROOT, 'docs', 'knowledge', 'agent-dev-playbook.md');
+const RELEASE_CHECKLIST = path.join(REPO_ROOT, 'docs', 'RELEASE_CHECKLIST.md');
 
 function gitStatus(cwd = path.join(__dirname, '..')) {
   return spawnSync('git', ['status', '--porcelain=v1'], {
@@ -43,6 +44,7 @@ async function main() {
       `Project skill link must resolve: ${linkedPath}`);
   }
   const devPlaybookText = fs.readFileSync(DEV_PLAYBOOK, 'utf8');
+  const releaseChecklistText = fs.readFileSync(RELEASE_CHECKLIST, 'utf8');
   assert.match(skillText, /Dev unavailable or not loading/,
     'Project skill must route Dev availability incidents');
   assert.match(devPlaybookText, /npm run ios:dev/,
@@ -53,6 +55,16 @@ async function main() {
     'Dev recovery must reconnect the physical device to the verified endpoint');
   assert.match(devPlaybookText, /iOS Bundled/,
     'Dev recovery must require runtime bundle evidence');
+  assert.match(skillText, /Release native build or delivery failure/,
+    'Project skill must route Release native build and delivery incidents');
+  assert.match(devPlaybookText, /CMAKE_BINARY=\/absolute\/path\/to\/cmake npm run ios:release/,
+    'Release recovery must document an explicit verified CMake override');
+  assert.match(devPlaybookText, /Installed com\.huanxue\.assistantapp/,
+    'Release recovery must distinguish installation evidence');
+  assert.match(releaseChecklistText, /command -v cmake/,
+    'Release checklist must record the selected CMake executable');
+  assert.match(releaseChecklistText, /cmake --version/,
+    'Release checklist must record the selected CMake version');
 
   assert.deepEqual(parseArgs(['--query', 'backup v3', '--pr', '27']), {
     query: 'backup v3',

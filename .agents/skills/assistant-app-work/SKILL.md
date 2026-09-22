@@ -32,6 +32,10 @@ Only here, read the Dev/Release sections of `docs/DEVELOPMENT_WORKFLOW.md`, the 
 
 For iOS “不再可用”, a Dev launcher loading failure, or `Error loading app`, follow the recovery flow in [`docs/knowledge/agent-dev-playbook.md`](../../../docs/knowledge/agent-dev-playbook.md). Treat signing/install and Metro/runtime as separate gates. Do not report recovery until the expected worktree owns the verified tunnel endpoint, that URL has been opened on the physical device, and Metro records the device request plus a completed iOS bundle. Never delete the App as a signing fix.
 
+### Release native build or delivery failure
+
+For a clean iOS Release build, Hermes/CMake failure, install failure, or launch failure, read [`docs/RELEASE_CHECKLIST.md`](../../../docs/RELEASE_CHECKLIST.md) and the Release troubleshooting section of [`docs/knowledge/agent-dev-playbook.md`](../../../docs/knowledge/agent-dev-playbook.md). Verify the actual executable path and version before changing source paths. Keep build, install, launch, and runtime evidence separate; do not rebuild after a confirmed install merely because automatic launch failed.
+
 ## Release closeout
 
 Only after acceptance, read `docs/RELEASE_CHECKLIST.md` and the matching knowledge topic, then follow the repository closeout order.
