@@ -128,6 +128,7 @@ Use an in-memory SQLite adapter with foreign keys enabled. Seed a complete seman
 - The export fails on an orphan request without its user message.
 - Legacy-projected messages without requests do not fail export: their source `entries` remain, the projection messages and now-unused segments are omitted, and references from retained facts are normalized safely.
 - Relations whose message endpoint is an omitted legacy projection are omitted; other retained relations only lose an invalid `sourceMessageId`.
+- Historical operations whose targets were later deleted, undone, or changed remain exportable; import planning skips undo restoration unless the current target still equals `afterSnapshot`.
 - Reimport is idempotent.
 - Local-newer conflicts persist both snapshots in `assistant_import_conflicts`.
 - A deliberately injected write failure rolls back all facts and conflict rows.

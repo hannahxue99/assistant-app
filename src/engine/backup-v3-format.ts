@@ -445,9 +445,7 @@ function validateEnvelope(value: unknown): BackupEnvelopeV3 {
     if (operationSequences.has(sequence)) invalid(`请求包含重复操作序号：${sequence}`);
     operationKeys.add(key);
     operationSequences.add(sequence);
-    if (operation.operationType !== 'delete_todo') {
-      assertRelationTarget(operation.objectType, operation.objectId, targetSets, `操作 ${operation.id}`);
-    } else {
+    if (operation.operationType === 'delete_todo') {
       let after: unknown;
       try {
         after = JSON.parse(operation.afterSnapshot);

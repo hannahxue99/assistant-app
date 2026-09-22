@@ -148,6 +148,11 @@ async function main() {
     'operation-1', 'request-1', 'todo', 'create_todo', 'todo', 'todo-1', null,
     JSON.stringify(entry), '建立待办：交报告', 'committed', 0, 1400, null,
   );
+  sqlite.prepare(`INSERT INTO assistant_operations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+    'operation-stale-todo', 'request-1', 'old-todo', 'create_todo', 'todo', 'todo-deleted', null,
+    JSON.stringify({ ...entry, id: 'todo-deleted', summary: '后来已删除的待办' }),
+    '建立待办：后来已删除的待办', 'committed', 1, 1450, null,
+  );
 
   const markdown = await backup.exportBackupV3Markdown();
   const envelope = format.parseBackupV3Markdown(markdown);
@@ -161,7 +166,8 @@ async function main() {
   assert.equal(envelope.payload.objectRelations.length, 2);
   assert.equal(envelope.payload.objectRelations.find(item => item.id === 'relation-legacy-source').sourceMessageId, null);
   assert.ok(!envelope.payload.objectRelations.some(item => item.id === 'relation-legacy-endpoint'));
-  assert.equal(envelope.payload.operations.length, 1);
+  assert.equal(envelope.payload.operations.length, 2);
+  assert.ok(envelope.payload.operations.some(item => item.id === 'operation-stale-todo'));
   assert.equal(envelope.payload.memories.length, 1);
   assert.equal(envelope.payload.memorySources.length, 2);
   assert.equal(envelope.payload.memorySources.find(item => item.id === 'memory-source-legacy').sourceMessageId, null);
@@ -177,7 +183,7 @@ async function main() {
   const preview = await backup.previewBackupV3Import(envelope.payload);
   assert.ok(preview.added > 0);
   const result = await backup.importBackupV3(envelope);
-  assert.equal(result.operationSkipped, 0);
+  assert.equal(result.operationSkipped, 1);
   assert.equal(count('entries'), 2);
   assert.equal(count('assistant_messages'), 2);
   assert.equal(count('assistant_events'), 1);
