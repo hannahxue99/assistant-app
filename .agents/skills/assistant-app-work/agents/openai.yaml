@@ -1,0 +1,4 @@
+interface:
+  display_name: "Assistant App Work"
+  short_description: "Route Assistant App development with minimal context"
+  default_prompt: "Use $assistant-app-work to continue this repository task with only the context it needs."
