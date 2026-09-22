@@ -39,3 +39,7 @@ Only after acceptance, read `docs/RELEASE_CHECKLIST.md` and the matching knowled
 - Prefer focused tests; use `ci:agent` for concise local output and `ci` before delivery.
 - Do not use multiple agents unless requested.
 - Refine over-limit results instead of expanding them.
+
+## Maintain this skill
+
+When a PR changes a path, command, source of truth, or delivery gate routed here, update this skill in the same PR or verify that its routing remains correct. Keep volatile detail in the linked source documents, extend `test:agent-tooling` for new invariants, and rerun skill validation. Use a fresh Codex session when discovery or routing behavior changes.

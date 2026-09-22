@@ -127,6 +127,12 @@ package.json
 - 不重复加载 Skill 已指向的同义规则。
 - 不使用多 Agent，除非用户明确要求并行或委派。
 
+### 自维护契约
+
+项目 Skill 不在运行时自动改写自己。任何 PR 如果改变了 Skill 所路由的目录、权威文档、命令或交付门禁，必须在同一 PR 中更新 Skill，或明确验证现有路由仍然正确。易变化的细节继续保留在权威文档，Skill 只维护入口和阶段判断。
+
+`test:agent-tooling` 验证 Skill 的仓库内链接仍可解析、入口体积保持有界；发现方式或路由行为变化时，还需要在全新 Codex 会话中验证。这样“自更新”仍受 Git、PR、CI 和用户验收约束，不会形成不可审查的后台自修改。
+
 ## 7. 动态上下文快照
 
 `node scripts/agent-context.cjs` 输出有上限的事实摘要：
@@ -167,7 +173,8 @@ package.json
 4. 安静 CI 包装器完整保留子进程的成功/失败退出码。
 5. 成功摘要保持短小，失败摘要包含诊断与完整日志路径。
 6. Skill 通过 `quick_validate.py`，没有未完成占位符。
-7. `npm run ci` 与 GitHub `CI / validate` 通过。
+7. Skill 引用的仓库文件全部存在，入口仍保持轻量。
+8. `npm run ci` 与 GitHub `CI / validate` 通过。
 
 手工验收：
 

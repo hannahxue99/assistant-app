@@ -12,6 +12,9 @@ const {
 } = require('./agent-context.cjs');
 const { runQuietCommand } = require('./ci-summary.cjs');
 
+const REPO_ROOT = path.join(__dirname, '..');
+const PROJECT_SKILL = path.join(REPO_ROOT, '.agents', 'skills', 'assistant-app-work', 'SKILL.md');
+
 function gitStatus(cwd = path.join(__dirname, '..')) {
   return spawnSync('git', ['status', '--porcelain=v1'], {
     cwd,
@@ -25,6 +28,20 @@ function runGit(cwd, args) {
 }
 
 async function main() {
+  const skillText = fs.readFileSync(PROJECT_SKILL, 'utf8');
+  const skillLines = skillText.split('\n').length;
+  const skillWords = skillText.split(/\s+/).filter(Boolean).length;
+  assert.ok(skillLines <= 80, `Project skill must stay lightweight; found ${skillLines} lines`);
+  assert.ok(skillWords <= 500, `Project skill must stay lightweight; found ${skillWords} words`);
+  const linkedPaths = [...skillText.matchAll(/\]\(([^)]+)\)/g)]
+    .map(match => match[1])
+    .filter(link => !link.includes('://') && !link.startsWith('#'));
+  assert.ok(linkedPaths.length > 0, 'Project skill must route to repository sources of truth');
+  for (const linkedPath of linkedPaths) {
+    assert.ok(fs.existsSync(path.resolve(path.dirname(PROJECT_SKILL), linkedPath)),
+      `Project skill link must resolve: ${linkedPath}`);
+  }
+
   assert.deepEqual(parseArgs(['--query', 'backup v3', '--pr', '27']), {
     query: 'backup v3',
     prNumber: 27,
@@ -49,7 +66,7 @@ async function main() {
 
   const before = gitStatus();
   const snapshot = buildSnapshot({
-    cwd: path.join(__dirname, '..'),
+    cwd: REPO_ROOT,
     query: 'agent context',
     includePr: false,
   });
@@ -107,7 +124,7 @@ async function main() {
     const logDir = path.join(tempDir, 'logs');
     const successOutput = [];
     const success = await runQuietCommand({
-      cwd: path.join(__dirname, '..'),
+      cwd: REPO_ROOT,
       command: process.execPath,
       args: ['-e', 'console.log("fixture passed")'],
       logDir,
