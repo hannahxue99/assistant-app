@@ -2,6 +2,9 @@
 
 后续每项产品需求统一按照以下阶段推进。
 
+Agent 默认先读取 [`docs/CURRENT.md`](CURRENT.md)，并通过项目 Skill
+`.agents/skills/assistant-app-work/SKILL.md` 按阶段加载本文。普通开发不默认读取真机、发布或历史归档内容。
+
 ## 1. 需求分析
 
 - 检查现有产品文档、设计稿、数据结构和代码实现。
