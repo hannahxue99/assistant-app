@@ -30,15 +30,15 @@
     <tspan x="34" dy="25">项目复盘材料。</tspan>
   </text>
 
-  <rect x="20" y="290" width="350" height="76" rx="14" fill="#FFFFFF" stroke="#E8E2D9" filter="url(#composerShadow)"/>
+  <rect x="20" y="290" width="350" height="74" rx="14" fill="#FFFFFF" stroke="#E8E2D9" filter="url(#composerShadow)"/>
   <g transform="translate(34 296)">
     <circle cx="10" cy="10" r="9" fill="none" stroke="#4C8A6E" stroke-width="1.7"/>
     <path d="M6 10l2.7 2.8L14.5 7" fill="none" stroke="#4C8A6E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
     <text x="30" y="15" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="14" font-weight="600" fill="#2B2622">已处理</text>
     <text x="88" y="15" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" fill="#8A837B">撤销本轮</text>
   </g>
-  <line x1="34" y1="322" x2="356" y2="322" stroke="#E8E2D9"/>
-  <g transform="translate(34 330)">
+  <line x1="34" y1="324" x2="356" y2="324" stroke="#E8E2D9"/>
+  <g transform="translate(34 333)">
     <rect x="0.8" y="1" width="17" height="17" rx="4" fill="none" stroke="#4C8A6E" stroke-width="1.6"/>
     <text x="29" y="15" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" fill="#2B2622">建立待办：整理项目复盘材料</text>
     <text x="307" y="15" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="18" fill="#8A837B">›</text>
