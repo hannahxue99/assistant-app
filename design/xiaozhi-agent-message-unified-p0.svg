@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="760" height="760" viewBox="0 0 760 760">
   <defs>
     <linearGradient id="bottomFade" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FDFCFB" stop-opacity="0.18"/>
-      <stop offset="0.54" stop-color="#FDFCFB" stop-opacity="0.58"/>
-      <stop offset="1" stop-color="#FDFCFB" stop-opacity="1"/>
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="0.54" stop-color="#FFFFFF" stop-opacity="0.58"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="1"/>
     </linearGradient>
     <filter id="composerShadow" x="-20%" y="-80%" width="140%" height="260%">
       <feDropShadow dx="0" dy="-2" stdDeviation="10" flood-color="#302923" flood-opacity="0.14"/>
@@ -12,7 +12,7 @@
 
   <g transform="translate(185 0)">
 
-  <rect width="390" height="760" fill="#FDFCFB"/>
+  <rect width="390" height="760" fill="#FFFFFF"/>
   <text x="20" y="45" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="22" font-weight="700" fill="#2B2622">小知</text>
 
   <rect x="102" y="78" width="268" height="54" rx="18" fill="#E0733A"/>
@@ -59,7 +59,7 @@
   <circle cx="345" cy="628" r="20" fill="#D8D2CC"/>
   <path d="M345 635v-14m-6 6l6-6 6 6" fill="none" stroke="#8A837B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <rect x="0" y="690" width="390" height="70" fill="#FDFCFB"/>
+  <rect x="0" y="690" width="390" height="70" fill="#FFFFFF"/>
   <line x1="0" y1="690" x2="390" y2="690" stroke="#EEE8E1"/>
   <text x="72" y="731" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" fill="#8A837B">首页</text>
   <text x="195" y="731" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="600" fill="#E0733A">小知</text>

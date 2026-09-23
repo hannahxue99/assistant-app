@@ -620,7 +620,7 @@ const styles = StyleSheet.create({
     right: 0,
     top: 5,
     bottom: 0,
-    experimental_backgroundImage: 'linear-gradient(to bottom, rgba(253,252,251,0.18) 0%, rgba(253,252,251,0.58) 54%, #FDFCFB 100%)',
+    experimental_backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.58) 54%, #FFFFFF 100%)',
   },
   pressed: { opacity: 0.72 },
 });
