@@ -1,20 +1,22 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
-  assistantCompletedRuntimeLabel,
   assistantRuntimeLabel,
   assistantStageLineLabel,
   assistantStageSummaryLabel,
   formatAssistantRuntimeDuration,
 } from '../assistant/runtime-state';
-import { formatAssistantMessageTime } from '../assistant/message-time';
 import type { AssistantReasoning } from '../assistant/reasoning-store';
-import { assistantFailureLabel } from '../assistant/ui-state';
+import { assistantFailureLabel, assistantMessageSurface } from '../assistant/ui-state';
 import type { AssistantMessage } from '../assistant/types';
 import type { AssistantRuntimeStage } from '../assistant/runtime-state';
 import { theme } from '../theme';
 import { AssistantActionReceipt } from './AssistantActionReceipt';
+import { AssistantWebSources } from './AssistantWebSources';
+
+const META_ICON_COLOR = '#5577F2';
 
 interface AssistantMessageBubbleProps {
   message: AssistantMessage;
@@ -40,6 +42,7 @@ export function AssistantMessageBubble({
   onLoadReasoning = async () => null,
 }: AssistantMessageBubbleProps) {
   const isUser = message.role === 'user';
+  const surface = assistantMessageSurface(message.role);
   const isStreaming = !isUser && message.status === 'streaming';
   const [now, setNow] = useState(() => Date.now());
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
@@ -56,9 +59,6 @@ export function AssistantMessageBubble({
   const elapsedMs = startedAt === undefined
     ? 0
     : Math.max(0, (isStreaming ? now : message.createdAt) - startedAt);
-  const completedRuntime = !isUser && !isStreaming && startedAt !== undefined && elapsedMs <= 300_000
-    ? assistantCompletedRuntimeLabel(elapsedMs)
-    : null;
   const reasoningText = message.reasoningContent ?? loadedReasoning?.content ?? '';
   const reasoningStartedAt = message.reasoningStartedAt ?? loadedReasoning?.startedAt;
   const reasoningCompletedAt = message.reasoningCompletedAt ?? loadedReasoning?.completedAt;
@@ -130,7 +130,9 @@ export function AssistantMessageBubble({
         >
           {isStreaming ? (
             <ActivityIndicator size="small" color={theme.colors.accent} />
-          ) : null}
+          ) : (
+            <Ionicons name="sparkles-outline" size={18} color={META_ICON_COLOR} />
+          )}
           <Text style={styles.reasoningHeaderText}>
             {isStreaming && startedAt !== undefined
               ? assistantRuntimeLabel(runtimeStage, elapsedMs)
@@ -152,15 +154,25 @@ export function AssistantMessageBubble({
           {reasoningText ? <Text style={styles.reasoningNote}>模型生成的思考过程，仅供参考</Text> : null}
         </View>
       ) : null}
-      {message.content ? (
-        <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-          <Text selectable style={[styles.content, isUser && styles.userContent]}>
-            {message.content}{isStreaming ? <Text style={styles.cursor}>▋</Text> : null}
-          </Text>
-          {!isStreaming ? (
-            <Text style={[styles.time, isUser && styles.userTime]}>
-              {completedRuntime ? `${completedRuntime} · ` : ''}{formatAssistantMessageTime(message.createdAt)}
+      {!isUser && !isStreaming && message.webSources?.length ? (
+        <AssistantWebSources sources={message.webSources} />
+      ) : null}
+      {surface === 'user-bubble' && message.content ? (
+        <View style={styles.userBubble}>
+          <Text selectable style={[styles.content, styles.userContent]}>{message.content}</Text>
+        </View>
+      ) : null}
+      {surface === 'assistant-bubble' && (message.content || message.errorCode === 'cancelled') ? (
+        <View style={styles.assistantBubble}>
+          {message.content ? (
+            <Text selectable style={styles.content}>
+              {message.content}{isStreaming ? <Text style={styles.cursor}>▋</Text> : null}
             </Text>
+          ) : null}
+          {message.errorCode === 'cancelled' ? (
+            <View style={styles.statusRow}>
+              <Text style={styles.statusText}>已停止 · 未执行任何操作</Text>
+            </View>
           ) : null}
         </View>
       ) : null}
@@ -173,11 +185,6 @@ export function AssistantMessageBubble({
             onNavigate={onNavigate}
             onUndo={() => onUndo(message.requestId)}
           />
-        </View>
-      ) : null}
-      {!isUser && message.errorCode === 'cancelled' ? (
-        <View style={styles.statusRow}>
-          <Text style={styles.statusText}>已停止 · 未执行任何操作</Text>
         </View>
       ) : null}
       {isUser && message.status === 'failed' ? (
@@ -204,29 +211,26 @@ const styles = StyleSheet.create({
   row: { width: '100%', marginVertical: 5 },
   userRow: { alignItems: 'flex-end' },
   assistantRow: { alignItems: 'flex-start' },
-  bubble: { maxWidth: '86%', borderRadius: 16, paddingHorizontal: 13, paddingTop: 10, paddingBottom: 7 },
-  userBubble: { backgroundColor: theme.colors.accent, borderBottomRightRadius: 5 },
-  assistantBubble: { backgroundColor: theme.colors.card, borderBottomLeftRadius: 5, borderWidth: 1, borderColor: theme.colors.border },
+  userBubble: { maxWidth: '86%', borderRadius: 18, borderBottomRightRadius: 6, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.colors.accent },
+  assistantBubble: { maxWidth: '94%', borderRadius: 18, borderBottomLeftRadius: 6, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: theme.colors.card, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.border },
   content: { color: theme.colors.text, fontSize: theme.font.body, lineHeight: 22 },
   userContent: { color: '#FFFFFF' },
-  time: { color: theme.colors.textDim, fontSize: 11, marginTop: 4 },
-  userTime: { color: 'rgba(255,255,255,0.72)', textAlign: 'right' },
   cursor: { color: theme.colors.accent },
-  runtimeRow: { minHeight: 36, maxWidth: '86%', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 16, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 4 },
-  runtimeText: { color: theme.colors.textDim, fontSize: 13 },
-  reasoningHeader: { minHeight: 38, maxWidth: '86%', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 19, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 4 },
+  runtimeRow: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 4, marginBottom: 2 },
+  runtimeText: { flexShrink: 1, color: theme.colors.textDim, fontSize: 13 },
+  reasoningHeader: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 4, marginBottom: 2 },
   reasoningHeaderText: { flexShrink: 1, color: theme.colors.textDim, fontSize: 13 },
-  reasoningChevron: { color: theme.colors.textDim, fontSize: 18, lineHeight: 20 },
-  reasoningBody: { width: '86%', gap: 8, paddingHorizontal: 13, paddingVertical: 11, borderRadius: 16, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 5 },
+  reasoningChevron: { color: theme.colors.textDim, fontSize: 18, lineHeight: 20, marginLeft: -3 },
+  reasoningBody: { width: '100%', gap: 8, marginLeft: 9, paddingLeft: 18, paddingTop: 5, paddingBottom: 9, borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: theme.colors.border, marginBottom: 5 },
   reasoningText: { color: theme.colors.textDim, fontSize: 13, lineHeight: 20 },
   reasoningNote: { color: theme.colors.textDim, fontSize: 11, marginTop: 2 },
   reasoningError: { color: theme.colors.red, fontSize: 12 },
-  stageLinesWrap: { maxWidth: '86%', gap: 3, paddingHorizontal: 12, marginBottom: 3 },
+  stageLinesWrap: { maxWidth: '92%', gap: 3, paddingLeft: 27, marginBottom: 3 },
   stageLine: { color: theme.colors.textDim, fontSize: 12 },
   statusRow: { minHeight: 24, flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3, paddingHorizontal: 3 },
   statusText: { color: theme.colors.textDim, fontSize: 12 },
   retry: { minHeight: 32, justifyContent: 'center', marginTop: 2, paddingHorizontal: 4 },
   retryPressed: { opacity: 0.6 },
   retryText: { color: theme.colors.red, fontSize: 12 },
-  receiptWrap: { width: '86%' },
+  receiptWrap: { width: '94%', marginTop: 4 },
 });

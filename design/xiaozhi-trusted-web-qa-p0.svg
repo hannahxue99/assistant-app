@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="790" viewBox="0 0 1320 790">
+  <style>
+    .bg{fill:#f6f3ee}.card{fill:#fff;stroke:#e8e2d9;stroke-width:2}.soft{fill:#f9e8dd}.orange{fill:#e0733a}.ink{fill:#2b2622}.muted{fill:#8a837b}.green{fill:#4c8a6e}.red{fill:#c05a4e}.line{stroke:#e8e2d9;stroke-width:1.5}.h1{font:700 30px -apple-system,"PingFang SC",sans-serif}.h2{font:650 18px -apple-system,"PingFang SC",sans-serif}.body{font:15px -apple-system,"PingFang SC",sans-serif}.small{font:13px -apple-system,"PingFang SC",sans-serif}.tiny{font:12px -apple-system,"PingFang SC",sans-serif}
+  </style>
+  <rect class="bg" width="1320" height="790"/>
+  <text class="h1 ink" x="60" y="58">小知可信联网问答 · P0</text>
+  <text class="body muted" x="60" y="88">不新增手动模式：DeepSeek 自主搜索并读取结果，小知展示进度、回答与本轮搜索来源。</text>
+
+  <g transform="translate(60 126)">
+    <rect class="card" width="270" height="545" rx="28"/>
+    <text class="h2 ink" x="24" y="42">1　需要联网配置</text>
+    <text class="tiny muted" x="24" y="68">仅在首次需要搜索且尚未配置时出现</text>
+    <rect class="orange" x="92" y="100" width="154" height="56" rx="18"/>
+    <text class="body" fill="#fff" x="112" y="134">Muse 是啥？</text>
+    <rect class="card" x="24" y="180" width="222" height="184" rx="17"/>
+    <text class="body ink" x="42" y="214">这个问题需要联网确认。</text>
+    <text class="small muted" x="42" y="244">配置联网搜索后，小知可以</text>
+    <text class="small muted" x="42" y="266">查找最新信息并附上来源。</text>
+    <rect class="orange" x="42" y="294" width="186" height="44" rx="12"/>
+    <text class="body" fill="#fff" x="90" y="321">去配置</text>
+    <text class="tiny muted" x="24" y="405">普通本地问答不受影响</text>
+  </g>
+
+  <g transform="translate(370 126)">
+    <rect class="card" width="270" height="545" rx="28"/>
+    <text class="h2 ink" x="24" y="42">2　搜索与整理</text>
+    <text class="tiny muted" x="24" y="68">DeepSeek 服务端完成搜索和内容读取</text>
+    <rect class="orange" x="92" y="100" width="154" height="56" rx="18"/>
+    <text class="body" fill="#fff" x="112" y="134">Muse 是啥？</text>
+    <rect class="soft" x="24" y="180" width="222" height="48" rx="18"/>
+    <circle cx="45" cy="204" r="7" fill="none" stroke="#e0733a" stroke-width="2"/>
+    <path d="M45 197a7 7 0 0 1 7 7" fill="none" stroke="#e0733a" stroke-width="2.5" stroke-linecap="round"/>
+    <text class="small ink" x="62" y="209">正在搜索网页 · 2 秒</text>
+    <text class="small muted" x="24" y="261">搜索完成后，状态切换为：</text>
+    <text class="small ink" x="24" y="290">已搜索网页 2 秒</text>
+    <rect class="soft" x="24" y="306" width="222" height="48" rx="18"/>
+    <circle cx="45" cy="330" r="7" fill="none" stroke="#e0733a" stroke-width="2"/>
+    <path d="M45 323a7 7 0 0 1 7 7" fill="none" stroke="#e0733a" stroke-width="2.5" stroke-linecap="round"/>
+    <text class="small ink" x="62" y="335">正在根据搜索结果整理 · 4 秒</text>
+    <rect x="24" y="430" width="222" height="46" rx="16" fill="#2b2622"/>
+    <text class="body" fill="#fff" x="100" y="459">停止</text>
+  </g>
+
+  <g transform="translate(680 126)">
+    <rect class="card" width="270" height="545" rx="28"/>
+    <text class="h2 ink" x="24" y="42">3　回答与来源</text>
+    <text class="tiny muted" x="24" y="68">正文保持易读，不强迫用户逐条核验</text>
+    <rect class="card" x="24" y="100" width="222" height="308" rx="17"/>
+    <text class="body ink" x="42" y="134">“Muse” 常见有几种含义。</text>
+    <text class="body ink" x="42" y="164">如果你说的是 AI 产品，</text>
+    <text class="body ink" x="42" y="187">目前更可能指……</text>
+    <text class="body ink" x="42" y="217">它主要用于……</text>
+    <text class="body ink" x="42" y="257">如果你指乐队或其他产品，</text>
+    <text class="body ink" x="42" y="280">告诉我看到它的场景就行。</text>
+    <text class="tiny muted" x="42" y="326">搜索 6 秒 · 思考 7 秒</text>
+    <line class="line" x1="42" y1="348" x2="228" y2="348"/>
+    <text class="small ink" x="42" y="378">搜索来源　2</text>
+    <text class="small muted" x="208" y="378">⌃</text>
+    <rect class="card" x="24" y="420" width="222" height="92" rx="15"/>
+    <text class="small ink" x="42" y="448">1　Muse — 官方网站</text>
+    <text class="tiny muted" x="59" y="468">muse.example · 本轮搜索　›</text>
+    <line class="line" x1="42" y1="480" x2="228" y2="480"/>
+    <text class="small ink" x="42" y="502">2　产品发布说明　　　　›</text>
+  </g>
+
+  <g transform="translate(990 126)">
+    <rect class="card" width="270" height="545" rx="28"/>
+    <text class="h2 ink" x="24" y="42">4　失败时明确降级</text>
+    <text class="tiny muted" x="24" y="68">不把模型已有知识伪装成联网结果</text>
+    <rect class="orange" x="68" y="100" width="178" height="56" rx="18"/>
+    <text class="body" fill="#fff" x="86" y="134">最近有什么更新？</text>
+    <rect class="card" x="24" y="180" width="222" height="206" rx="17"/>
+    <text class="body ink" x="42" y="214">我暂时没能完成联网验证，</text>
+    <text class="body ink" x="42" y="238">因此不能可靠回答“最近”的</text>
+    <text class="body ink" x="42" y="262">变化。</text>
+    <text class="small muted" x="42" y="298">联网搜索超时，本轮没有使用</text>
+    <text class="small muted" x="42" y="320">未经验证的实时信息。</text>
+    <rect class="soft" x="42" y="338" width="94" height="34" rx="10"/>
+    <text class="small ink" x="64" y="360">重新尝试</text>
+    <text class="tiny red" x="24" y="425">无来源卡；不生成虚假引用</text>
+  </g>
+
+  <path d="M330 390h40m270 0h40m270 0h40" stroke="#c7beb5" stroke-width="2" stroke-dasharray="7 7"/>
+  <rect x="60" y="706" width="1200" height="52" rx="16" fill="#fff"/>
+  <text class="small ink" x="82" y="737">交互原则：自动触发 ｜ 可停止 ｜ 搜索次数和结果量由 DeepSeek 决定 ｜ 来源不伪装成逐句引用 ｜ 搜索失败不影响本地能力</text>
+</svg>

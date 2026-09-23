@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="760" viewBox="0 0 760 760">
+  <defs>
+    <linearGradient id="bottomFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="0.54" stop-color="#FFFFFF" stop-opacity="0.58"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="1"/>
+    </linearGradient>
+    <filter id="composerShadow" x="-20%" y="-80%" width="140%" height="260%">
+      <feDropShadow dx="0" dy="-2" stdDeviation="10" flood-color="#302923" flood-opacity="0.14"/>
+    </filter>
+  </defs>
+
+  <g transform="translate(185 0)">
+
+  <rect width="390" height="760" fill="#FFFFFF"/>
+  <text x="20" y="45" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="22" font-weight="700" fill="#2B2622">小知</text>
+
+  <rect x="102" y="78" width="268" height="54" rx="18" fill="#E0733A"/>
+  <text x="120" y="111" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="15" fill="#FFFFFF">帮我新增一个明天下午的待办</text>
+
+  <g transform="translate(20 164)">
+    <path d="M10 1l2.3 6.7L19 10l-6.7 2.3L10 19l-2.3-6.7L1 10l6.7-2.3z" fill="none" stroke="#5577F2" stroke-width="1.7"/>
+    <text x="30" y="15" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="14" fill="#77716B">读取 2 秒 · 思考 4 秒</text>
+    <text x="169" y="15" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="20" fill="#77716B">›</text>
+  </g>
+
+  <rect x="20" y="202" width="350" height="74" rx="18" fill="#FFFFFF" stroke="#E8E2D9"/>
+  <text x="34" y="232" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="15" fill="#2B2622">
+    <tspan x="34" dy="0">已经帮你安排好了，明天下午提醒你整理</tspan>
+    <tspan x="34" dy="25">项目复盘材料。</tspan>
+  </text>
+
+  <rect x="20" y="290" width="350" height="74" rx="14" fill="#FFFFFF" stroke="#E8E2D9" filter="url(#composerShadow)"/>
+  <g transform="translate(34 296)">
+    <circle cx="10" cy="10" r="9" fill="none" stroke="#4C8A6E" stroke-width="1.7"/>
+    <path d="M6 10l2.7 2.8L14.5 7" fill="none" stroke="#4C8A6E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="30" y="15" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="14" font-weight="600" fill="#2B2622">已处理</text>
+    <text x="88" y="15" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" fill="#8A837B">撤销本轮</text>
+  </g>
+  <line x1="34" y1="324" x2="356" y2="324" stroke="#E8E2D9"/>
+  <g transform="translate(34 333)">
+    <rect x="0.8" y="1" width="17" height="17" rx="4" fill="none" stroke="#4C8A6E" stroke-width="1.6"/>
+    <text x="29" y="15" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" fill="#2B2622">建立待办：整理项目复盘材料</text>
+    <text x="307" y="15" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="18" fill="#8A837B">›</text>
+  </g>
+
+  <text x="20" y="540" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="15" fill="#68636A">
+    <tspan x="20" dy="0">下一段历史消息可以从浮动输入框旁经过……</tspan>
+    <tspan x="20" dy="27" fill="#8A837B">从输入框上沿开始渐白，一直衔接到 Tab Bar。</tspan>
+  </text>
+
+  <rect x="0" y="601" width="390" height="89" fill="url(#bottomFade)"/>
+  <g filter="url(#composerShadow)">
+    <rect x="14" y="601" width="362" height="54" rx="27" fill="#FFFFFF" stroke="#E8E2D9"/>
+  </g>
+  <circle cx="44" cy="628" r="20" fill="#F9E8DD"/>
+  <path d="M44 619v10m-5-4v3a5 5 0 0010 0v-3m-5 8v4m-4 0h8" fill="none" stroke="#E0733A" stroke-width="1.7" stroke-linecap="round"/>
+  <text x="75" y="634" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="16" fill="#8A837B">发消息给小知</text>
+  <circle cx="345" cy="628" r="20" fill="#D8D2CC"/>
+  <path d="M345 635v-14m-6 6l6-6 6 6" fill="none" stroke="#8A837B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="0" y="690" width="390" height="70" fill="#FFFFFF"/>
+  <line x1="0" y1="690" x2="390" y2="690" stroke="#EEE8E1"/>
+  <text x="72" y="731" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" fill="#8A837B">首页</text>
+  <text x="195" y="731" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="600" fill="#E0733A">小知</text>
+  <text x="318" y="731" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" fill="#8A837B">我的</text>
+  </g>
+</svg>

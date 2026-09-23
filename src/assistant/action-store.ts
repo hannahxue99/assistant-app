@@ -37,7 +37,7 @@ import {
 } from './event-store';
 import { completeTurnWithDatabase } from './store';
 import { saveAssistantReasoningWithDatabase, type AssistantReasoning } from './reasoning-store';
-import type { AssistantMessage, AssistantMessageSource, AssistantSegmentDecision } from './types';
+import type { AssistantMessage, AssistantMessageSource, AssistantSegmentDecision, AssistantWebSource } from './types';
 
 function stableHash(value: string): string {
   let first = 2166136261;
@@ -720,6 +720,7 @@ export async function completeAssistantTurnWithActions(input: {
   actionContext: AssistantActionContext;
   createdAt?: number;
   stageDurations?: AssistantMessage['stageDurations'];
+  webSources?: AssistantWebSource[];
 }): Promise<{ assistantMessage: AssistantMessage; operations: AssistantOperation[] }> {
   const createdAt = input.createdAt ?? Date.now();
   return withExclusiveDatabaseTransaction(async (database) => {
@@ -746,6 +747,7 @@ export async function completeAssistantTurnWithActions(input: {
       segment: input.segment,
       createdAt,
       stageDurations: input.stageDurations,
+      webSources: input.webSources,
     });
     if (input.reasoning) await saveAssistantReasoningWithDatabase(database, input.reasoning);
     return { assistantMessage, operations: [...operations, ...memoryOperations] };

@@ -13,6 +13,8 @@ import {
   listStateWhileRefreshing,
   shouldScrollAssistantOnFocus,
   shouldFollowAssistantEnd,
+  assistantComposerElevation,
+  assistantMessageSurface,
 } from '../src/assistant/ui-state';
 import { ASSISTANT_EMPTY_DESCRIPTION } from '../src/assistant/ui-copy';
 import {
@@ -32,6 +34,11 @@ import {
 } from '../src/assistant/runtime-state';
 import type { AssistantMessage } from '../src/assistant/types';
 import type { AssistantOperation } from '../src/assistant/action-types';
+import {
+  assistantWebSourceHost,
+  assistantWebSourcesLabel,
+  safeAssistantWebSourceUrl,
+} from '../src/assistant/web-source-ui';
 
 const NOW = new Date(2026, 8, 15, 12, 0).getTime();
 const DAY = 24 * 3600 * 1000;
@@ -114,6 +121,8 @@ check(assistantRuntimeLabel('planning', 68_000) === '小知正在整理处理方
   '思考状态应展示连续运行时间');
 check(assistantRuntimeLabel('reading', 9_000) === '小知正在读取事件和待办 · 9 秒',
   '调用数据工具时应明确展示读取状态');
+check(assistantRuntimeLabel('searching', 12_000) === '小知正在搜索网页 · 12 秒',
+  '联网时应明确展示搜索网页状态');
 check(assistantRuntimeLabel('updating', 70_000) === '小知正在更新 · 1 分 10 秒',
   '本地事务执行时应明确展示更新状态');
 check(assistantRuntimeLabel('answering', 72_000) === '小知正在回答 · 1 分 12 秒',
@@ -128,17 +137,19 @@ check(assistantStageLineLabel('planning', 8_500) === '整理处理方案 8 秒',
 
 const timeline = [
   { stage: 'planning' as const, at: 1_000 },
-  { stage: 'reading' as const, at: 2_000 },
-  { stage: 'planning' as const, at: 5_000 },
-  { stage: 'updating' as const, at: 11_000 },
-  { stage: 'answering' as const, at: 12_000 },
+  { stage: 'searching' as const, at: 2_000 },
+  { stage: 'reading' as const, at: 4_000 },
+  { stage: 'planning' as const, at: 7_000 },
+  { stage: 'updating' as const, at: 13_000 },
+  { stage: 'answering' as const, at: 14_000 },
 ];
 const mergedStages = assistantStageDurationsFromTimeline(timeline, 20_000);
-check(mergedStages.thinkingMs === 7_000 && mergedStages.readingMs === 3_000 && mergedStages.updatingMs === 1_000,
+check(mergedStages.thinkingMs === 7_000 && mergedStages.searchingMs === 2_000
+  && mergedStages.readingMs === 3_000 && mergedStages.updatingMs === 1_000,
   '同阶段多段时间线必须合并累加，忽略回答与收尾');
 
-check(assistantStageSummaryLabel({ readingMs: 3_000, thinkingMs: 8_000, updatingMs: 1_000 })
-  === '读取 3 秒 · 思考 8 秒 · 更新 1 秒',
+check(assistantStageSummaryLabel({ readingMs: 3_000, searchingMs: 2_000, thinkingMs: 8_000, updatingMs: 1_000 })
+  === '读取 3 秒 · 搜索 2 秒 · 思考 8 秒 · 更新 1 秒',
   '落定摘要应按阶段顺序拼接实际耗时');
 check(assistantStageSummaryLabel({ thinkingMs: 6_000 }) === '思考了 6 秒',
   '纯聊天轮应退化为思考了 X 秒');
@@ -151,6 +162,14 @@ check(assistantStageSummaryLabel({ readingMs: 3_000, thinkingMs: 8_000 })
   '未发生的阶段不得出现在摘要行');
 check(assistantCompletedRuntimeLabel(84_000) === '用时 1 分 24 秒',
   '完成后应弱化展示本轮总用时');
+check(assistantWebSourcesLabel(3) === '搜索来源 3', '来源入口应显示实际数量并默认由组件折叠');
+check(safeAssistantWebSourceUrl('https://example.com/doc#part') === 'https://example.com/doc#part',
+  'HTTP(S) 来源应允许交给系统浏览器打开');
+check(safeAssistantWebSourceUrl('file:///etc/passwd') === null
+  && safeAssistantWebSourceUrl('https://user:pass@example.com') === null,
+  '本地协议或带凭据的来源不得打开');
+check(assistantWebSourceHost({ title: '示例', url: 'https://www.example.com/a', position: 0 }) === 'example.com',
+  '展开来源时应显示简洁站点域名');
 const todayAtNoon = new Date(2026, 8, 15, 12, 0).getTime();
 const yesterdayAtNoon = new Date(2026, 8, 14, 12, 0).getTime();
 const sameYear = new Date(2026, 5, 8, 9, 5).getTime();
@@ -176,6 +195,17 @@ check(!shouldFollowAssistantEnd({ contentHeight: 1200, viewportHeight: 600, offs
   '用户上滑阅读历史时不得强制拉回末端');
 check(shouldFollowAssistantEnd({ contentHeight: 400, viewportHeight: 600, offsetY: 0 }),
   '内容不足一屏时应视为位于末端');
+check(assistantComposerElevation({ contentHeight: 400, viewportHeight: 600, offsetY: 0 }) === 0,
+  '内容不足一屏时输入框不得凭空产生悬浮阴影');
+check(assistantComposerElevation({ contentHeight: 1200, viewportHeight: 600, offsetY: 600 }) === 0,
+  '停在最新消息时输入框应保持干净');
+const partialComposerElevation = assistantComposerElevation({ contentHeight: 1200, viewportHeight: 600, offsetY: 540 });
+check(partialComposerElevation > 0 && partialComposerElevation < 1,
+  '下拉离开最新位置时阴影应连续渐变而不是突然出现');
+check(assistantComposerElevation({ contentHeight: 1200, viewportHeight: 600, offsetY: 420 }) === 1,
+  '深入阅读历史消息时输入框应显示完整悬浮层次');
+check(assistantMessageSurface('user') === 'user-bubble', '用户消息应使用品牌色气泡');
+check(assistantMessageSurface('assistant') === 'assistant-bubble', '小知最终回复与处理结果应共用回复气泡');
 
 const firstTodoIntent = assistantTodoNavigationIntent('all', 'todo-long', '');
 check(firstTodoIntent?.isNew && firstTodoIntent.view === 'all', '新的全部待办跳链应被首次消费');

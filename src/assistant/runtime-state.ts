@@ -1,4 +1,4 @@
-export type AssistantRuntimeStage = 'reading' | 'planning' | 'updating' | 'answering' | 'finalizing';
+export type AssistantRuntimeStage = 'reading' | 'searching' | 'planning' | 'updating' | 'answering' | 'finalizing';
 
 export function formatAssistantRuntimeDuration(elapsedMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
@@ -11,6 +11,8 @@ export function formatAssistantRuntimeDuration(elapsedMs: number): string {
 export function assistantRuntimeLabel(stage: AssistantRuntimeStage, elapsedMs: number): string {
   const action = stage === 'reading'
     ? '小知正在读取事件和待办'
+    : stage === 'searching'
+      ? '小知正在搜索网页'
     : stage === 'planning'
       ? '小知正在整理处理方案'
       : stage === 'updating'
@@ -28,6 +30,7 @@ export function assistantCompletedRuntimeLabel(elapsedMs: number): string {
 /** 落定后按阶段汇总的实际耗时；缺省字段表示该阶段未发生。 */
 export interface AssistantStageDurations {
   readingMs?: number;
+  searchingMs?: number;
   thinkingMs?: number;
   updatingMs?: number;
 }
@@ -39,6 +42,7 @@ export interface AssistantStageTimelineEntry {
 
 const STAGE_DISPLAY_NAMES: Record<AssistantRuntimeStage, string> = {
   reading: '读取事件和待办',
+  searching: '搜索网页',
   planning: '整理处理方案',
   updating: '更新',
   answering: '回答',
@@ -64,6 +68,7 @@ export function assistantStageDurationsFromTimeline(
   });
   const durations: AssistantStageDurations = {};
   if (sums.has('reading')) durations.readingMs = sums.get('reading');
+  if (sums.has('searching')) durations.searchingMs = sums.get('searching');
   if (sums.has('planning')) durations.thinkingMs = sums.get('planning');
   if (sums.has('updating')) durations.updatingMs = sums.get('updating');
   return durations;
@@ -80,6 +85,9 @@ export function assistantStageSummaryLabel(
   const parts: string[] = [];
   if (durations?.readingMs && durations.readingMs >= 1000) {
     parts.push(`读取 ${formatAssistantRuntimeDuration(durations.readingMs)}`);
+  }
+  if (durations?.searchingMs && durations.searchingMs >= 1000) {
+    parts.push(`搜索 ${formatAssistantRuntimeDuration(durations.searchingMs)}`);
   }
   const thinkingMs = durations?.thinkingMs ?? fallbackThinkingMs;
   if (thinkingMs && thinkingMs >= 1000) {

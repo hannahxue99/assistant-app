@@ -49,6 +49,19 @@ export const assistantSchema = `
   CREATE INDEX IF NOT EXISTS idx_assistant_messages_segment
     ON assistant_messages(segment_id, created_at, id);
 
+  CREATE TABLE IF NOT EXISTS assistant_web_sources (
+    id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    url TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE(request_id, url),
+    FOREIGN KEY(request_id) REFERENCES assistant_requests(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_assistant_web_sources_request
+    ON assistant_web_sources(request_id, position, id);
+
   CREATE TABLE IF NOT EXISTS assistant_reasoning (
     request_id TEXT PRIMARY KEY,
     content TEXT NOT NULL,

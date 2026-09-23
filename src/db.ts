@@ -46,6 +46,7 @@ const DEFAULT_SETTINGS: Settings = {
   llmBaseUrl: 'https://api.deepseek.com/v1',
   llmKey: '',
   llmModel: 'deepseek-chat',
+  webSearchEnabled: true,
 };
 
 const DEFAULT_PROFILE: Profile = {
@@ -119,7 +120,8 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
       llm_enabled INTEGER NOT NULL DEFAULT 0,
       llm_base_url TEXT NOT NULL DEFAULT 'https://api.deepseek.com/v1',
       llm_key TEXT NOT NULL DEFAULT '',
-      llm_model TEXT NOT NULL DEFAULT 'deepseek-chat'
+      llm_model TEXT NOT NULL DEFAULT 'deepseek-chat',
+      web_search_enabled INTEGER NOT NULL DEFAULT 1
     );
     INSERT OR IGNORE INTO settings (id) VALUES (1);
 
@@ -179,6 +181,11 @@ async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
   await database.execAsync(assistantActionSchema);
   await ensureAssistantOperationSchema(database);
   await database.execAsync(assistantMemorySchema);
+
+  const settingsColumns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(settings)');
+  if (!settingsColumns.some(column => column.name === 'web_search_enabled')) {
+    await database.execAsync('ALTER TABLE settings ADD COLUMN web_search_enabled INTEGER NOT NULL DEFAULT 1;');
+  }
 
   const requestColumns = await database.getAllAsync<{ name: string }>('PRAGMA table_info(assistant_requests)');
   if (!requestColumns.some(column => column.name === 'error_code')) {
@@ -1034,14 +1041,15 @@ export async function getSettings(): Promise<Settings> {
     llmBaseUrl: r.llm_base_url,
     llmKey: r.llm_key,
     llmModel: r.llm_model,
+    webSearchEnabled: r.web_search_enabled !== 0,
   };
 }
 
 export async function saveSettings(s: Settings): Promise<void> {
   const d = await getDb();
   await d.runAsync(
-    `UPDATE settings SET llm_enabled=?, llm_base_url=?, llm_key=?, llm_model=? WHERE id=1`,
-    s.llmEnabled ? 1 : 0, s.llmBaseUrl, s.llmKey, s.llmModel,
+    `UPDATE settings SET llm_enabled=?, llm_base_url=?, llm_key=?, llm_model=?, web_search_enabled=? WHERE id=1`,
+    s.llmEnabled ? 1 : 0, s.llmBaseUrl, s.llmKey, s.llmModel, s.webSearchEnabled === false ? 0 : 1,
   );
 }
 

@@ -43,7 +43,7 @@ function load(file) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText;
   vm.runInNewContext(code, {
-    exports, Date, Promise, Set, Map, JSON, Math, console, setTimeout, clearTimeout,
+    exports, Date, Promise, Set, Map, JSON, Math, URL, console, setTimeout, clearTimeout,
     require(name) {
       if (name === 'expo-sqlite') return { openDatabaseAsync: async () => adapter };
       const base = path.posix.dirname(normalized);
@@ -66,6 +66,7 @@ function count(table) {
 function clearFacts() {
   sqlite.exec(`
     DELETE FROM assistant_reasoning;
+    DELETE FROM assistant_web_sources;
     DELETE FROM assistant_operations;
     DELETE FROM assistant_object_relations;
     DELETE FROM assistant_memory_sources;
@@ -131,6 +132,7 @@ async function main() {
     INSERT INTO assistant_requests VALUES ('request-1','message-user-1','pending',NULL,1,1200,1500);
     INSERT INTO assistant_messages VALUES ('message-user-1','request-1','user','帮我安排报告','text','sending','segment-1',NULL,'{}',1200,1200);
     INSERT INTO assistant_messages VALUES ('message-assistant-1','request-1','assistant','已经安排。','assistant','saved','segment-1',NULL,'{"thinkingMs":200}',1500,1500);
+    INSERT INTO assistant_web_sources VALUES ('request-1:web:0','request-1',0,'报告写作指南','https://example.com/report',1500);
     INSERT INTO assistant_messages VALUES ('legacy-legacy-entry-1','legacy-legacy-entry-1','user','旧日记原文','legacy','saved','legacy-history','legacy-entry-1','{}',800,800);
     INSERT INTO assistant_reasoning VALUES ('request-1','private reasoning',1200,1400,1400);
     INSERT INTO assistant_events VALUES ('event-1','报告','撰写中','active',NULL,1,1300,1500);
@@ -158,6 +160,8 @@ async function main() {
   const envelope = format.parseBackupV3Markdown(markdown);
   assert.equal(envelope.payload.entries.length, 2, 'old entries remain canonical exported facts');
   assert.equal(envelope.payload.assistantMessages.length, 2);
+  assert.equal(envelope.payload.assistantWebSources.length, 1);
+  assert.equal(envelope.payload.assistantWebSources[0].url, 'https://example.com/report');
   assert.ok(!envelope.payload.assistantMessages.some(item => item.id === 'legacy-legacy-entry-1'));
   assert.ok(!envelope.payload.conversationSegments.some(item => item.id === 'legacy-history'));
   assert.equal(envelope.payload.events.length, 1);
@@ -186,6 +190,7 @@ async function main() {
   assert.equal(result.operationSkipped, 1);
   assert.equal(count('entries'), 2);
   assert.equal(count('assistant_messages'), 2);
+  assert.equal(count('assistant_web_sources'), 1);
   assert.equal(count('assistant_events'), 1);
   assert.equal(count('assistant_object_relations'), 2);
   assert.equal(count('assistant_operations'), 1);
@@ -196,6 +201,7 @@ async function main() {
   assert.equal(repeated.added, 0);
   assert.equal(count('entries'), 2);
   assert.equal(count('assistant_messages'), 2);
+  assert.equal(count('assistant_web_sources'), 1);
 
   clearFacts();
   const localEntry = { ...entry, summary: '本地较新', revisionAt: 5000, updatedAt: 5000 };

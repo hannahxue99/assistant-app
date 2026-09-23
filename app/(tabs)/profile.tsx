@@ -1,7 +1,7 @@
 /**
  * 「我的」页 — 长期记忆 + 助手与同步 + 待办通知 + 数据管理。
  */
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -55,6 +55,7 @@ import { importLegacyExport, previewLegacyImport } from '../../src/assistant/leg
 import { migrateLegacyEntriesToAssistantHistory } from '../../src/assistant/migration';
 import { migrateLegacyTopicsToEvents } from '../../src/assistant/event-migration';
 import { memorySectionState } from '../../src/assistant/memory-ui';
+import { webSearchSettingsState } from '../../src/assistant/web-search';
 import {
   editMemory,
   forgetMemory,
@@ -369,6 +370,14 @@ export default function ProfileScreen() {
     : settings.llmKey
       ? { label: '已开启', warn: false }
       : { label: '未配置', warn: true };
+  const webSearchState = settings ? webSearchSettingsState(settings) : null;
+  const webSearchStatus = !settings
+    ? { label: '读取中', warn: false }
+    : settings.webSearchEnabled === false
+      ? { label: '已关闭', warn: false }
+      : webSearchState?.status === 'ready'
+        ? { label: '已开启', warn: false }
+        : { label: '暂不可用', warn: true };
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
@@ -397,6 +406,15 @@ export default function ProfileScreen() {
             <Text style={styles.rowLabel}>理解引擎</Text>
             <Text style={[styles.rowValue, llmStatus.warn && { color: theme.colors.red }]}>
               {llmStatus.label} ›
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.settingsRow, styles.dataRowBorder]}
+            onPress={() => router.push('/settings/web-search' as Href)}
+          >
+            <Text style={styles.rowLabel}>联网搜索</Text>
+            <Text style={[styles.rowValue, webSearchStatus.warn && { color: theme.colors.red }]}>
+              {webSearchStatus.label} ›
             </Text>
           </Pressable>
           <CalendarSyncSetting embedded topDividerStyle={styles.dataRowBorder} />

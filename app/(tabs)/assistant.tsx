@@ -21,6 +21,7 @@ import {
   mergeAssistantMessages,
   pendingAssistantRequestId,
   shouldFollowAssistantEnd,
+  assistantComposerElevation,
   shouldScrollAssistantOnFocus,
 } from '../../src/assistant/ui-state';
 import { cancelAssistantTurn, retryAssistantTurn, sendAssistantTurn } from '../../src/assistant/orchestrator';
@@ -89,6 +90,8 @@ export default function AssistantScreen() {
   const [stoppingRequestId, setStoppingRequestId] = useState<string | null>(null);
   const [undoErrors, setUndoErrors] = useState<Record<string, string>>({});
   const [streamingReplies, setStreamingReplies] = useState<Record<string, AssistantMessage>>({});
+  const [composerHeight, setComposerHeight] = useState(68);
+  const [composerElevation, setComposerElevation] = useState(0);
 
   const displayMessages = useMemo(() => mergeAssistantMessages(messages, Object.values(streamingReplies)), [messages, streamingReplies]);
   const requestStartedAt = useMemo(() => new Map(
@@ -526,7 +529,11 @@ export default function AssistantScreen() {
                 />
               </View>
             )}
-            contentContainerStyle={[styles.listContent, messages.length === 0 && styles.emptyList]}
+            contentContainerStyle={[
+              styles.listContent,
+              { paddingBottom: composerHeight + 18 },
+              messages.length === 0 && styles.emptyList,
+            ]}
             ListEmptyComponent={<AssistantEmptyState />}
             ListHeaderComponent={olderLoad === 'loading' ? (
               <ActivityIndicator color={theme.colors.accent} style={styles.olderSpinner} />
@@ -546,23 +553,35 @@ export default function AssistantScreen() {
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
             onScroll={({ nativeEvent }) => {
-              followEndRef.current = shouldFollowAssistantEnd({
+              const metrics = {
                 contentHeight: nativeEvent.contentSize.height,
                 viewportHeight: nativeEvent.layoutMeasurement.height,
                 offsetY: nativeEvent.contentOffset.y,
-              });
+              };
+              followEndRef.current = shouldFollowAssistantEnd(metrics);
+              setComposerElevation(assistantComposerElevation(metrics));
               if (nativeEvent.contentOffset.y < 32) void loadOlder();
             }}
             scrollEventThrottle={80}
           />
         )}
 
-        <View style={styles.composerWrap}>
+        <View
+          style={styles.composerWrap}
+          onLayout={({ nativeEvent }) => setComposerHeight(nativeEvent.layout.height)}
+        >
+          {composerElevation > 0 ? (
+            <View
+              pointerEvents="none"
+              style={[styles.composerShadowFade, { opacity: composerElevation }]}
+            />
+          ) : null}
           <AssistantComposer
             onSend={send}
             onStop={() => stopCurrentTurn(activeRequestId)}
             disabled={composerDisabled}
             processing={composerProcessing || stoppingRequestId !== null}
+            elevation={composerElevation}
           />
         </View>
       </KeyboardAvoidingView>
@@ -586,7 +605,7 @@ const styles = StyleSheet.create({
   contextTitle: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold, marginTop: 1 },
   contextClose: { width: theme.touchTarget, height: theme.touchTarget, alignItems: 'center', justifyContent: 'center' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  listContent: { paddingHorizontal: theme.spacing.md, paddingTop: 5, paddingBottom: 12 },
+  listContent: { paddingHorizontal: theme.spacing.md, paddingTop: 5 },
   emptyList: { flexGrow: 1 },
   olderSpinner: { marginVertical: 8 },
   olderError: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 },
@@ -594,6 +613,14 @@ const styles = StyleSheet.create({
   olderRetryText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
   dateSeparatorWrap: { alignItems: 'center', paddingTop: 7, paddingBottom: 3 },
   dateSeparatorText: { color: theme.colors.textDim, fontSize: 11, lineHeight: 17, paddingHorizontal: 9, paddingVertical: 2, borderRadius: 11, backgroundColor: theme.colors.card },
-  composerWrap: { paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6 },
+  composerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6 },
+  composerShadowFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 5,
+    bottom: 0,
+    experimental_backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.58) 54%, #FFFFFF 100%)',
+  },
   pressed: { opacity: 0.72 },
 });

@@ -34,10 +34,14 @@ export function AssistantActionReceipt({
   const allUndone = state.operations.every(operation => operation.status === 'undone');
 
   return (
-    <View style={styles.card} accessibilityLabel="小知已处理事项">
+    <View style={styles.wrap} accessibilityLabel="小知已处理事项">
       <View style={styles.header}>
         <View style={styles.headerLabel}>
-          <Ionicons name={allUndone ? 'arrow-undo-outline' : 'sparkles-outline'} size={16} color={theme.colors.accent} />
+          <Ionicons
+            name={allUndone ? 'arrow-undo-outline' : 'checkmark-circle-outline'}
+            size={17}
+            color={allUndone ? theme.colors.textDim : theme.colors.green}
+          />
           <Text style={styles.title}>{allUndone ? '已撤销' : '已处理'}</Text>
         </View>
         {state.canUndo ? (
@@ -56,7 +60,7 @@ export function AssistantActionReceipt({
         ) : null}
       </View>
 
-      {state.groups.map((group, index) => {
+      {state.groups.map((group) => {
         const operation = group.primaryOperation;
         const target = group.target;
         return (
@@ -67,11 +71,11 @@ export function AssistantActionReceipt({
             disabled={!target}
             hitSlop={target ? 4 : undefined}
             onPress={() => { if (target) onNavigate(target); }}
-            style={({ pressed }) => [styles.row, index > 0 && styles.rowSpacing, pressed && target && styles.pressed]}
+            style={({ pressed }) => [styles.row, pressed && target && styles.pressed]}
           >
             <Ionicons
               name={iconName(operation)}
-              size={18}
+              size={16}
               color={operation.status === 'undone' ? theme.colors.textDim : theme.colors.green}
             />
             <View style={styles.summaryWrap}>
@@ -92,23 +96,27 @@ export function AssistantActionReceipt({
 }
 
 const styles = StyleSheet.create({
-  card: {
+  wrap: {
     width: '100%',
-    marginTop: 7,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#ECDCCF',
-    backgroundColor: '#FFF9F4',
+    paddingHorizontal: 11,
+    paddingTop: 6,
+    paddingBottom: 1,
+    borderRadius: 14,
+    backgroundColor: theme.colors.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.border,
+    shadowColor: '#302923',
+    shadowOpacity: 0.045,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  header: { minHeight: 26, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  headerLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  header: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 9 },
+  headerLabel: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   title: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
-  undoButton: { minHeight: 26, minWidth: 72, alignItems: 'flex-end', justifyContent: 'center' },
+  undoButton: { minHeight: 26, justifyContent: 'center' },
   undoText: { color: theme.colors.textDim, fontSize: 12 },
-  row: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 7 },
-  rowSpacing: { marginTop: 2 },
+  row: { minHeight: 32, paddingVertical: 3, flexDirection: 'row', alignItems: 'center', gap: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
   summaryWrap: { flex: 1, paddingVertical: 1, gap: 0 },
   summary: { color: theme.colors.text, fontSize: theme.font.small, lineHeight: 18 },
   undone: { color: theme.colors.textDim, textDecorationLine: 'line-through' },

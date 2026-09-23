@@ -9,6 +9,7 @@ import type {
   AssistantMessageCursor,
   AssistantMessageSource,
   AssistantSegmentDecision,
+  AssistantWebSource,
   ConversationSegment,
 } from './types';
 
@@ -32,6 +33,7 @@ type CompleteTurnInput = {
   segment: AssistantSegmentDecision;
   createdAt?: number;
   stageDurations?: AssistantMessage['stageDurations'];
+  webSources?: AssistantWebSource[];
 };
 
 function makeId(prefix: string, now: number): string {
@@ -74,6 +76,38 @@ function rowToSegment(row: any): ConversationSegment {
     endedAt: row.ended_at ?? null,
     updatedAt: row.updated_at,
   };
+}
+
+function rowToWebSource(row: any): AssistantWebSource {
+  return {
+    title: String(row.title),
+    url: String(row.url),
+    position: Number(row.position),
+  };
+}
+
+async function attachWebSources(
+  database: SQLiteDatabase,
+  messages: AssistantMessage[],
+): Promise<AssistantMessage[]> {
+  const requestIds = [...new Set(messages
+    .filter(message => message.role === 'assistant')
+    .map(message => message.requestId))];
+  if (!requestIds.length) return messages;
+  const placeholders = requestIds.map(() => '?').join(',');
+  const rows = await database.getAllAsync<any>(
+    `SELECT * FROM assistant_web_sources
+     WHERE request_id IN (${placeholders})
+     ORDER BY request_id, position, id`,
+    ...requestIds,
+  );
+  const byRequest = new Map<string, AssistantWebSource[]>();
+  for (const row of rows) {
+    byRequest.set(row.request_id, [...(byRequest.get(row.request_id) ?? []), rowToWebSource(row)]);
+  }
+  return messages.map(message => message.role === 'assistant'
+    ? { ...message, webSources: byRequest.get(message.requestId) ?? [] }
+    : message);
 }
 
 async function currentSegment(txn: SQLiteDatabase, now: number): Promise<ConversationSegment> {
@@ -167,10 +201,11 @@ export async function updateAssistantReply(
       "UPDATE assistant_messages SET content=?, updated_at=? WHERE request_id=? AND role='assistant'",
       content, updatedAt, requestId,
     );
-    return rowToMessage(await txn.getFirstAsync<any>(
+    const message = rowToMessage(await txn.getFirstAsync<any>(
       "SELECT * FROM assistant_messages WHERE request_id=? AND role='assistant'",
       requestId,
     ));
+    return (await attachWebSources(txn, [message]))[0];
   });
 }
 
@@ -185,7 +220,7 @@ export async function completeTurnWithDatabase(
       "SELECT * FROM assistant_messages WHERE request_id=? AND role='assistant'",
       input.requestId,
     );
-    if (existing) return rowToMessage(existing);
+    if (existing) return (await attachWebSources(txn, [rowToMessage(existing)]))[0];
 
     const request = await txn.getFirstAsync<any>('SELECT * FROM assistant_requests WHERE id=?', input.requestId);
     if (!request) throw new Error('找不到对应请求');
@@ -244,7 +279,16 @@ export async function completeTurnWithDatabase(
       "UPDATE assistant_requests SET status='succeeded', error_code=NULL, updated_at=? WHERE id=?",
       createdAt, input.requestId,
     );
-    return rowToMessage(await txn.getFirstAsync<any>('SELECT * FROM assistant_messages WHERE id=?', replyId));
+    for (const [position, source] of (input.webSources ?? []).entries()) {
+      await txn.runAsync(
+        `INSERT OR IGNORE INTO assistant_web_sources
+         (id, request_id, position, title, url, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        `${input.requestId}:web:${position}`, input.requestId, position,
+        source.title, source.url, createdAt,
+      );
+    }
+    const message = rowToMessage(await txn.getFirstAsync<any>('SELECT * FROM assistant_messages WHERE id=?', replyId));
+    return (await attachWebSources(txn, [message]))[0];
 }
 
 export async function failTurn(requestId: string, errorCode: string, updatedAt = Date.now()): Promise<void> {
@@ -354,7 +398,7 @@ export async function getMessage(id: string): Promise<AssistantMessage | null> {
        WHERE m.id=?`,
       id,
     );
-    return row ? rowToMessage(row) : null;
+    return row ? (await attachWebSources(database, [rowToMessage(row)]))[0] : null;
   });
 }
 
@@ -371,13 +415,15 @@ export async function getRequestState(requestId: string): Promise<AssistantReque
       "SELECT * FROM assistant_messages WHERE request_id=? AND role='assistant'",
       requestId,
     );
+    const messages = await attachWebSources(database, [
+      rowToMessage({ ...userRow, request_error_code: request.error_code }),
+      ...(assistantRow ? [rowToMessage({ ...assistantRow, request_error_code: request.error_code })] : []),
+    ]);
     return {
       id: request.id,
       status: request.status,
-      userMessage: rowToMessage({ ...userRow, request_error_code: request.error_code }),
-      assistantMessage: assistantRow
-        ? rowToMessage({ ...assistantRow, request_error_code: request.error_code })
-        : null,
+      userMessage: messages[0],
+      assistantMessage: assistantRow ? messages[1] : null,
     };
   });
 }
@@ -412,7 +458,7 @@ export async function listMessages(options: {
          ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
         limit,
       );
-    return rows.reverse().map(rowToMessage);
+    return attachWebSources(database, rows.reverse().map(rowToMessage));
   });
 }
 

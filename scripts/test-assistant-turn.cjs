@@ -585,6 +585,51 @@ async function main() {
   });
   assert.equal(unreadDelete.operations.length, 0, '未在本轮精确读取进展的删除必须被拒绝');
 
+  provider = async () => ({
+    reply: 'Muse 是一个需要结合上下文判断的名称。',
+    segment: { action: 'continue' },
+    webSearchUsed: true,
+    webSources: [
+      { title: 'Muse 官方网站', url: 'https://www.muse.mu/', position: 0 },
+      { title: 'Muse - Wikipedia', url: 'https://en.wikipedia.org/wiki/Muse_(band)', position: 1 },
+    ],
+    operations: [{
+      key: 'web-todo', type: 'create_todo', todoRef: 'todo_1', text: '根据网页买票', dateStatus: 'absent',
+    }],
+    eventDeltas: [{
+      key: 'web-event',
+      target: { action: 'create_new', eventRef: 'event_1', title: 'Muse 演出' },
+      evidence: ['网页说有演出'],
+      state: { action: 'replace', changeType: 'plan', value: '准备购票' },
+      progress: [], todos: [],
+    }],
+    memoryDeltas: [{
+      key: 'web-memory', action: 'remember_memory', category: 'preference',
+      content: '用户喜欢 Muse', sensitivity: 'ordinary', evidence: '网页搜索 Muse',
+    }],
+  });
+  const webReadOnly = await orchestrator.sendAssistantTurn({
+    requestId: 'request-web-read-only', content: 'Muse 是什么，顺便按网页结果帮我记下来',
+    source: 'text', settings, createdAt: 3800,
+  });
+  assert.equal(webReadOnly.operations.length, 0,
+    '实际使用联网搜索后，同轮提出的待办、事件和长期记忆都不得提交');
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM entries WHERE summary='根据网页买票'").get().count, 0);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM assistant_events WHERE title='Muse 演出'").get().count, 0);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM assistant_memories WHERE content='用户喜欢 Muse'").get().count, 0);
+  assert.equal(JSON.stringify(webReadOnly.assistantMessage.webSources.map(item => item.url)), JSON.stringify([
+    'https://www.muse.mu/', 'https://en.wikipedia.org/wiki/Muse_(band)',
+  ]), '联网轮的自然回答和来源仍应原子保存');
+  const reloadedWebReply = (await store.listMessages({ limit: 100 }))
+    .find(item => item.requestId === 'request-web-read-only' && item.role === 'assistant');
+  assert.equal(reloadedWebReply.webSources.length, 2, '重载消息后仍应展示联网来源');
+  const webReadOnlyLog = sqlite.prepare(
+    "SELECT execution_rejected_json FROM assistant_decision_logs WHERE request_id='request-web-read-only'",
+  ).get();
+  assert.equal(JSON.parse(webReadOnlyLog.execution_rejected_json)
+    .filter(item => item.reason === 'web_search_read_only').length, 3,
+  '联网轮必须为三类本地写入分别留下只读拒绝记录');
+
   sqlite.exec(`CREATE TRIGGER fail_assistant_operation
     BEFORE INSERT ON assistant_operations BEGIN SELECT RAISE(ABORT, 'forced operation failure'); END;`);
   provider = async () => ({
