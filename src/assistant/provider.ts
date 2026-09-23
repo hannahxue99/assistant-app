@@ -15,6 +15,11 @@ import {
   type AssistantReadSet,
   type AssistantReadToolExecution,
 } from './data-tools';
+import {
+  ASSISTANT_WEB_SEARCH_TOOL,
+  type AssistantWebSearchExecution,
+  type AssistantWebSource,
+} from './web-search';
 
 export type AssistantProviderErrorCode = 'missing-key' | 'timeout' | 'network' | 'provider' | 'invalid-response' | 'cancelled';
 
@@ -71,9 +76,11 @@ export type AssistantProviderResult = AssistantTurnOutput & {
   providerMetadata: AssistantProviderMetadata;
   reasoning: AssistantProviderReasoning | null;
   grounding: AssistantReadSet;
+  webSearchUsed: boolean;
+  webSources: AssistantWebSource[];
 };
 
-export type AssistantProviderProgressStage = 'thinking' | 'reading' | 'answering';
+export type AssistantProviderProgressStage = 'thinking' | 'reading' | 'searching' | 'answering';
 
 export interface AssistantProviderTimeouts {
   firstByteMs: number;
@@ -382,6 +389,7 @@ export async function requestAssistantTurn(input: {
   onProgress?: (stage: AssistantProviderProgressStage) => void;
   timeouts?: Partial<AssistantProviderTimeouts>;
   executeReadTool?: (call: ProviderToolCall) => Promise<AssistantReadToolExecution>;
+  executeWebSearch?: (call: ProviderToolCall) => Promise<AssistantWebSearchExecution>;
 }): Promise<AssistantProviderResult> {
   if (!input.settings.llmEnabled || !input.settings.llmKey) {
     throw new AssistantProviderError('missing-key', '理解引擎尚未开启或未配置 API Key');
@@ -398,6 +406,7 @@ export async function requestAssistantTurn(input: {
       timeZone: input.timeZone,
   });
   const toolExecutions: AssistantReadToolExecution[] = [];
+  const webSearchExecutions: AssistantWebSearchExecution[] = [];
   const maxReadRounds = 6;
   const maxToolCalls = 12;
   let readRounds = 0;
@@ -410,6 +419,10 @@ export async function requestAssistantTurn(input: {
     while (true) {
       const attemptStartedAt = Date.now();
       input.onProgress?.('thinking');
+      const tools = [
+        ...(input.executeReadTool ? ASSISTANT_READ_TOOLS : []),
+        ...(input.executeWebSearch ? [ASSISTANT_WEB_SEARCH_TOOL] : []),
+      ];
       completion = await requestCompletion({
         settings: input.settings,
         body: JSON.stringify({
@@ -418,7 +431,7 @@ export async function requestAssistantTurn(input: {
           thinking: { type: 'enabled' },
           reasoning_effort: 'high',
           response_format: { type: 'json_object' },
-          ...(input.executeReadTool && !toolsDisabled ? { tools: ASSISTANT_READ_TOOLS, tool_choice: 'auto' } : {}),
+          ...(tools.length && !toolsDisabled ? { tools, tool_choice: 'auto' } : {}),
           stream: true,
           stream_options: { include_usage: true },
         }),
@@ -453,7 +466,10 @@ export async function requestAssistantTurn(input: {
         }
         break;
       }
-      if (!input.executeReadTool) {
+      const unsupportedCall = completion.toolCalls.find(call => (
+        call.name === 'web_search' ? !input.executeWebSearch : !input.executeReadTool
+      ));
+      if (unsupportedCall) {
         throw new AssistantProviderError('invalid-response', '理解引擎请求了未启用的数据工具');
       }
       if (toolsDisabled) break;
@@ -499,9 +515,19 @@ export async function requestAssistantTurn(input: {
         })),
       });
       for (const call of completion.toolCalls) {
-        input.onProgress?.('reading');
-        const execution = await input.executeReadTool(call);
-        toolExecutions.push(execution);
+        const execution = call.name === 'web_search'
+          ? await (async () => {
+            input.onProgress?.('searching');
+            const searched = await input.executeWebSearch!(call);
+            webSearchExecutions.push(searched);
+            return searched;
+          })()
+          : await (async () => {
+            input.onProgress?.('reading');
+            const read = await input.executeReadTool!(call);
+            toolExecutions.push(read);
+            return read;
+          })();
         messages.push({
           role: 'tool',
           tool_call_id: call.id,
@@ -538,9 +564,14 @@ export async function requestAssistantTurn(input: {
       ...truncationWarnings(output.truncations),
     ])];
     input.onReplyText?.(output.reply);
+    const webSources = [...new Map(
+      webSearchExecutions.flatMap(item => item.sources).map(source => [source.url, source] as const),
+    ).values()].map((source, position) => ({ ...source, position }));
     return {
       ...output,
       grounding: mergeAssistantReadSets(toolExecutions),
+      webSearchUsed: webSearchExecutions.length > 0,
+      webSources,
       reasoning: completion.reasoningContent.trim()
         ? {
           content: completion.reasoningContent,

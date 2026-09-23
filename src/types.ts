@@ -69,6 +69,8 @@ export interface Settings {
   llmBaseUrl: string;     // OpenAI 兼容地址，如 https://api.deepseek.com/v1
   llmKey: string;         // 用户自己的 key，仅存本地
   llmModel: string;       // 模型名
+  /** 旧调用方可缺省；读取时按开启处理。 */
+  webSearchEnabled?: boolean; // 复用 DeepSeek 配置的服务端联网搜索
 }
 
 /** 主题聚合视图的分组 */

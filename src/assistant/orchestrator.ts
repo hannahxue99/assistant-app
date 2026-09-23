@@ -15,6 +15,11 @@ import {
   type AssistantReadToolExecution,
   type AssistantReadToolName,
 } from './data-tools';
+import {
+  executeDeepSeekWebSearch,
+  webSearchSettingsState,
+  type AssistantWebSearchExecution,
+} from './web-search';
 import { buildAssistantExecutionResult, fallbackReplyForExecution } from './execution-result';
 import { assistantStageDurationsFromTimeline, type AssistantRuntimeStage } from './runtime-state';
 import { getAssistantReasoning, type AssistantReasoning } from './reasoning-store';
@@ -272,6 +277,47 @@ async function runSavedTurn(input: {
       toolCallTrace.push(summarizeToolExecution(call, execution));
       return execution.toolCallId === call.id ? execution : { ...execution, toolCallId: call.id };
     };
+    const webSearchCache = new Map<string, Promise<AssistantWebSearchExecution>>();
+    const executeWebSearch = async (call: {
+      id: string;
+      name: string;
+      argumentsJson: string;
+    }): Promise<AssistantWebSearchExecution> => {
+      const cacheKey = call.argumentsJson;
+      let pending = webSearchCache.get(cacheKey);
+      if (!pending) {
+        pending = executeDeepSeekWebSearch({
+          call,
+          settings,
+          signal: input.signal,
+        }).catch((error: any) => {
+          if (error?.code === 'cancelled') throw error;
+          return {
+            toolCallId: call.id,
+            name: 'web_search' as const,
+            result: {
+              error: typeof error?.code === 'string' ? error.code : 'web_search_error',
+              message: error instanceof Error ? error.message : String(error),
+            },
+            sources: [],
+          };
+        });
+        webSearchCache.set(cacheKey, pending);
+      }
+      const execution = await pending;
+      const errorCode = typeof execution.result.error === 'string' ? execution.result.error : null;
+      toolCallTrace.push({
+        name: call.name,
+        argumentsJson: call.argumentsJson,
+        ok: !errorCode,
+        errorCode,
+        summary: errorCode
+          ? String(execution.result.message ?? '')
+          : `sources:${execution.sources.length}`,
+      });
+      return execution.toolCallId === call.id ? execution : { ...execution, toolCallId: call.id };
+    };
+    const webSearchEnabled = webSearchSettingsState(settings).enabled;
     const output = await requestAssistantTurn({
       settings,
       context,
@@ -280,9 +326,10 @@ async function runSavedTurn(input: {
       signal: input.signal,
       onReasoningText: input.onReasoningText,
       onProgress: (stage: AssistantProviderProgressStage) => emitProgress(
-        stage === 'reading' ? 'reading' : 'planning',
+        stage === 'reading' ? 'reading' : stage === 'searching' ? 'searching' : 'planning',
       ),
       executeReadTool,
+      ...(webSearchEnabled ? { executeWebSearch } : {}),
     });
     throwIfCancelled(input.signal);
     emitProgress('planning');
