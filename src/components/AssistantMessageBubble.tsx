@@ -15,6 +15,7 @@ import type { AssistantMessage } from '../assistant/types';
 import type { AssistantRuntimeStage } from '../assistant/runtime-state';
 import { theme } from '../theme';
 import { AssistantActionReceipt } from './AssistantActionReceipt';
+import { AssistantWebSources } from './AssistantWebSources';
 
 interface AssistantMessageBubbleProps {
   message: AssistantMessage;
@@ -163,6 +164,9 @@ export function AssistantMessageBubble({
             </Text>
           ) : null}
         </View>
+      ) : null}
+      {!isUser && !isStreaming && message.webSources?.length ? (
+        <AssistantWebSources sources={message.webSources} />
       ) : null}
       {!isUser && message.operations?.length ? (
         <View style={styles.receiptWrap}>

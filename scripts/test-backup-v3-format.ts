@@ -30,6 +30,10 @@ function payload(): BackupPayloadV3 {
       status: 'saved', segmentId: 'segment-1', legacyEntryId: null,
       stageDurations: { readingMs: 100, thinkingMs: 200, updatingMs: 50 }, createdAt: 1500, updatedAt: 1500,
     }],
+    assistantWebSources: [{
+      id: 'request-1:web:0', requestId: 'request-1', position: 0,
+      title: '报告写作指南', url: 'https://example.com/report', createdAt: 1500,
+    }],
     events: [{
       id: 'event-1', title: '报告', currentState: '撰写中', status: 'active', pinnedAt: null,
       revision: 1, createdAt: 1300, updatedAt: 1500,
@@ -95,6 +99,22 @@ check('V3 完整语义数据图可往返', () => {
     }
   }
   if (!markdown.includes('ASSISTANT_APP_EXPORT_V3')) throw new Error('missing V3 marker');
+});
+
+check('联网搜索上线前的 V3 备份仍可导入', () => {
+  const markdown = buildBackupV3Markdown('# 旧 V3', payload(), 2000);
+  const startToken = '<!-- ASSISTANT_APP_EXPORT_V3\n';
+  const endToken = '\nASSISTANT_APP_EXPORT_END -->';
+  const start = markdown.lastIndexOf(startToken) + startToken.length;
+  const end = markdown.indexOf(endToken, start);
+  const legacyEnvelope = JSON.parse(markdown.slice(start, end));
+  delete legacyEnvelope.payload.assistantWebSources;
+  delete legacyEnvelope.counts.assistantWebSources;
+  const legacyMarkdown = `${markdown.slice(0, start)}${JSON.stringify(legacyEnvelope)}${markdown.slice(end)}`;
+  const parsed = parseBackupV3Markdown(legacyMarkdown);
+  if (parsed.payload.assistantWebSources.length !== 0 || parsed.counts.assistantWebSources !== 0) {
+    throw new Error('旧 V3 缺少网页来源时应按空列表兼容');
+  }
 });
 
 check('V2 文件交给调用方继续按 V2 解析', () => {

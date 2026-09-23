@@ -5,6 +5,7 @@ import type { Entry } from '../types';
 import type {
   BackupAssistantMessage,
   BackupAssistantRequest,
+  BackupAssistantWebSource,
   BackupEventAlias,
   BackupPayloadV3,
   BackupV3ObjectKind,
@@ -68,6 +69,7 @@ export interface BackupV3ImportPlan {
   conversationSegments: BackupV3MergeDecision<ConversationSegment>[];
   assistantRequests: BackupV3MergeDecision<BackupAssistantRequest>[];
   assistantMessages: BackupV3MergeDecision<BackupAssistantMessage>[];
+  assistantWebSources: BackupV3MergeDecision<BackupAssistantWebSource>[];
   events: BackupV3MergeDecision<AssistantEvent>[];
   eventAliases: BackupV3MergeDecision<BackupEventAlias>[];
   eventUpdates: BackupV3MergeDecision<AssistantEventUpdate>[];
@@ -222,6 +224,26 @@ function requestAndMessageDecisions(
   return { requests, messages, skippedRequests };
 }
 
+function webSourceDecisions(
+  incoming: BackupAssistantWebSource[],
+  local: BackupAssistantWebSource[],
+  skippedRequests: Set<string>,
+): BackupV3MergeDecision<BackupAssistantWebSource>[] {
+  const localById = byId(local);
+  const localByRequestUrl = new Map(local.map(source => [`${source.requestId}:${source.url}`, source]));
+  return incoming.map(source => {
+    const existing = localById.get(source.id)
+      ?? localByRequestUrl.get(`${source.requestId}:${source.url}`)
+      ?? null;
+    if (skippedRequests.has(source.requestId)) {
+      return { action: 'skip-group', incoming: source, local: existing, reason: 'request_group_skipped' };
+    }
+    if (!existing) return { action: 'add', incoming: source, local: null, reason: 'missing_local' };
+    if (same(source, existing)) return { action: 'ignore', incoming: source, local: existing, reason: 'identical' };
+    return { action: 'keep-local', incoming: source, local: existing, reason: 'immutable_request_url_conflict' };
+  });
+}
+
 function effectiveById<T extends { id: string }>(decisions: BackupV3MergeDecision<T>[]): Map<string, T> {
   const result = new Map<string, T>();
   for (const decision of decisions) {
@@ -331,6 +353,11 @@ export function buildBackupV3ImportPlan(
   const entries = entryDecisions(incoming.entries, local.entries);
   const conversationSegments = segmentDecisions(incoming.conversationSegments, local.conversationSegments);
   const { requests: assistantRequests, messages: assistantMessages, skippedRequests } = requestAndMessageDecisions(incoming, local);
+  const assistantWebSources = webSourceDecisions(
+    incoming.assistantWebSources,
+    local.assistantWebSources,
+    skippedRequests,
+  );
   const events = eventDecisions(incoming.events, local.events);
   const eventAliases = immutableDecisions(incoming.eventAliases, local.eventAliases);
   const eventUpdates = immutableDecisions(incoming.eventUpdates, local.eventUpdates);
@@ -350,6 +377,7 @@ export function buildBackupV3ImportPlan(
   const decisionGroups: Array<[BackupV3ObjectKind, BackupV3MergeDecision<any>[]]> = [
     ['entries', entries], ['conversationSegments', conversationSegments], ['assistantRequests', assistantRequests],
     ['assistantMessages', assistantMessages], ['events', events], ['eventAliases', eventAliases],
+    ['assistantWebSources', assistantWebSources],
     ['eventUpdates', eventUpdates], ['objectRelations', objectRelations], ['memories', memories],
     ['memorySources', memorySources],
   ];
@@ -398,7 +426,7 @@ export function buildBackupV3ImportPlan(
   };
 
   return {
-    entries, conversationSegments, assistantRequests, assistantMessages, events, eventAliases,
+    entries, conversationSegments, assistantRequests, assistantMessages, assistantWebSources, events, eventAliases,
     eventUpdates, objectRelations, operations, memories, memorySources, conflicts, preview,
   };
 }

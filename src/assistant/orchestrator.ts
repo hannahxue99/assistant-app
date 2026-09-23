@@ -351,14 +351,19 @@ async function runSavedTurn(input: {
       readTodoIds,
       selectionMode: 'read-set',
     });
-    const eventDeltas = output.eventDeltas ?? [];
-    const memoryDeltas = output.memoryDeltas ?? [];
+    const proposedOperations = output.operations ?? [];
+    const proposedEventDeltas = output.eventDeltas ?? [];
+    const proposedMemoryDeltas = output.memoryDeltas ?? [];
+    // P0 联网轮严格只读：网页内容不能成为本地写入或长期记忆的授权来源。
+    const allowedOperations = output.webSearchUsed ? [] : proposedOperations;
+    const eventDeltas = output.webSearchUsed ? [] : proposedEventDeltas;
+    const memoryDeltas = output.webSearchUsed ? [] : proposedMemoryDeltas;
     const parseRejections = output.memoryRejections ?? [];
     await safelyLog(() => recordAssistantModelDecision({
       requestId: input.requestId,
-      operations: output.operations ?? [],
-      eventDeltas,
-      memoryDeltas,
+      operations: proposedOperations,
+      eventDeltas: proposedEventDeltas,
+      memoryDeltas: proposedMemoryDeltas,
       metadata: output.providerMetadata,
       toolReadEventIds: readEventIds,
       toolReadTodoIds: readTodoIds,
@@ -370,7 +375,7 @@ async function runSavedTurn(input: {
       .slice(-6)
       .map(message => message.content);
     const validation = prepareAssistantActions({
-      operations: output.operations ?? [],
+      operations: allowedOperations,
       eventDeltas,
       actionContext: groundedActionContext,
       currentMessage: state.userMessage.content,
@@ -404,7 +409,7 @@ async function runSavedTurn(input: {
       rejectedMemoryDeltas: memoryValidation.rejected,
     }));
     throwIfCancelled(input.signal);
-    emitProgress('updating');
+    emitProgress(output.webSearchUsed ? 'finalizing' : 'updating');
     const completed = await completeAssistantTurnWithActions({
       requestId: input.requestId,
       userMessageId: state.userMessage.id,
@@ -413,6 +418,7 @@ async function runSavedTurn(input: {
       segment: output.segment,
       operations: validation.accepted,
       memoryDeltas: memoryValidation.accepted,
+      webSources: output.webSources,
       stageDurations: assistantStageDurationsFromTimeline(stageTimeline, Date.now()),
       reasoning: output.reasoning
         ? {
@@ -436,8 +442,30 @@ async function runSavedTurn(input: {
         operations: completed.operations,
       }));
     }
-    const proposedWriteCount = validation.accepted.length + memoryValidation.accepted.length;
+    const proposedWriteCount = output.webSearchUsed
+      ? proposedOperations.length + proposedEventDeltas.length + proposedMemoryDeltas.length
+      : validation.accepted.length + memoryValidation.accepted.length;
+    const webReadOnlyRejections: Array<{ type: string; reason: string; detail?: string }> = output.webSearchUsed
+      ? [
+        ...proposedOperations.map(operation => ({
+          type: operation.type,
+          reason: 'web_search_read_only',
+          detail: '联网结果不能在同一轮授权本地写入',
+        })),
+        ...proposedEventDeltas.map(delta => ({
+          type: 'event_delta',
+          reason: 'web_search_read_only',
+          detail: '联网结果不能在同一轮授权事件变化',
+        })),
+        ...proposedMemoryDeltas.map(delta => ({
+          type: delta.action,
+          reason: 'web_search_read_only',
+          detail: '联网结果不能写入长期记忆',
+        })),
+      ]
+      : [];
     const executionRejected: Array<{ type: string; reason: string; detail?: string }> = [
+      ...webReadOnlyRejections,
       ...validation.rejected.map(item => ({
         type: item.type,
         reason: item.reason,

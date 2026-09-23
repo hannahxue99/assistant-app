@@ -16,6 +16,12 @@ export type AssistantEngineStatus = 'configured' | 'unconfigured' | 'unknown';
 export type AssistantInitialLoadStatus = 'loading' | 'ready' | 'error';
 export type AssistantOlderLoadStatus = 'idle' | 'loading' | 'error';
 
+export interface AssistantWebSource {
+  title: string;
+  url: string;
+  position: number;
+}
+
 export interface AssistantMessage {
   id: string;
   requestId: string;
@@ -43,6 +49,8 @@ export interface AssistantMessage {
   reasoningContent?: string;
   reasoningStartedAt?: number;
   reasoningCompletedAt?: number;
+  /** 本轮 DeepSeek 服务端搜索返回的来源元数据，不含网页正文。 */
+  webSources?: AssistantWebSource[];
 }
 
 export interface AssistantMessageCursor {

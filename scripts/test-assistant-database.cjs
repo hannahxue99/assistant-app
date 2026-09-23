@@ -73,7 +73,7 @@ async function main() {
   const store = load('src/assistant/store.ts');
   await db.initDatabase();
 
-  for (const table of ['assistant_messages', 'conversation_segments', 'assistant_requests', 'assistant_reasoning']) {
+  for (const table of ['assistant_messages', 'conversation_segments', 'assistant_requests', 'assistant_reasoning', 'assistant_web_sources']) {
     const row = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table);
     assert.equal(row?.name, table, `${table} 应在数据库初始化时创建`);
   }
@@ -107,6 +107,49 @@ async function main() {
   });
   assert.equal(duplicateReply.id, reply.id, '同一请求只能形成一条助手回复');
   assert.equal(duplicateReply.content, reply.content, '重复完成不得覆盖首次回复');
+
+  const sourcedUser = await store.saveUserTurn({
+    requestId: 'request-sources',
+    content: 'Muse 是什么？',
+    source: 'text',
+    createdAt: 4100,
+  });
+  const sourcedReply = await store.completeTurn({
+    requestId: 'request-sources',
+    reply: 'Muse 可能指多个对象，以下是这次联网搜索使用的来源。',
+    segment: { action: 'continue' },
+    webSources: [
+      { title: 'Muse 官方网站', url: 'https://www.muse.mu/', position: 9 },
+      { title: '重复来源', url: 'https://www.muse.mu/', position: 10 },
+      { title: 'Muse - Wikipedia', url: 'https://en.wikipedia.org/wiki/Muse_(band)', position: 11 },
+    ],
+    createdAt: 4200,
+  });
+  assert.equal(JSON.stringify(sourcedReply.webSources.map(item => [item.title, item.url, item.position])), JSON.stringify([
+    ['Muse 官方网站', 'https://www.muse.mu/', 0],
+    ['Muse - Wikipedia', 'https://en.wikipedia.org/wiki/Muse_(band)', 2],
+  ]), '来源应按服务端结果顺序持久化，并按 URL 去重');
+  const reloadedSourcedReply = (await store.listMessages({ limit: 50 }))
+    .find(item => item.requestId === 'request-sources' && item.role === 'assistant');
+  assert.equal(JSON.stringify(reloadedSourcedReply.webSources), JSON.stringify(sourcedReply.webSources),
+    '消息重新加载后仍应挂载搜索来源');
+  assert.equal(JSON.stringify((await store.getMessage(sourcedReply.id)).webSources), JSON.stringify(sourcedReply.webSources),
+    '单条消息读取也应恢复搜索来源');
+  assert.equal((await store.getRequestState('request-sources')).assistantMessage.webSources.length, 2,
+    '请求状态读取也应恢复搜索来源');
+
+  await store.saveUserTurn({
+    requestId: 'request-source-failed', content: '失败搜索', source: 'text', createdAt: 4300,
+  });
+  await store.failTurn('request-source-failed', 'network', 4400);
+  await store.saveUserTurn({
+    requestId: 'request-source-cancelled', content: '取消搜索', source: 'text', createdAt: 4500,
+  });
+  await store.cancelTurn('request-source-cancelled', '已停止', 4600);
+  assert.equal(sqlite.prepare(
+    "SELECT COUNT(*) AS count FROM assistant_web_sources WHERE request_id IN ('request-source-failed','request-source-cancelled')",
+  ).get().count, 0, '失败或取消的搜索轮不得保存来源');
+  assert.equal(sourcedUser.status, 'sending');
 
   const reasoningStore = load('src/assistant/reasoning-store.ts');
   await reasoningStore.saveAssistantReasoningWithDatabase(adapter, {

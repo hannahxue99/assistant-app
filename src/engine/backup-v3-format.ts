@@ -52,6 +52,15 @@ export interface BackupAssistantMessage {
   updatedAt: number;
 }
 
+export interface BackupAssistantWebSource {
+  id: string;
+  requestId: string;
+  position: number;
+  title: string;
+  url: string;
+  createdAt: number;
+}
+
 export interface BackupEventAlias {
   id: string;
   eventId: string;
@@ -66,6 +75,7 @@ export interface BackupPayloadV3 {
   conversationSegments: ConversationSegment[];
   assistantRequests: BackupAssistantRequest[];
   assistantMessages: BackupAssistantMessage[];
+  assistantWebSources: BackupAssistantWebSource[];
   events: AssistantEvent[];
   eventAliases: BackupEventAlias[];
   eventUpdates: AssistantEventUpdate[];
@@ -87,7 +97,7 @@ export interface BackupEnvelopeV3 {
 
 const PAYLOAD_KEYS: BackupV3ObjectKind[] = [
   'entries', 'profile', 'topicPreferences', 'conversationSegments', 'assistantRequests',
-  'assistantMessages', 'events', 'eventAliases', 'eventUpdates', 'objectRelations',
+  'assistantMessages', 'assistantWebSources', 'events', 'eventAliases', 'eventUpdates', 'objectRelations',
   'operations', 'memories', 'memorySources',
 ];
 
@@ -195,7 +205,7 @@ function validateRequest(value: unknown, index: number): BackupAssistantRequest 
 function validateStageDurations(value: unknown, index: number): AssistantStageDurations {
   if (!isObject(value)) invalid(`第 ${index + 1} 条消息阶段耗时无效`);
   const result: AssistantStageDurations = {};
-  for (const key of ['readingMs', 'thinkingMs', 'updatingMs'] as const) {
+  for (const key of ['readingMs', 'searchingMs', 'thinkingMs', 'updatingMs'] as const) {
     const duration = value[key];
     if (duration === undefined) continue;
     if (typeof duration !== 'number' || !Number.isFinite(duration) || duration < 0) {
@@ -203,10 +213,32 @@ function validateStageDurations(value: unknown, index: number): AssistantStageDu
     }
     result[key] = duration;
   }
-  if (Object.keys(value).some(key => !['readingMs', 'thinkingMs', 'updatingMs'].includes(key))) {
+  if (Object.keys(value).some(key => !['readingMs', 'searchingMs', 'thinkingMs', 'updatingMs'].includes(key))) {
     invalid(`第 ${index + 1} 条消息包含未知阶段耗时`);
   }
   return result;
+}
+
+function validateWebSource(value: unknown, index: number): BackupAssistantWebSource {
+  if (!isObject(value)) invalid(`第 ${index + 1} 个网页来源不是对象`);
+  const url = stringValue(value.url, `第 ${index + 1} 个网页来源 URL`);
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    invalid(`第 ${index + 1} 个网页来源 URL 无效`);
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+    invalid(`第 ${index + 1} 个网页来源 URL 无效`);
+  }
+  return {
+    id: stringValue(value.id, `第 ${index + 1} 个网页来源 ID`),
+    requestId: stringValue(value.requestId, `第 ${index + 1} 个网页来源请求`),
+    position: integer(value.position, `第 ${index + 1} 个网页来源顺序`),
+    title: stringValue(value.title, `第 ${index + 1} 个网页来源标题`),
+    url,
+    createdAt: timestamp(value.createdAt, `第 ${index + 1} 个网页来源创建`),
+  };
 }
 
 function validateMessage(value: unknown, index: number): BackupAssistantMessage {
@@ -336,6 +368,7 @@ function countsForPayload(payload: BackupPayloadV3): Record<BackupV3ObjectKind, 
     conversationSegments: payload.conversationSegments.length,
     assistantRequests: payload.assistantRequests.length,
     assistantMessages: payload.assistantMessages.length,
+    assistantWebSources: payload.assistantWebSources.length,
     events: payload.events.length,
     eventAliases: payload.eventAliases.length,
     eventUpdates: payload.eventUpdates.length,
@@ -363,6 +396,10 @@ function validateEnvelope(value: unknown): BackupEnvelopeV3 {
     conversationSegments: arrayValue(value.payload.conversationSegments, '对话分段').map(validateSegment),
     assistantRequests: arrayValue(value.payload.assistantRequests, '助手请求').map(validateRequest),
     assistantMessages: arrayValue(value.payload.assistantMessages, '助手消息').map(validateMessage),
+    // 兼容联网搜索上线前已生成的 V3 备份。
+    assistantWebSources: value.payload.assistantWebSources === undefined
+      ? []
+      : arrayValue(value.payload.assistantWebSources, '网页来源').map(validateWebSource),
     events: arrayValue(value.payload.events, '事件').map(validateEvent),
     eventAliases: arrayValue(value.payload.eventAliases, '事件别名').map(validateEventAlias),
     eventUpdates: arrayValue(value.payload.eventUpdates, '事件进展').map(validateEventUpdate),
@@ -376,6 +413,7 @@ function validateEnvelope(value: unknown): BackupEnvelopeV3 {
   const segments = uniqueById(payload.conversationSegments, '对话分段');
   const requests = uniqueById(payload.assistantRequests, '助手请求');
   const messages = uniqueById(payload.assistantMessages, '助手消息');
+  uniqueById(payload.assistantWebSources, '网页来源');
   const events = uniqueById(payload.events, '事件');
   uniqueById(payload.eventAliases, '事件别名');
   const updates = uniqueById(payload.eventUpdates, '事件进展');
@@ -400,6 +438,17 @@ function validateEnvelope(value: unknown): BackupEnvelopeV3 {
     if (!userMessage || userMessage.role !== 'user' || userMessage.requestId !== request.id) {
       invalid(`请求的用户消息不完整：${request.id}`);
     }
+  }
+  const sourceUrls = new Set<string>();
+  for (const source of payload.assistantWebSources) {
+    if (!requests.has(source.requestId)) invalid(`网页来源指向不存在的请求：${source.requestId}`);
+    const assistantMessage = payload.assistantMessages.find(message => (
+      message.requestId === source.requestId && message.role === 'assistant'
+    ));
+    if (!assistantMessage) invalid(`网页来源缺少对应助手消息：${source.requestId}`);
+    const key = `${source.requestId}:${source.url}`;
+    if (sourceUrls.has(key)) invalid(`请求包含重复网页来源：${source.requestId}`);
+    sourceUrls.add(key);
   }
   for (const alias of payload.eventAliases) {
     if (!events.has(alias.eventId)) invalid(`事件别名指向不存在的事件：${alias.eventId}`);
@@ -461,7 +510,10 @@ function validateEnvelope(value: unknown): BackupEnvelopeV3 {
   if (!isObject(value.counts)) invalid('V3 备份缺少数量摘要');
   const expectedCounts = countsForPayload(payload);
   for (const key of PAYLOAD_KEYS) {
-    const count = integer(value.counts[key], `${key} 数量`);
+    const rawCount = key === 'assistantWebSources' && value.counts[key] === undefined
+      ? 0
+      : value.counts[key];
+    const count = integer(rawCount, `${key} 数量`);
     if (count !== expectedCounts[key]) invalid(`${key} 数量不一致`);
   }
 

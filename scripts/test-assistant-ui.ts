@@ -32,6 +32,11 @@ import {
 } from '../src/assistant/runtime-state';
 import type { AssistantMessage } from '../src/assistant/types';
 import type { AssistantOperation } from '../src/assistant/action-types';
+import {
+  assistantWebSourceHost,
+  assistantWebSourcesLabel,
+  safeAssistantWebSourceUrl,
+} from '../src/assistant/web-source-ui';
 
 const NOW = new Date(2026, 8, 15, 12, 0).getTime();
 const DAY = 24 * 3600 * 1000;
@@ -114,6 +119,8 @@ check(assistantRuntimeLabel('planning', 68_000) === '小知正在整理处理方
   '思考状态应展示连续运行时间');
 check(assistantRuntimeLabel('reading', 9_000) === '小知正在读取事件和待办 · 9 秒',
   '调用数据工具时应明确展示读取状态');
+check(assistantRuntimeLabel('searching', 12_000) === '小知正在搜索网页 · 12 秒',
+  '联网时应明确展示搜索网页状态');
 check(assistantRuntimeLabel('updating', 70_000) === '小知正在更新 · 1 分 10 秒',
   '本地事务执行时应明确展示更新状态');
 check(assistantRuntimeLabel('answering', 72_000) === '小知正在回答 · 1 分 12 秒',
@@ -128,17 +135,19 @@ check(assistantStageLineLabel('planning', 8_500) === '整理处理方案 8 秒',
 
 const timeline = [
   { stage: 'planning' as const, at: 1_000 },
-  { stage: 'reading' as const, at: 2_000 },
-  { stage: 'planning' as const, at: 5_000 },
-  { stage: 'updating' as const, at: 11_000 },
-  { stage: 'answering' as const, at: 12_000 },
+  { stage: 'searching' as const, at: 2_000 },
+  { stage: 'reading' as const, at: 4_000 },
+  { stage: 'planning' as const, at: 7_000 },
+  { stage: 'updating' as const, at: 13_000 },
+  { stage: 'answering' as const, at: 14_000 },
 ];
 const mergedStages = assistantStageDurationsFromTimeline(timeline, 20_000);
-check(mergedStages.thinkingMs === 7_000 && mergedStages.readingMs === 3_000 && mergedStages.updatingMs === 1_000,
+check(mergedStages.thinkingMs === 7_000 && mergedStages.searchingMs === 2_000
+  && mergedStages.readingMs === 3_000 && mergedStages.updatingMs === 1_000,
   '同阶段多段时间线必须合并累加，忽略回答与收尾');
 
-check(assistantStageSummaryLabel({ readingMs: 3_000, thinkingMs: 8_000, updatingMs: 1_000 })
-  === '读取 3 秒 · 思考 8 秒 · 更新 1 秒',
+check(assistantStageSummaryLabel({ readingMs: 3_000, searchingMs: 2_000, thinkingMs: 8_000, updatingMs: 1_000 })
+  === '读取 3 秒 · 搜索 2 秒 · 思考 8 秒 · 更新 1 秒',
   '落定摘要应按阶段顺序拼接实际耗时');
 check(assistantStageSummaryLabel({ thinkingMs: 6_000 }) === '思考了 6 秒',
   '纯聊天轮应退化为思考了 X 秒');
@@ -151,6 +160,14 @@ check(assistantStageSummaryLabel({ readingMs: 3_000, thinkingMs: 8_000 })
   '未发生的阶段不得出现在摘要行');
 check(assistantCompletedRuntimeLabel(84_000) === '用时 1 分 24 秒',
   '完成后应弱化展示本轮总用时');
+check(assistantWebSourcesLabel(3) === '搜索来源 3', '来源入口应显示实际数量并默认由组件折叠');
+check(safeAssistantWebSourceUrl('https://example.com/doc#part') === 'https://example.com/doc#part',
+  'HTTP(S) 来源应允许交给系统浏览器打开');
+check(safeAssistantWebSourceUrl('file:///etc/passwd') === null
+  && safeAssistantWebSourceUrl('https://user:pass@example.com') === null,
+  '本地协议或带凭据的来源不得打开');
+check(assistantWebSourceHost({ title: '示例', url: 'https://www.example.com/a', position: 0 }) === 'example.com',
+  '展开来源时应显示简洁站点域名');
 const todayAtNoon = new Date(2026, 8, 15, 12, 0).getTime();
 const yesterdayAtNoon = new Date(2026, 8, 14, 12, 0).getTime();
 const sameYear = new Date(2026, 5, 8, 9, 5).getTime();

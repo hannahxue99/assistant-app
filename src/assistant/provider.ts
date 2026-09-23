@@ -408,10 +408,10 @@ export async function requestAssistantTurn(input: {
   const toolExecutions: AssistantReadToolExecution[] = [];
   const webSearchExecutions: AssistantWebSearchExecution[] = [];
   const maxReadRounds = 6;
-  const maxToolCalls = 12;
+  const maxReadToolCalls = 12;
   let readRounds = 0;
-  // 收敛轮不再携带 tools：超限后迫使模型基于已读信息直接产出计划，而不是整轮失败。
-  let toolsDisabled = false;
+  // 只限制本地数据读取；DeepSeek 服务端网页搜索不受小知的次数或结果数预算干预。
+  let readToolsDisabled = false;
   // DeepSeek 偶发把全部输出放进 reasoning_content 而 content 为空；追加提示重试一次。
   let emptyContentRetried = false;
   let completion: CompletionResponse | null = null;
@@ -420,7 +420,7 @@ export async function requestAssistantTurn(input: {
       const attemptStartedAt = Date.now();
       input.onProgress?.('thinking');
       const tools = [
-        ...(input.executeReadTool ? ASSISTANT_READ_TOOLS : []),
+        ...(input.executeReadTool && !readToolsDisabled ? ASSISTANT_READ_TOOLS : []),
         ...(input.executeWebSearch ? [ASSISTANT_WEB_SEARCH_TOOL] : []),
       ];
       completion = await requestCompletion({
@@ -431,7 +431,7 @@ export async function requestAssistantTurn(input: {
           thinking: { type: 'enabled' },
           reasoning_effort: 'high',
           response_format: { type: 'json_object' },
-          ...(tools.length && !toolsDisabled ? { tools, tool_choice: 'auto' } : {}),
+          ...(tools.length ? { tools, tool_choice: 'auto' } : {}),
           stream: true,
           stream_options: { include_usage: true },
         }),
@@ -472,9 +472,10 @@ export async function requestAssistantTurn(input: {
       if (unsupportedCall) {
         throw new AssistantProviderError('invalid-response', '理解引擎请求了未启用的数据工具');
       }
-      if (toolsDisabled) break;
-      readRounds += 1;
-      if (readRounds > maxReadRounds || toolExecutions.length + completion.toolCalls.length > maxToolCalls) {
+      const localReadCalls = completion.toolCalls.filter(call => call.name !== 'web_search');
+      if (localReadCalls.length > 0) readRounds += 1;
+      if (localReadCalls.length > 0
+        && (readRounds > maxReadRounds || toolExecutions.length + localReadCalls.length > maxReadToolCalls)) {
         protocolWarnings = [...new Set([...protocolWarnings, 'tool_budget_exhausted' as const])];
         messages.push({
           role: 'assistant',
@@ -487,6 +488,17 @@ export async function requestAssistantTurn(input: {
           })),
         });
         for (const call of completion.toolCalls) {
+          if (call.name === 'web_search') {
+            input.onProgress?.('searching');
+            const searched = await input.executeWebSearch!(call);
+            webSearchExecutions.push(searched);
+            messages.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              content: JSON.stringify(searched.result),
+            });
+            continue;
+          }
           messages.push({
             role: 'tool',
             tool_call_id: call.id,
@@ -498,9 +510,9 @@ export async function requestAssistantTurn(input: {
         }
         messages.push({
           role: 'system',
-          content: '工具额度已用尽。不要再调用任何工具：直接基于已读取的信息输出最终 JSON 计划；对未能核实的事项，在 reply 中明确说明并请用户确认。',
+          content: '本地数据读取工具额度已用尽。不要再读取本地数据；仍可在确有需要时使用网页搜索，否则请基于已读取的信息输出最终 JSON 计划，并对未核实事项明确说明。',
         });
-        toolsDisabled = true;
+        readToolsDisabled = true;
         continue;
       }
       messages.push({

@@ -14,6 +14,7 @@ import {
   buildBackupV3Markdown,
   type BackupAssistantMessage,
   type BackupAssistantRequest,
+  type BackupAssistantWebSource,
   type BackupEnvelopeV3,
   type BackupEventAlias,
   type BackupPayloadV3,
@@ -98,6 +99,17 @@ function rowToMessage(row: any): BackupAssistantMessage {
   };
 }
 
+function rowToWebSource(row: any): BackupAssistantWebSource {
+  return {
+    id: row.id,
+    requestId: row.request_id,
+    position: Number(row.position),
+    title: row.title,
+    url: row.url,
+    createdAt: Number(row.created_at),
+  };
+}
+
 function rowToEvent(row: any): AssistantEvent {
   return {
     id: row.id, title: row.title, currentState: row.current_state, status: row.status,
@@ -156,7 +168,7 @@ function rowToMemorySource(row: any): AssistantMemorySource {
 
 async function readBackupV3State(database: Database): Promise<BackupPayloadV3> {
   const [
-    entryRows, profileRow, preferenceRows, segmentRows, requestRows, messageRows,
+    entryRows, profileRow, preferenceRows, segmentRows, requestRows, messageRows, webSourceRows,
     eventRows, aliasRows, updateRows, relationRows, operationRows, memoryRows, memorySourceRows,
   ] = await Promise.all([
     database.getAllAsync<any>('SELECT * FROM entries ORDER BY created_at,id'),
@@ -165,6 +177,7 @@ async function readBackupV3State(database: Database): Promise<BackupPayloadV3> {
     database.getAllAsync<any>('SELECT * FROM conversation_segments ORDER BY started_at,id'),
     database.getAllAsync<any>('SELECT * FROM assistant_requests ORDER BY created_at,id'),
     database.getAllAsync<any>('SELECT * FROM assistant_messages ORDER BY created_at,id'),
+    database.getAllAsync<any>('SELECT * FROM assistant_web_sources ORDER BY request_id,position,id'),
     database.getAllAsync<any>('SELECT * FROM assistant_events ORDER BY created_at,id'),
     database.getAllAsync<any>('SELECT * FROM assistant_event_aliases ORDER BY created_at,id'),
     database.getAllAsync<any>('SELECT * FROM assistant_event_updates ORDER BY created_at,id'),
@@ -180,6 +193,7 @@ async function readBackupV3State(database: Database): Promise<BackupPayloadV3> {
   const exportedSegmentIds = new Set(assistantMessages.map(message => message.segmentId));
   const userMessageIds = new Set(assistantMessages.filter(message => message.role === 'user').map(message => message.id));
   const assistantRequests = requestRows.map(rowToRequest);
+  const exportedRequestIds = new Set(assistantRequests.map(request => request.id));
   for (const request of assistantRequests) {
     if (!userMessageIds.has(request.userMessageId)) throw new Error(`请求 ${request.id} 缺少用户消息，无法生成完整备份`);
   }
@@ -214,6 +228,8 @@ async function readBackupV3State(database: Database): Promise<BackupPayloadV3> {
     conversationSegments: segmentRows.map(rowToSegment).filter(segment => exportedSegmentIds.has(segment.id)),
     assistantRequests,
     assistantMessages,
+    assistantWebSources: webSourceRows.map(rowToWebSource)
+      .filter(source => exportedRequestIds.has(source.requestId)),
     events: eventRows.map(rowToEvent), eventAliases: aliasRows.map(rowToAlias),
     eventUpdates,
     objectRelations,
@@ -232,6 +248,7 @@ function readableBackupSummary(payload: BackupPayloadV3, exportedAt: number): st
     '## 内容摘要', '',
     `- 记录与待办：${payload.entries.length} 条`,
     `- 对话消息：${payload.assistantMessages.length} 条（${range}）`,
+    `- 网页来源：${payload.assistantWebSources.length} 条`,
     `- 事件：${payload.events.length} 个；进展：${payload.eventUpdates.length} 条`,
     `- 对象关系：${payload.objectRelations.length} 条`,
     `- 长期记忆：${payload.memories.length} 条`, '',
@@ -323,6 +340,15 @@ async function applyPlan(
     await database.runAsync('INSERT INTO assistant_messages VALUES (?,?,?,?,?,?,?,?,?,?,?)',
       item.id, item.requestId, item.role, item.content, item.source, item.status, item.segmentId,
       item.legacyEntryId, JSON.stringify(item.stageDurations), item.createdAt, item.updatedAt);
+  }
+  for (const decision of plan.assistantWebSources) {
+    if (decision.action !== 'add') continue;
+    const item = decision.incoming;
+    await database.runAsync(
+      `INSERT INTO assistant_web_sources (id,request_id,position,title,url,created_at)
+       VALUES (?,?,?,?,?,?)`,
+      item.id, item.requestId, item.position, item.title, item.url, item.createdAt,
+    );
   }
   for (const decision of plan.events) {
     const item = decision.incoming;

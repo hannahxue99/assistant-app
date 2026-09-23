@@ -19,7 +19,7 @@ function emptyPayload(): BackupPayloadV3 {
   return {
     entries: [],
     profile: { name: '', goals: [], avoid: [], notifyMorning: true, notifyEvening: true },
-    topicPreferences: [], conversationSegments: [], assistantRequests: [], assistantMessages: [],
+    topicPreferences: [], conversationSegments: [], assistantRequests: [], assistantMessages: [], assistantWebSources: [],
     events: [], eventAliases: [], eventUpdates: [], objectRelations: [], operations: [],
     memories: [], memorySources: [],
   };
@@ -113,6 +113,10 @@ check('用户消息冲突时整组请求、助手消息和操作跳过', () => {
     id: 'message-assistant', requestId: 'request-1', role: 'assistant', content: '回复', source: 'assistant',
     status: 'saved', segmentId: 'segment-1', legacyEntryId: null, stageDurations: {}, createdAt: 200, updatedAt: 200,
   }];
+  incoming.assistantWebSources = [{
+    id: 'request-1:web:0', requestId: 'request-1', position: 0,
+    title: '导入来源', url: 'https://example.com/source', createdAt: 200,
+  }];
   incoming.entries = [todo()];
   incoming.operations = [{
     id: 'operation-1', requestId: 'request-1', operationKey: 'todo', operationType: 'create_todo',
@@ -127,6 +131,7 @@ check('用户消息冲突时整组请求、助手消息和操作跳过', () => {
   const plan = buildBackupV3ImportPlan(incoming, local);
   equal(plan.assistantRequests[0].action, 'skip-group');
   equal(plan.assistantMessages.every(item => item.action === 'skip-group'), true);
+  equal(plan.assistantWebSources[0].action, 'skip-group');
   equal(plan.operations[0].action, 'skip');
 });
 

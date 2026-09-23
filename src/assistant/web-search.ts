@@ -1,10 +1,7 @@
 import type { Settings } from '../types';
+import type { AssistantWebSource } from './types';
 
-export interface AssistantWebSource {
-  title: string;
-  url: string;
-  position: number;
-}
+export type { AssistantWebSource } from './types';
 
 export interface AssistantWebSearchResult {
   answer: string;

@@ -137,6 +137,36 @@ async function main() {
     && bodies[1].messages.at(-1).content.includes('Muse 是一个多义词'),
   '搜索摘要必须作为真实工具结果交回主模型');
 
+  let autonomousSearchRounds = 0;
+  let autonomousExecutions = 0;
+  const autonomousResult = await requestAssistantTurn({
+    settings: ready.settings,
+    context: { contextBlock: '上下文', recentMessages: [] },
+    fetchImpl: async () => {
+      autonomousSearchRounds += 1;
+      if (autonomousSearchRounds <= 7) {
+        return new Response(JSON.stringify({ choices: [{ message: {
+          content: '', reasoning_content: '继续核实',
+          tool_calls: [{
+            id: `web-auto-${autonomousSearchRounds}`, type: 'function',
+            function: { name: 'web_search', arguments: `{"query":"第 ${autonomousSearchRounds} 轮"}` },
+          }],
+        }, finish_reason: 'tool_calls' }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: '{"reply":"核实完成。","segment":{"action":"continue"}}' } }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+    executeWebSearch: async call => {
+      autonomousExecutions += 1;
+      return { toolCallId: call.id, name: 'web_search', result: { answer: '结果' }, sources: [] };
+    },
+  });
+  check(autonomousExecutions === 7,
+    '小知不得用本地读取轮次预算限制 DeepSeek 自主决定的网页搜索次数');
+  check(!autonomousResult.providerMetadata.protocolWarnings.includes('tool_budget_exhausted'),
+    '纯网页搜索轮不应触发本地数据工具额度警告');
+
   const controller = new AbortController();
   controller.abort();
   let cancelled = false;
