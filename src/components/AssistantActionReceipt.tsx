@@ -98,7 +98,17 @@ export function AssistantActionReceipt({
 const styles = StyleSheet.create({
   wrap: {
     width: '100%',
-    marginTop: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: theme.colors.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.border,
+    shadowColor: '#302923',
+    shadowOpacity: 0.045,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   header: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 11 },
   headerLabel: { flexDirection: 'row', alignItems: 'center', gap: 9 },

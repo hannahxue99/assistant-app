@@ -42,7 +42,7 @@ export function AssistantMessageBubble({
   onLoadReasoning = async () => null,
 }: AssistantMessageBubbleProps) {
   const isUser = message.role === 'user';
-  const usesBubble = assistantMessageSurface(message.role) === 'bubble';
+  const surface = assistantMessageSurface(message.role);
   const isStreaming = !isUser && message.status === 'streaming';
   const [now, setNow] = useState(() => Date.now());
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
@@ -157,11 +157,23 @@ export function AssistantMessageBubble({
       {!isUser && !isStreaming && message.webSources?.length ? (
         <AssistantWebSources sources={message.webSources} />
       ) : null}
-      {message.content ? (
-        <View style={usesBubble ? styles.userBubble : styles.assistantContent}>
-          <Text selectable style={[styles.content, isUser && styles.userContent]}>
-            {message.content}{isStreaming ? <Text style={styles.cursor}>▋</Text> : null}
-          </Text>
+      {surface === 'user-bubble' && message.content ? (
+        <View style={styles.userBubble}>
+          <Text selectable style={[styles.content, styles.userContent]}>{message.content}</Text>
+        </View>
+      ) : null}
+      {surface === 'assistant-bubble' && (message.content || message.errorCode === 'cancelled') ? (
+        <View style={styles.assistantBubble}>
+          {message.content ? (
+            <Text selectable style={styles.content}>
+              {message.content}{isStreaming ? <Text style={styles.cursor}>▋</Text> : null}
+            </Text>
+          ) : null}
+          {message.errorCode === 'cancelled' ? (
+            <View style={styles.statusRow}>
+              <Text style={styles.statusText}>已停止 · 未执行任何操作</Text>
+            </View>
+          ) : null}
         </View>
       ) : null}
       {!isUser && message.operations?.length ? (
@@ -173,11 +185,6 @@ export function AssistantMessageBubble({
             onNavigate={onNavigate}
             onUndo={() => onUndo(message.requestId)}
           />
-        </View>
-      ) : null}
-      {!isUser && message.errorCode === 'cancelled' ? (
-        <View style={styles.statusRow}>
-          <Text style={styles.statusText}>已停止 · 未执行任何操作</Text>
         </View>
       ) : null}
       {isUser && message.status === 'failed' ? (
@@ -205,7 +212,7 @@ const styles = StyleSheet.create({
   userRow: { alignItems: 'flex-end' },
   assistantRow: { alignItems: 'flex-start' },
   userBubble: { maxWidth: '86%', borderRadius: 18, borderBottomRightRadius: 6, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.colors.accent },
-  assistantContent: { width: '100%', paddingTop: 6, paddingBottom: 4 },
+  assistantBubble: { maxWidth: '94%', borderRadius: 18, borderBottomLeftRadius: 6, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: theme.colors.card, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.border },
   content: { color: theme.colors.text, fontSize: theme.font.body, lineHeight: 22 },
   userContent: { color: '#FFFFFF' },
   cursor: { color: theme.colors.accent },
@@ -225,5 +232,5 @@ const styles = StyleSheet.create({
   retry: { minHeight: 32, justifyContent: 'center', marginTop: 2, paddingHorizontal: 4 },
   retryPressed: { opacity: 0.6 },
   retryText: { color: theme.colors.red, fontSize: 12 },
-  receiptWrap: { width: '100%' },
+  receiptWrap: { width: '94%', marginTop: 4 },
 });

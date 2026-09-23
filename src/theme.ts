@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 /** 统一的视觉语言：暖色、克制、阅读友好 */
 export const theme = {
   colors: {
-    bg: '#FAF9F7',
+    bg: '#FDFCFB',
     card: '#FFFFFF',
     border: '#E8E2D9',
     text: '#2B2622',

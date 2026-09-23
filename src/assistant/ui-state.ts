@@ -61,20 +61,20 @@ export function shouldFollowAssistantEnd(
   return distance <= threshold;
 }
 
-/** 输入框只在历史消息实际从它下方经过时获得悬浮层次。 */
-export function shouldElevateAssistantComposer(
+/** 历史消息越深入输入框下方，悬浮阴影越清晰；回到最新位置时自然消失。 */
+export function assistantComposerElevation(
   metrics: AssistantScrollMetrics,
-  threshold = 8,
-): boolean {
-  if (metrics.contentHeight <= metrics.viewportHeight) return false;
-  const distance = metrics.contentHeight - metrics.viewportHeight - metrics.offsetY;
-  return distance > threshold;
+  fadeDistance = 120,
+): number {
+  if (metrics.contentHeight <= metrics.viewportHeight) return 0;
+  const distance = Math.max(0, metrics.contentHeight - metrics.viewportHeight - metrics.offsetY);
+  return Math.min(1, distance / fadeDistance);
 }
 
 export function assistantMessageSurface(
   role: AssistantMessage['role'],
-): 'bubble' | 'plain' {
-  return role === 'user' ? 'bubble' : 'plain';
+): 'user-bubble' | 'assistant-bubble' {
+  return role === 'user' ? 'user-bubble' : 'assistant-bubble';
 }
 
 export function shouldScrollAssistantOnFocus(input: {

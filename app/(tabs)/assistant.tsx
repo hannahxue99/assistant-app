@@ -21,7 +21,7 @@ import {
   mergeAssistantMessages,
   pendingAssistantRequestId,
   shouldFollowAssistantEnd,
-  shouldElevateAssistantComposer,
+  assistantComposerElevation,
   shouldScrollAssistantOnFocus,
 } from '../../src/assistant/ui-state';
 import { cancelAssistantTurn, retryAssistantTurn, sendAssistantTurn } from '../../src/assistant/orchestrator';
@@ -91,7 +91,7 @@ export default function AssistantScreen() {
   const [undoErrors, setUndoErrors] = useState<Record<string, string>>({});
   const [streamingReplies, setStreamingReplies] = useState<Record<string, AssistantMessage>>({});
   const [composerHeight, setComposerHeight] = useState(68);
-  const [composerElevated, setComposerElevated] = useState(false);
+  const [composerElevation, setComposerElevation] = useState(0);
 
   const displayMessages = useMemo(() => mergeAssistantMessages(messages, Object.values(streamingReplies)), [messages, streamingReplies]);
   const requestStartedAt = useMemo(() => new Map(
@@ -559,7 +559,7 @@ export default function AssistantScreen() {
                 offsetY: nativeEvent.contentOffset.y,
               };
               followEndRef.current = shouldFollowAssistantEnd(metrics);
-              setComposerElevated(shouldElevateAssistantComposer(metrics));
+              setComposerElevation(assistantComposerElevation(metrics));
               if (nativeEvent.contentOffset.y < 32) void loadOlder();
             }}
             scrollEventThrottle={80}
@@ -570,23 +570,18 @@ export default function AssistantScreen() {
           style={styles.composerWrap}
           onLayout={({ nativeEvent }) => setComposerHeight(nativeEvent.layout.height)}
         >
-          {composerElevated ? (
-            <View pointerEvents="none" style={styles.composerSoftEdge}>
-              <View style={[styles.softEdgeBand, styles.softEdgeBand1]} />
-              <View style={[styles.softEdgeBand, styles.softEdgeBand2]} />
-              <View style={[styles.softEdgeBand, styles.softEdgeBand3]} />
-              <View style={[styles.softEdgeBand, styles.softEdgeBand4]} />
-              <View style={[styles.softEdgeBand, styles.softEdgeBand5]} />
-              <View style={[styles.softEdgeBand, styles.softEdgeBand6]} />
-              <View style={[styles.softEdgeBand, styles.softEdgeBand7]} />
-            </View>
+          {composerElevation > 0 ? (
+            <View
+              pointerEvents="none"
+              style={[styles.composerShadowHaze, { opacity: composerElevation }]}
+            />
           ) : null}
           <AssistantComposer
             onSend={send}
             onStop={() => stopCurrentTurn(activeRequestId)}
             disabled={composerDisabled}
             processing={composerProcessing || stoppingRequestId !== null}
-            elevated={composerElevated}
+            elevation={composerElevation}
           />
         </View>
       </KeyboardAvoidingView>
@@ -619,14 +614,6 @@ const styles = StyleSheet.create({
   dateSeparatorWrap: { alignItems: 'center', paddingTop: 7, paddingBottom: 3 },
   dateSeparatorText: { color: theme.colors.textDim, fontSize: 11, lineHeight: 17, paddingHorizontal: 9, paddingVertical: 2, borderRadius: 11, backgroundColor: theme.colors.card },
   composerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6 },
-  composerSoftEdge: { position: 'absolute', left: 0, right: 0, top: -72, bottom: 0, flexDirection: 'column' },
-  softEdgeBand: { flex: 1, backgroundColor: theme.colors.bg },
-  softEdgeBand1: { opacity: 0.04 },
-  softEdgeBand2: { opacity: 0.1 },
-  softEdgeBand3: { opacity: 0.2 },
-  softEdgeBand4: { opacity: 0.34 },
-  softEdgeBand5: { opacity: 0.52 },
-  softEdgeBand6: { opacity: 0.76 },
-  softEdgeBand7: { opacity: 1 },
+  composerShadowHaze: { position: 'absolute', left: 22, right: 22, top: 2, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.01)', shadowColor: '#302923', shadowOpacity: 0.1, shadowRadius: 24, shadowOffset: { width: 0, height: -8 } },
   pressed: { opacity: 0.72 },
 });
