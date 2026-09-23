@@ -573,7 +573,7 @@ export default function AssistantScreen() {
           {composerElevation > 0 ? (
             <View
               pointerEvents="none"
-              style={[styles.composerShadowHaze, { opacity: composerElevation }]}
+              style={[styles.composerShadowFade, { opacity: composerElevation }]}
             />
           ) : null}
           <AssistantComposer
@@ -614,6 +614,13 @@ const styles = StyleSheet.create({
   dateSeparatorWrap: { alignItems: 'center', paddingTop: 7, paddingBottom: 3 },
   dateSeparatorText: { color: theme.colors.textDim, fontSize: 11, lineHeight: 17, paddingHorizontal: 9, paddingVertical: 2, borderRadius: 11, backgroundColor: theme.colors.card },
   composerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6 },
-  composerShadowHaze: { position: 'absolute', left: 22, right: 22, top: 2, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.01)', shadowColor: '#302923', shadowOpacity: 0.1, shadowRadius: 24, shadowOffset: { width: 0, height: -8 } },
+  composerShadowFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 5,
+    bottom: 0,
+    experimental_backgroundImage: 'linear-gradient(to bottom, rgba(253,252,251,0.18) 0%, rgba(253,252,251,0.58) 54%, #FDFCFB 100%)',
+  },
   pressed: { opacity: 0.72 },
 });

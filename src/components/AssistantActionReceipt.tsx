@@ -39,7 +39,7 @@ export function AssistantActionReceipt({
         <View style={styles.headerLabel}>
           <Ionicons
             name={allUndone ? 'arrow-undo-outline' : 'checkmark-circle-outline'}
-            size={19}
+            size={17}
             color={allUndone ? theme.colors.textDim : theme.colors.green}
           />
           <Text style={styles.title}>{allUndone ? '已撤销' : '已处理'}</Text>
@@ -75,7 +75,7 @@ export function AssistantActionReceipt({
           >
             <Ionicons
               name={iconName(operation)}
-              size={18}
+              size={16}
               color={operation.status === 'undone' ? theme.colors.textDim : theme.colors.green}
             />
             <View style={styles.summaryWrap}>
@@ -98,9 +98,9 @@ export function AssistantActionReceipt({
 const styles = StyleSheet.create({
   wrap: {
     width: '100%',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 14,
     backgroundColor: theme.colors.card,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.border,
@@ -110,15 +110,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
-  header: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 11 },
-  headerLabel: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  header: { minHeight: 26, flexDirection: 'row', alignItems: 'center', gap: 9 },
+  headerLabel: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   title: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
-  undoButton: { minHeight: 30, justifyContent: 'center' },
+  undoButton: { minHeight: 26, justifyContent: 'center' },
   undoText: { color: theme.colors.textDim, fontSize: 12 },
-  row: { minHeight: 44, marginLeft: 28, paddingVertical: 7, flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
+  row: { minHeight: 34, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
   summaryWrap: { flex: 1, paddingVertical: 1, gap: 0 },
   summary: { color: theme.colors.text, fontSize: theme.font.small, lineHeight: 18 },
   undone: { color: theme.colors.textDim, textDecorationLine: 'line-through' },
-  error: { color: theme.colors.red, fontSize: 12, lineHeight: 16, marginLeft: 28, paddingTop: 3 },
+  error: { color: theme.colors.red, fontSize: 12, lineHeight: 16, paddingTop: 2 },
   pressed: { opacity: 0.65 },
 });

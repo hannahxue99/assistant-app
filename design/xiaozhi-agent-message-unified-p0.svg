@@ -1,5 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="760" height="760" viewBox="0 0 760 760">
   <defs>
+    <linearGradient id="bottomFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FDFCFB" stop-opacity="0.18"/>
+      <stop offset="0.54" stop-color="#FDFCFB" stop-opacity="0.58"/>
+      <stop offset="1" stop-color="#FDFCFB" stop-opacity="1"/>
+    </linearGradient>
     <filter id="composerShadow" x="-20%" y="-80%" width="140%" height="260%">
       <feDropShadow dx="0" dy="-2" stdDeviation="10" flood-color="#302923" flood-opacity="0.14"/>
     </filter>
@@ -25,25 +30,26 @@
     <tspan x="34" dy="25">项目复盘材料。</tspan>
   </text>
 
-  <rect x="20" y="290" width="350" height="104" rx="16" fill="#FFFFFF" stroke="#E8E2D9" filter="url(#composerShadow)"/>
-  <g transform="translate(34 302)">
+  <rect x="20" y="290" width="350" height="76" rx="14" fill="#FFFFFF" stroke="#E8E2D9" filter="url(#composerShadow)"/>
+  <g transform="translate(34 296)">
     <circle cx="10" cy="10" r="9" fill="none" stroke="#4C8A6E" stroke-width="1.7"/>
     <path d="M6 10l2.7 2.8L14.5 7" fill="none" stroke="#4C8A6E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
     <text x="30" y="15" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="14" font-weight="600" fill="#2B2622">已处理</text>
     <text x="88" y="15" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" fill="#8A837B">撤销本轮</text>
   </g>
-  <line x1="62" y1="338" x2="356" y2="338" stroke="#E8E2D9"/>
-  <g transform="translate(62 352)">
+  <line x1="34" y1="322" x2="356" y2="322" stroke="#E8E2D9"/>
+  <g transform="translate(34 330)">
     <rect x="0.8" y="1" width="17" height="17" rx="4" fill="none" stroke="#4C8A6E" stroke-width="1.6"/>
     <text x="29" y="15" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" fill="#2B2622">建立待办：整理项目复盘材料</text>
-    <text x="277" y="15" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="18" fill="#8A837B">›</text>
+    <text x="307" y="15" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="18" fill="#8A837B">›</text>
   </g>
 
   <text x="20" y="540" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="15" fill="#68636A">
     <tspan x="20" dy="0">下一段历史消息可以从浮动输入框旁经过……</tspan>
-    <tspan x="20" dy="27" fill="#8A837B">只有卡片周围的阴影随滚动距离逐渐减弱。</tspan>
+    <tspan x="20" dy="27" fill="#8A837B">从输入框上沿开始渐白，一直衔接到 Tab Bar。</tspan>
   </text>
 
+  <rect x="0" y="601" width="390" height="89" fill="url(#bottomFade)"/>
   <g filter="url(#composerShadow)">
     <rect x="14" y="601" width="362" height="54" rx="27" fill="#FFFFFF" stroke="#E8E2D9"/>
   </g>
