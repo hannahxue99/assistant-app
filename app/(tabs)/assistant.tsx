@@ -576,6 +576,9 @@ export default function AssistantScreen() {
               <View style={[styles.softEdgeBand, styles.softEdgeBand2]} />
               <View style={[styles.softEdgeBand, styles.softEdgeBand3]} />
               <View style={[styles.softEdgeBand, styles.softEdgeBand4]} />
+              <View style={[styles.softEdgeBand, styles.softEdgeBand5]} />
+              <View style={[styles.softEdgeBand, styles.softEdgeBand6]} />
+              <View style={[styles.softEdgeBand, styles.softEdgeBand7]} />
             </View>
           ) : null}
           <AssistantComposer
@@ -616,11 +619,14 @@ const styles = StyleSheet.create({
   dateSeparatorWrap: { alignItems: 'center', paddingTop: 7, paddingBottom: 3 },
   dateSeparatorText: { color: theme.colors.textDim, fontSize: 11, lineHeight: 17, paddingHorizontal: 9, paddingVertical: 2, borderRadius: 11, backgroundColor: theme.colors.card },
   composerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6 },
-  composerSoftEdge: { position: 'absolute', left: 0, right: 0, top: -43, height: 54 },
-  softEdgeBand: { position: 'absolute', left: 0, right: 0, height: 14, backgroundColor: theme.colors.bg },
-  softEdgeBand1: { top: 0, opacity: 0.08 },
-  softEdgeBand2: { top: 13, opacity: 0.18 },
-  softEdgeBand3: { top: 26, opacity: 0.36 },
-  softEdgeBand4: { top: 39, opacity: 0.64 },
+  composerSoftEdge: { position: 'absolute', left: 0, right: 0, top: -72, bottom: 0, flexDirection: 'column' },
+  softEdgeBand: { flex: 1, backgroundColor: theme.colors.bg },
+  softEdgeBand1: { opacity: 0.04 },
+  softEdgeBand2: { opacity: 0.1 },
+  softEdgeBand3: { opacity: 0.2 },
+  softEdgeBand4: { opacity: 0.34 },
+  softEdgeBand5: { opacity: 0.52 },
+  softEdgeBand6: { opacity: 0.76 },
+  softEdgeBand7: { opacity: 1 },
   pressed: { opacity: 0.72 },
 });

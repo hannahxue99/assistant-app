@@ -8,7 +8,6 @@ import {
   assistantStageSummaryLabel,
   formatAssistantRuntimeDuration,
 } from '../assistant/runtime-state';
-import { formatAssistantMessageTime } from '../assistant/message-time';
 import type { AssistantReasoning } from '../assistant/reasoning-store';
 import { assistantFailureLabel, assistantMessageSurface } from '../assistant/ui-state';
 import type { AssistantMessage } from '../assistant/types';
@@ -163,9 +162,6 @@ export function AssistantMessageBubble({
           <Text selectable style={[styles.content, isUser && styles.userContent]}>
             {message.content}{isStreaming ? <Text style={styles.cursor}>▋</Text> : null}
           </Text>
-          {!isStreaming && isUser ? (
-            <Text style={styles.userTime}>{formatAssistantMessageTime(message.createdAt)}</Text>
-          ) : null}
         </View>
       ) : null}
       {!isUser && message.operations?.length ? (
@@ -208,11 +204,10 @@ const styles = StyleSheet.create({
   row: { width: '100%', marginVertical: 5 },
   userRow: { alignItems: 'flex-end' },
   assistantRow: { alignItems: 'flex-start' },
-  userBubble: { maxWidth: '86%', borderRadius: 18, borderBottomRightRadius: 6, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, backgroundColor: theme.colors.accent },
+  userBubble: { maxWidth: '86%', borderRadius: 18, borderBottomRightRadius: 6, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.colors.accent },
   assistantContent: { width: '100%', paddingTop: 6, paddingBottom: 4 },
   content: { color: theme.colors.text, fontSize: theme.font.body, lineHeight: 22 },
   userContent: { color: '#FFFFFF' },
-  userTime: { color: 'rgba(255,255,255,0.72)', fontSize: 11, marginTop: 4, textAlign: 'right' },
   cursor: { color: theme.colors.accent },
   runtimeRow: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 4, marginBottom: 2 },
   runtimeText: { flexShrink: 1, color: theme.colors.textDim, fontSize: 13 },
@@ -230,5 +225,5 @@ const styles = StyleSheet.create({
   retry: { minHeight: 32, justifyContent: 'center', marginTop: 2, paddingHorizontal: 4 },
   retryPressed: { opacity: 0.6 },
   retryText: { color: theme.colors.red, fontSize: 12 },
-  receiptWrap: { width: '86%' },
+  receiptWrap: { width: '100%' },
 });
