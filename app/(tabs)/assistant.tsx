@@ -21,6 +21,7 @@ import {
   mergeAssistantMessages,
   pendingAssistantRequestId,
   shouldFollowAssistantEnd,
+  shouldElevateAssistantComposer,
   shouldScrollAssistantOnFocus,
 } from '../../src/assistant/ui-state';
 import { cancelAssistantTurn, retryAssistantTurn, sendAssistantTurn } from '../../src/assistant/orchestrator';
@@ -89,6 +90,8 @@ export default function AssistantScreen() {
   const [stoppingRequestId, setStoppingRequestId] = useState<string | null>(null);
   const [undoErrors, setUndoErrors] = useState<Record<string, string>>({});
   const [streamingReplies, setStreamingReplies] = useState<Record<string, AssistantMessage>>({});
+  const [composerHeight, setComposerHeight] = useState(68);
+  const [composerElevated, setComposerElevated] = useState(false);
 
   const displayMessages = useMemo(() => mergeAssistantMessages(messages, Object.values(streamingReplies)), [messages, streamingReplies]);
   const requestStartedAt = useMemo(() => new Map(
@@ -526,7 +529,11 @@ export default function AssistantScreen() {
                 />
               </View>
             )}
-            contentContainerStyle={[styles.listContent, messages.length === 0 && styles.emptyList]}
+            contentContainerStyle={[
+              styles.listContent,
+              { paddingBottom: composerHeight + 18 },
+              messages.length === 0 && styles.emptyList,
+            ]}
             ListEmptyComponent={<AssistantEmptyState />}
             ListHeaderComponent={olderLoad === 'loading' ? (
               <ActivityIndicator color={theme.colors.accent} style={styles.olderSpinner} />
@@ -546,23 +553,37 @@ export default function AssistantScreen() {
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
             onScroll={({ nativeEvent }) => {
-              followEndRef.current = shouldFollowAssistantEnd({
+              const metrics = {
                 contentHeight: nativeEvent.contentSize.height,
                 viewportHeight: nativeEvent.layoutMeasurement.height,
                 offsetY: nativeEvent.contentOffset.y,
-              });
+              };
+              followEndRef.current = shouldFollowAssistantEnd(metrics);
+              setComposerElevated(shouldElevateAssistantComposer(metrics));
               if (nativeEvent.contentOffset.y < 32) void loadOlder();
             }}
             scrollEventThrottle={80}
           />
         )}
 
-        <View style={styles.composerWrap}>
+        <View
+          style={styles.composerWrap}
+          onLayout={({ nativeEvent }) => setComposerHeight(nativeEvent.layout.height)}
+        >
+          {composerElevated ? (
+            <View pointerEvents="none" style={styles.composerSoftEdge}>
+              <View style={[styles.softEdgeBand, styles.softEdgeBand1]} />
+              <View style={[styles.softEdgeBand, styles.softEdgeBand2]} />
+              <View style={[styles.softEdgeBand, styles.softEdgeBand3]} />
+              <View style={[styles.softEdgeBand, styles.softEdgeBand4]} />
+            </View>
+          ) : null}
           <AssistantComposer
             onSend={send}
             onStop={() => stopCurrentTurn(activeRequestId)}
             disabled={composerDisabled}
             processing={composerProcessing || stoppingRequestId !== null}
+            elevated={composerElevated}
           />
         </View>
       </KeyboardAvoidingView>
@@ -586,7 +607,7 @@ const styles = StyleSheet.create({
   contextTitle: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold, marginTop: 1 },
   contextClose: { width: theme.touchTarget, height: theme.touchTarget, alignItems: 'center', justifyContent: 'center' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  listContent: { paddingHorizontal: theme.spacing.md, paddingTop: 5, paddingBottom: 12 },
+  listContent: { paddingHorizontal: theme.spacing.md, paddingTop: 5 },
   emptyList: { flexGrow: 1 },
   olderSpinner: { marginVertical: 8 },
   olderError: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 },
@@ -594,6 +615,12 @@ const styles = StyleSheet.create({
   olderRetryText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
   dateSeparatorWrap: { alignItems: 'center', paddingTop: 7, paddingBottom: 3 },
   dateSeparatorText: { color: theme.colors.textDim, fontSize: 11, lineHeight: 17, paddingHorizontal: 9, paddingVertical: 2, borderRadius: 11, backgroundColor: theme.colors.card },
-  composerWrap: { paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6 },
+  composerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6 },
+  composerSoftEdge: { position: 'absolute', left: 0, right: 0, top: -43, height: 54 },
+  softEdgeBand: { position: 'absolute', left: 0, right: 0, height: 14, backgroundColor: theme.colors.bg },
+  softEdgeBand1: { top: 0, opacity: 0.08 },
+  softEdgeBand2: { top: 13, opacity: 0.18 },
+  softEdgeBand3: { top: 26, opacity: 0.36 },
+  softEdgeBand4: { top: 39, opacity: 0.64 },
   pressed: { opacity: 0.72 },
 });

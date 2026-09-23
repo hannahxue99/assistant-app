@@ -28,6 +28,7 @@ interface AssistantComposerProps {
   onStop?: () => Promise<void>;
   disabled?: boolean;
   processing?: boolean;
+  elevated?: boolean;
 }
 
 function VoiceLevelBars({ level }: { level: number }) {
@@ -45,6 +46,7 @@ export function AssistantComposer({
   onStop = async () => {},
   disabled = false,
   processing = false,
+  elevated = false,
 }: AssistantComposerProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -200,6 +202,7 @@ export function AssistantComposer({
       <View
         style={[
           styles.composer,
+          elevated && styles.composerElevated,
           mode === 'listening' && styles.composerListening,
           mode === 'processing' && styles.composerDisabled,
         ]}
@@ -296,7 +299,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 4,
     minHeight: 50,
-    ...theme.shadow,
+  },
+  composerElevated: {
+    shadowColor: '#302923',
+    shadowOpacity: 0.13,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -2 },
+    elevation: 8,
   },
   composerListening: {
     borderColor: theme.colors.accent,

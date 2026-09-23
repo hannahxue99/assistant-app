@@ -61,6 +61,22 @@ export function shouldFollowAssistantEnd(
   return distance <= threshold;
 }
 
+/** 输入框只在历史消息实际从它下方经过时获得悬浮层次。 */
+export function shouldElevateAssistantComposer(
+  metrics: AssistantScrollMetrics,
+  threshold = 8,
+): boolean {
+  if (metrics.contentHeight <= metrics.viewportHeight) return false;
+  const distance = metrics.contentHeight - metrics.viewportHeight - metrics.offsetY;
+  return distance > threshold;
+}
+
+export function assistantMessageSurface(
+  role: AssistantMessage['role'],
+): 'bubble' | 'plain' {
+  return role === 'user' ? 'bubble' : 'plain';
+}
+
 export function shouldScrollAssistantOnFocus(input: {
   loadedOnce: boolean;
   followingEnd: boolean;

@@ -37,9 +37,9 @@ export function AssistantWebSources({ sources }: { sources: AssistantWebSource[]
         onPress={() => setExpanded(value => !value)}
         style={({ pressed }) => [styles.header, pressed && styles.pressed]}
       >
-        <Ionicons name="globe-outline" size={15} color={theme.colors.textDim} />
+        <Ionicons name="globe-outline" size={18} color="#5577F2" />
         <Text style={styles.headerText}>{assistantWebSourcesLabel(sources.length)}</Text>
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-forward'} size={15} color={theme.colors.textDim} />
+        <Text style={styles.headerChevron}>{expanded ? '⌃' : '›'}</Text>
       </Pressable>
       {expanded ? (
         <View style={styles.list} accessibilityLabel="搜索来源列表">
@@ -65,28 +65,23 @@ export function AssistantWebSources({ sources }: { sources: AssistantWebSource[]
 }
 
 const styles = StyleSheet.create({
-  wrap: { width: '86%', marginTop: 5 },
+  wrap: { width: '100%', marginBottom: 3 },
   header: {
-    minHeight: 36,
+    minHeight: 30,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    paddingHorizontal: 11,
-    borderRadius: 12,
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    gap: 9,
+    paddingVertical: 4,
   },
-  headerText: { flex: 1, color: theme.colors.textDim, fontSize: 12, fontWeight: '600' },
+  headerText: { flexShrink: 1, color: theme.colors.textDim, fontSize: 13 },
+  headerChevron: { color: theme.colors.textDim, fontSize: 18, lineHeight: 20, marginLeft: -3 },
   list: {
-    marginTop: 4,
-    borderRadius: 12,
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    overflow: 'hidden',
+    marginLeft: 9,
+    paddingLeft: 18,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: theme.colors.border,
   },
-  sourceRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 11, paddingVertical: 8 },
+  sourceRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingRight: 2 },
   divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
   sourceCopy: { flex: 1, gap: 2 },
   sourceTitle: { color: theme.colors.text, fontSize: 13, lineHeight: 18 },

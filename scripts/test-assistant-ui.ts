@@ -13,6 +13,8 @@ import {
   listStateWhileRefreshing,
   shouldScrollAssistantOnFocus,
   shouldFollowAssistantEnd,
+  shouldElevateAssistantComposer,
+  assistantMessageSurface,
 } from '../src/assistant/ui-state';
 import { ASSISTANT_EMPTY_DESCRIPTION } from '../src/assistant/ui-copy';
 import {
@@ -193,6 +195,14 @@ check(!shouldFollowAssistantEnd({ contentHeight: 1200, viewportHeight: 600, offs
   '用户上滑阅读历史时不得强制拉回末端');
 check(shouldFollowAssistantEnd({ contentHeight: 400, viewportHeight: 600, offsetY: 0 }),
   '内容不足一屏时应视为位于末端');
+check(!shouldElevateAssistantComposer({ contentHeight: 400, viewportHeight: 600, offsetY: 0 }),
+  '内容不足一屏时输入框不得凭空产生悬浮阴影');
+check(!shouldElevateAssistantComposer({ contentHeight: 1200, viewportHeight: 600, offsetY: 594 }),
+  '停在最新消息附近时输入框应保持干净');
+check(shouldElevateAssistantComposer({ contentHeight: 1200, viewportHeight: 600, offsetY: 420 }),
+  '阅读历史消息时输入框应显示柔和悬浮层次');
+check(assistantMessageSurface('user') === 'bubble', '只有用户消息使用气泡');
+check(assistantMessageSurface('assistant') === 'plain', '小知回复必须直接显示，不得使用卡片');
 
 const firstTodoIntent = assistantTodoNavigationIntent('all', 'todo-long', '');
 check(firstTodoIntent?.isNew && firstTodoIntent.view === 'all', '新的全部待办跳链应被首次消费');
