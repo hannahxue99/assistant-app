@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="760" viewBox="0 0 1040 760">
+  <style>
+    .bg{fill:#f6f3ee}.card{fill:#fff;stroke:#e8e2d9;stroke-width:2}.soft{fill:#f9e8dd}.orange{fill:#e0733a}.ink{fill:#2b2622}.muted{fill:#8a837b}.red{fill:#c05a4e}.line{stroke:#e8e2d9;stroke-width:1.5}.h1{font:700 30px -apple-system,"PingFang SC",sans-serif}.h2{font:700 21px -apple-system,"PingFang SC",sans-serif}.body{font:15px -apple-system,"PingFang SC",sans-serif}.small{font:13px -apple-system,"PingFang SC",sans-serif}.tiny{font:12px -apple-system,"PingFang SC",sans-serif}
+  </style>
+  <rect class="bg" width="1040" height="760"/>
+  <text class="h1 ink" x="60" y="58">“我的”页与联网搜索设置</text>
+  <text class="body muted" x="60" y="88">联网搜索是独立基础能力，不藏在理解引擎内部；两个配置状态分别展示。</text>
+
+  <g transform="translate(120 126)">
+    <rect class="card" width="330" height="570" rx="30"/>
+    <text class="h2 ink" x="24" y="46">我的</text>
+    <rect class="soft" x="24" y="76" width="282" height="108" rx="18"/>
+    <text class="small ink" x="44" y="108">长期记忆</text>
+    <text class="body ink" x="44" y="142">陪伴 38 天 · 12 条</text>
+    <text class="small muted" x="258" y="142">›</text>
+
+    <text class="h2 ink" x="24" y="226">设置</text>
+    <text class="small muted" x="28" y="254">助手与同步</text>
+    <rect class="card" x="24" y="270" width="282" height="146" rx="14"/>
+    <text class="body ink" x="42" y="306">理解引擎</text>
+    <text class="small muted" x="230" y="306">已开启　›</text>
+    <line class="line" x1="42" y1="323" x2="288" y2="323"/>
+    <text class="body ink" x="42" y="357">联网搜索</text>
+    <text class="small muted" x="230" y="357">已配置　›</text>
+    <line class="line" x1="42" y1="374" x2="288" y2="374"/>
+    <text class="body ink" x="42" y="405">系统日历同步</text>
+    <text class="small muted" x="230" y="405">已开启　›</text>
+
+    <text class="small muted" x="28" y="456">待办通知</text>
+    <rect class="card" x="24" y="472" width="282" height="72" rx="14"/>
+    <text class="body ink" x="42" y="515">早 8:00 晨间待办</text>
+    <rect x="246" y="493" width="42" height="24" rx="12" fill="#e0733a"/>
+    <circle cx="276" cy="505" r="9" fill="#fff"/>
+    <text class="tiny muted" x="24" y="574">状态：已配置 / 未配置 / 已关闭</text>
+  </g>
+
+  <path d="M450 410h70" stroke="#c7beb5" stroke-width="2" stroke-dasharray="7 7"/>
+
+  <g transform="translate(590 126)">
+    <rect class="card" width="330" height="570" rx="30"/>
+    <text class="body orange" x="24" y="42">‹ 我的</text>
+    <text class="h2 ink" x="24" y="82">联网搜索</text>
+    <text class="small muted" x="24" y="108">让小知查询最新信息、读取网页并附上来源。</text>
+    <rect class="card" x="24" y="136" width="282" height="62" rx="14"/>
+    <text class="body ink" x="42" y="173">启用联网搜索</text>
+    <rect x="246" y="155" width="42" height="24" rx="12" fill="#e0733a"/>
+    <circle cx="276" cy="167" r="9" fill="#fff"/>
+
+    <text class="small muted" x="24" y="232">搜索能力</text>
+    <rect class="card" x="24" y="244" width="282" height="48" rx="12"/>
+    <text class="body ink" x="40" y="274">DeepSeek 服务端搜索</text>
+    <text class="small muted" x="248" y="274">已就绪</text>
+
+    <text class="small muted" x="24" y="326">模型与密钥</text>
+    <rect class="card" x="24" y="338" width="282" height="48" rx="12"/>
+    <text class="body ink" x="40" y="368">复用理解引擎配置</text>
+    <text class="small muted" x="266" y="368">›</text>
+
+    <rect class="orange" x="24" y="414" width="282" height="48" rx="12"/>
+    <text class="body" fill="#fff" x="150" y="444" text-anchor="middle">保存</text>
+
+    <rect class="soft" x="24" y="486" width="282" height="58" rx="14"/>
+    <text class="small ink" x="42" y="511">搜索次数和结果数量由 DeepSeek 决定。</text>
+    <text class="tiny muted" x="42" y="532">网页内容不会自动写入长期记忆。</text>
+  </g>
+</svg>
