@@ -8,6 +8,27 @@ const markdownSource = fs.readFileSync('src/components/AssistantMarkdown.tsx', '
 const sourceListSource = fs.readFileSync('src/components/AssistantWebSources.tsx', 'utf8');
 const llmSettingsSource = fs.readFileSync('app/settings/llm.tsx', 'utf8');
 const tabsSource = fs.readFileSync('app/(tabs)/_layout.tsx', 'utf8');
+const homeSource = fs.readFileSync('app/(tabs)/index.tsx', 'utf8');
+const profileSource = fs.readFileSync('app/(tabs)/profile.tsx', 'utf8');
+const ambientSource = fs.readFileSync('src/components/WarmAmbientBackground.tsx', 'utf8');
+const mascotSource = fs.readFileSync('src/components/XiaozhiMascot.tsx', 'utf8');
+
+assert.match(homeSource, /accessibilityLabel="小知正在关注"/,
+  '首页必须保留生成图中的“小知正在关注”主视觉区');
+assert.match(homeSource, /<XiaozhiMascot size=\{92\}/,
+  '首页标题区必须使用可复用的小知 3D 形象');
+assert.match(profileSource, /管理你的记忆与偏好，让小知更懂你。/,
+  '我的页必须保留生成图中的页面说明');
+assert.match(profileSource, /<XiaozhiMascot size=\{88\}/,
+  '我的页标题区必须使用可复用的小知 3D 形象');
+assert.match(assistantSource, /连续对话 · 自动保存/,
+  '小知页必须保留生成图中的会话说明');
+assert.match(assistantSource, /<XiaozhiMascot size=\{84\}/,
+  '小知页标题区必须使用可复用的小知 3D 形象');
+assert.match(ambientSource, /pointerEvents="none"/,
+  '暖色氛围背景不能拦截页面交互');
+assert.match(mascotSource, /xiaozhi-mascot\.png/,
+  '三个页面必须复用项目内的小知形象资产');
 
 assert.match(
   assistantSource,
@@ -70,9 +91,9 @@ assert.match(assistantSource, /composerShadowFade: \{[\s\S]*top: -58,[\s\S]*bott
   '白色渐隐必须从输入框上方平滑延伸到底部，不能形成实色面板');
 assert.match(composerSource, /elevation > 0 && styles\.composerElevated/,
   '滚动阴影必须保留在输入框卡片自身，不能因移除整宽渐变层而丢失');
-assert.match(composerSource, /borderColor: '#DCD4CA',[\s\S]*backgroundColor: '#FFFEFD'/,
+assert.match(composerSource, /borderColor: '#E7DED6',[\s\S]*backgroundColor: '#FFFFFF'/,
   '输入框必须用清晰但克制的边界与暖白卡片底色形成基础层次');
-assert.match(composerSource, /shadowColor: '#6E5E52',[\s\S]*shadowOpacity: 0\.10,[\s\S]*shadowRadius: 10,[\s\S]*shadowOffset: \{ width: 0, height: 3 \}/,
+assert.match(composerSource, /shadowColor: '#6E5E52',[\s\S]*shadowOpacity: 0\.12,[\s\S]*shadowRadius: 16,[\s\S]*shadowOffset: \{ width: 0, height: 6 \}/,
   '输入框在置底状态也必须保留轻微外凸阴影');
 assert.match(composerSource, /shadowOpacity: 0\.10 \+ 0\.06 \* elevation/,
   '用户离开底部时，输入框阴影必须从基础外凸连续增强');
@@ -86,8 +107,8 @@ assert.match(tabsSource, /sceneStyle: styles\.scene/,
   '首页、小知、我的三个 Tab 场景必须统一使用纯白背景');
 assert.match(tabsSource, /tabBarBackground: \(\) => <View style=\{styles\.tabBarBackground\} \/>/,
   '底部 Tab Bar 必须使用实体背景，不能透出系统灰色或模糊材质');
-assert.match(tabsSource, /scene: \{ backgroundColor: '#FFFFFF' \}[\s\S]*tabBarBackground: \{ flex: 1, backgroundColor: '#FFFFFF' \}/,
-  '三个 Tab 页面与底部导航背景必须明确为纯白');
+assert.match(tabsSource, /scene: \{ backgroundColor: theme\.colors\.bg \}[\s\S]*tabBarBackground: \{ flex: 1, backgroundColor: theme\.colors\.tabBar \}/,
+  '三个 Tab 页面与底部导航必须使用统一的暖白设计令牌');
 assert.ok((assistantSource.match(/loadLatest\('if-following'\)/g) ?? []).length >= 3,
   '完成、停止和重试刷新都必须尊重用户是否仍在末端');
 assert.doesNotMatch(assistantSource, /loadLatest\((true|false)\)/,

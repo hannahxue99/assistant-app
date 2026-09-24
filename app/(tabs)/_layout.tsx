@@ -10,17 +10,20 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: theme.colors.accent,
-        tabBarInactiveTintColor: theme.colors.accent,
+        tabBarInactiveTintColor: theme.colors.textDim,
         sceneStyle: styles.scene,
         tabBarBackground: () => <View style={styles.tabBarBackground} />,
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#F1EEE9',
-          shadowColor: 'transparent',
-          elevation: 0,
-          height: 64,
-          paddingBottom: 8,
-          paddingTop: 6,
+          backgroundColor: theme.colors.tabBar,
+          borderTopColor: theme.colors.border,
+          shadowColor: '#8A5B3D',
+          shadowOpacity: 0.06,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: -4 },
+          elevation: 8,
+          height: 70,
+          paddingBottom: 9,
+          paddingTop: 7,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         headerShown: false,
@@ -31,7 +34,7 @@ export default function TabLayout() {
         options={{
           title: '首页',
           tabBarIcon: ({ size, focused }) => (
-            <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={theme.colors.accent} />
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={focused ? theme.colors.accent : theme.colors.textDim} />
           ),
         }}
       />
@@ -49,7 +52,7 @@ export default function TabLayout() {
         options={{
           title: '我的',
           tabBarIcon: ({ size, focused }) => (
-            <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={theme.colors.accent} />
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={focused ? theme.colors.accent : theme.colors.textDim} />
           ),
         }}
       />
@@ -58,6 +61,6 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  scene: { backgroundColor: '#FFFFFF' },
-  tabBarBackground: { flex: 1, backgroundColor: '#FFFFFF' },
+  scene: { backgroundColor: theme.colors.bg },
+  tabBarBackground: { flex: 1, backgroundColor: theme.colors.tabBar },
 });

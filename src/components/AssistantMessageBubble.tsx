@@ -16,6 +16,7 @@ import { theme } from '../theme';
 import { AssistantActionReceipt } from './AssistantActionReceipt';
 import { AssistantMarkdown } from './AssistantMarkdown';
 import { AssistantWebSources } from './AssistantWebSources';
+import { XiaozhiMascot } from './XiaozhiMascot';
 
 const META_ICON_COLOR = '#5577F2';
 
@@ -164,15 +165,18 @@ export function AssistantMessageBubble({
         </View>
       ) : null}
       {surface === 'assistant-bubble' && (message.content || message.errorCode === 'cancelled') ? (
-        <View style={styles.assistantBubble}>
-          {message.content ? (
-            <AssistantMarkdown content={message.content} streaming={isStreaming} />
-          ) : null}
-          {message.errorCode === 'cancelled' ? (
-            <View style={styles.statusRow}>
-              <Text style={styles.statusText}>已停止 · 未执行任何操作</Text>
-            </View>
-          ) : null}
+        <View style={styles.assistantMessageLine}>
+          <View style={styles.avatar}><XiaozhiMascot size={32} /></View>
+          <View style={styles.assistantBubble}>
+            {message.content ? (
+              <AssistantMarkdown content={message.content} streaming={isStreaming} />
+            ) : null}
+            {message.errorCode === 'cancelled' ? (
+              <View style={styles.statusRow}>
+                <Text style={styles.statusText}>已停止 · 未执行任何操作</Text>
+              </View>
+            ) : null}
+          </View>
         </View>
       ) : null}
       {!isUser && message.operations?.length ? (
@@ -207,11 +211,13 @@ export function AssistantMessageBubble({
 }
 
 const styles = StyleSheet.create({
-  row: { width: '100%', marginVertical: 5 },
+  row: { width: '100%', marginVertical: 7 },
   userRow: { alignItems: 'flex-end' },
   assistantRow: { alignItems: 'flex-start' },
-  userBubble: { maxWidth: '86%', borderRadius: 18, borderBottomRightRadius: 6, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.colors.accent },
-  assistantBubble: { maxWidth: '94%', borderRadius: 18, borderBottomLeftRadius: 6, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: theme.colors.card, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.border },
+  userBubble: { maxWidth: '84%', borderRadius: 20, borderBottomRightRadius: 7, paddingHorizontal: 16, paddingVertical: 11, backgroundColor: theme.colors.accent, ...theme.shadow },
+  assistantMessageLine: { width: '100%', flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#FFF3E9', alignItems: 'center', justifyContent: 'center', marginTop: 3 },
+  assistantBubble: { flexShrink: 1, maxWidth: '88%', borderRadius: 20, borderBottomLeftRadius: 7, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFFAF5', ...theme.shadow },
   content: { color: theme.colors.text, fontSize: 16, lineHeight: 23 },
   userContent: { color: '#FFFFFF' },
   runtimeRow: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 4, marginBottom: 2 },

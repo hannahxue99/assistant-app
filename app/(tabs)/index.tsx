@@ -14,7 +14,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AssistantEventCard } from '../../src/components/AssistantEventCard';
+import { WarmAmbientBackground } from '../../src/components/WarmAmbientBackground';
+import { XiaozhiMascot } from '../../src/components/XiaozhiMascot';
 import {
   listLongTermTasks,
   listWeekTasks,
@@ -24,6 +25,7 @@ import { syncEntryReminder } from '../../src/engine/notifications';
 import {
   groupWeekTasks,
   isOverdue,
+  logTimestamp,
   weekTaskLabel,
   type DayGroup,
 } from '../../src/engine/schedule';
@@ -155,11 +157,29 @@ export default function HomeScreen() {
     day: 'numeric',
     weekday: 'long',
   });
+  const greetingHour = new Date().getHours();
+  const greeting = greetingHour < 11 ? '早上好' : greetingHour < 18 ? '下午好' : '晚上好';
+  const visibleTodoGroups = todoView === 'week' ? weekGroups : longTermGroups;
+  const visibleTodos = visibleTodoGroups.flatMap(group => group.entries.map(entry => ({ entry, isToday: group.isToday })));
+  const spotlightEvent = events[0] ?? null;
+  const recentEvents = events.slice(1);
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
+      <WarmAmbientBackground />
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
-          <Text style={styles.dateLine}>{dateStr} · 今天</Text>
+          <View style={styles.hero}>
+            <View style={styles.heroCopy}>
+              <Text style={styles.greeting}>{greeting} 👋</Text>
+              <Text style={styles.dateLine}>{dateStr} · 今天</Text>
+            </View>
+            <View style={styles.heroAssistant}>
+              <View style={styles.speechBubble}>
+                <Text style={styles.speechText}>有我在，{`\n`}一切井井有条。</Text>
+              </View>
+              <XiaozhiMascot size={92} />
+            </View>
+          </View>
 
           {/* 模块一：同一位置切换 7 天窗口和更远待办，两个列表互不重复。 */}
           <View
@@ -169,23 +189,15 @@ export default function HomeScreen() {
               tryFocusTodo();
             }}
           >
-            <View style={styles.todoTabs}>
+            <View style={styles.sectionHead}>
+              <Text style={styles.sectionTitle}>{todoView === 'week' ? '今日待办' : '全部待办'}</Text>
               <Pressable
-                accessibilityRole="tab"
-                accessibilityState={{ selected: todoView === 'week' }}
-                onPress={() => setTodoView('week')}
-                style={styles.todoTabButton}
+                accessibilityRole="button"
+                onPress={() => setTodoView(todoView === 'week' ? 'all' : 'week')}
+                style={styles.sectionAction}
               >
-                <Text style={[styles.todoTabWeek, todoView === 'week' && styles.todoTabActiveText]}>本周待办</Text>
-              </Pressable>
-              <Text style={styles.todoTabDivider}>｜</Text>
-              <Pressable
-                accessibilityRole="tab"
-                accessibilityState={{ selected: todoView === 'all' }}
-                onPress={() => setTodoView('all')}
-                style={styles.todoTabButton}
-              >
-                <Text style={[styles.todoTabAll, todoView === 'all' && styles.todoTabActiveText]}>全部待办</Text>
+                <Text style={styles.sectionActionText}>{todoView === 'week' ? '查看全部' : '查看本周'}</Text>
+                <Ionicons name="chevron-forward" size={17} color={theme.colors.textDim} />
               </Pressable>
             </View>
             {todosState === 'loading' ? (
@@ -195,7 +207,7 @@ export default function HomeScreen() {
                 <Text style={styles.eventsErrorText}>待办暂时加载不了</Text>
                 <Text style={styles.eventsRetry}>重试</Text>
               </Pressable>
-            ) : (todoView === 'week' ? weekGroups : longTermGroups).length === 0 ? (
+            ) : visibleTodoGroups.length === 0 ? (
               <View style={styles.emptyWeek}>
                 <Ionicons name="calendar-outline" size={22} color={theme.colors.textDim} />
                 <Text style={styles.emptyWeekTitle}>
@@ -206,8 +218,8 @@ export default function HomeScreen() {
                 </Text>
               </View>
             ) : (
-              (todoView === 'week' ? weekGroups : longTermGroups).flatMap(group => (
-                group.entries.map(entry => (
+              <View style={styles.todoCard}>
+                {visibleTodos.map(({ entry, isToday }, index) => (
                   <View
                     key={entry.id}
                     onLayout={event => {
@@ -217,18 +229,24 @@ export default function HomeScreen() {
                   >
                     <WeekTaskRow
                       entry={entry}
-                      isToday={group.isToday}
+                      isToday={isToday}
                       highlighted={highlightedTodoId === entry.id}
                       onToggle={handleToggle}
                     />
+                    {index < visibleTodos.length - 1 ? <View style={styles.rowDivider} /> : null}
                   </View>
-                ))
-              ))
+                ))}
+              </View>
             )}
           </View>
 
           {/* 模块二：持续事件。失败只影响本区，不阻断待办。 */}
-          <Text style={styles.h1}>事件</Text>
+          <View style={styles.sectionHead} accessibilityLabel="小知正在关注">
+            <Text style={styles.sectionTitle}>小知正在关注</Text>
+            <View style={styles.sectionAction}>
+              <Text style={styles.sectionActionText}>持续事件</Text>
+            </View>
+          </View>
           {eventsState === 'loading' ? (
             <ActivityIndicator color={theme.colors.accent} style={styles.eventsLoading} />
           ) : eventsState === 'error' ? (
@@ -236,17 +254,74 @@ export default function HomeScreen() {
               <Text style={styles.eventsErrorText}>事件暂时加载不了</Text>
               <Text style={styles.eventsRetry}>重试</Text>
             </Pressable>
-          ) : events.length === 0 ? (
+          ) : !spotlightEvent ? (
             <Text style={styles.eventsEmpty}>还没有需要持续跟进的事</Text>
-          ) : events.map(event => (
-            <AssistantEventCard
-              key={event.id}
-              event={event}
-              onPress={() => router.push(`/event/${event.id}`)}
-              onTogglePin={() => { void handleEventPin(event); }}
-              pinning={pinningEventId === event.id}
-            />
-          ))}
+          ) : (
+            <View style={styles.watchingCard}>
+              <View style={styles.watchingOrb}>
+                <Ionicons name="trending-up" size={27} color={theme.colors.accent} />
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`查看事件${spotlightEvent.title}`}
+                onPress={() => router.push(`/event/${spotlightEvent.id}`)}
+                style={({ pressed }) => [styles.watchingContent, pressed && styles.pressed]}
+              >
+                <Text style={styles.watchingTitle} numberOfLines={1}>{spotlightEvent.title}</Text>
+                <Text style={styles.watchingState} numberOfLines={2}>{spotlightEvent.currentState || '暂时还没有明确进展'}</Text>
+                <Text style={styles.watchingLink}>查看更新 <Ionicons name="arrow-forward" size={15} /></Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={spotlightEvent.pinnedAt !== null ? `取消置顶${spotlightEvent.title}` : `置顶${spotlightEvent.title}`}
+                disabled={pinningEventId === spotlightEvent.id}
+                onPress={() => { void handleEventPin(spotlightEvent); }}
+                style={styles.pinAction}
+              >
+                <Ionicons name={spotlightEvent.pinnedAt !== null ? 'bookmark' : 'bookmark-outline'} size={18} color={theme.colors.accent} />
+              </Pressable>
+            </View>
+          )}
+
+          {recentEvents.length > 0 ? (
+            <>
+              <View style={styles.sectionHead}>
+                <Text style={styles.sectionTitle}>最近事件</Text>
+                <Text style={styles.sectionActionText}>{recentEvents.length} 件</Text>
+              </View>
+              <View style={styles.recentCard}>
+                {recentEvents.map((event, index) => (
+                  <View key={event.id}>
+                    <View style={styles.eventRow}>
+                      <View style={[styles.eventIcon, index % 3 === 1 ? styles.eventIconViolet : index % 3 === 2 ? styles.eventIconOrange : styles.eventIconGreen]}>
+                        <Ionicons name={index % 3 === 1 ? 'airplane-outline' : index % 3 === 2 ? 'home-outline' : 'book-outline'} size={22} color={index % 3 === 1 ? theme.colors.violet : index % 3 === 2 ? theme.colors.accent : theme.colors.green} />
+                      </View>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`查看事件${event.title}`}
+                        onPress={() => router.push(`/event/${event.id}`)}
+                        style={({ pressed }) => [styles.eventContent, pressed && styles.pressed]}
+                      >
+                        <Text style={styles.eventTitle} numberOfLines={1}>{event.title}</Text>
+                        <Text style={styles.eventState} numberOfLines={1}>{event.currentState || '暂时还没有明确进展'}</Text>
+                        <Text style={styles.eventTime}>{logTimestamp(event.updatedAt)}</Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={event.pinnedAt !== null ? `取消置顶${event.title}` : `置顶${event.title}`}
+                        disabled={pinningEventId === event.id}
+                        onPress={() => { void handleEventPin(event); }}
+                        style={styles.eventChevron}
+                      >
+                        <Ionicons name={event.pinnedAt !== null ? 'bookmark' : 'chevron-forward'} size={18} color={theme.colors.textDim} />
+                      </Pressable>
+                    </View>
+                    {index < recentEvents.length - 1 ? <View style={styles.eventDivider} /> : null}
+                  </View>
+                ))}
+              </View>
+            </>
+          ) : null}
 
       </ScrollView>
     </SafeAreaView>
@@ -289,16 +364,21 @@ function WeekTaskRow({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
-  content: { padding: 16, paddingBottom: 40, gap: 10 },
-  dateLine: { fontSize: theme.font.small, color: theme.colors.textDim },
-  h1: { fontSize: 18, fontWeight: '700', color: theme.colors.text, marginTop: 8 },
-  todoSection: { gap: 10 },
-  todoTabs: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center' },
-  todoTabButton: { minHeight: theme.touchTarget, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 1 },
-  todoTabWeek: { fontSize: 18, lineHeight: 25, fontWeight: '700', color: '#A9A29A' },
-  todoTabAll: { fontSize: 14, lineHeight: 22, fontWeight: '600', color: '#A9A29A' },
-  todoTabActiveText: { color: theme.colors.text },
-  todoTabDivider: { color: '#A9A29A', fontSize: 15, lineHeight: 27, paddingHorizontal: 1 },
+  content: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 42, gap: 20 },
+  hero: { minHeight: 122, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  heroCopy: { paddingTop: 9, gap: 7 },
+  greeting: { color: theme.colors.text, fontSize: 32, lineHeight: 40, fontWeight: theme.fontWeight.bold },
+  dateLine: { fontSize: 15, color: theme.colors.textDim },
+  heroAssistant: { width: 180, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginRight: -8 },
+  speechBubble: { maxWidth: 106, borderRadius: 22, borderBottomRightRadius: 5, backgroundColor: '#FFF0E3', paddingHorizontal: 14, paddingVertical: 12, marginRight: -5 },
+  speechText: { color: '#765A49', fontSize: 12, lineHeight: 18 },
+  todoSection: { gap: 11 },
+  sectionHead: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sectionTitle: { color: theme.colors.text, fontSize: 22, lineHeight: 30, fontWeight: theme.fontWeight.bold },
+  sectionAction: { minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 2, paddingLeft: 10 },
+  sectionActionText: { color: theme.colors.textDim, fontSize: 14 },
+  todoCard: { backgroundColor: theme.colors.card, borderRadius: theme.radius.card, paddingHorizontal: 16, ...theme.shadow },
+  rowDivider: { height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border, marginLeft: 42 },
   emptyWeek: {
     borderWidth: 1,
     borderStyle: 'dashed',
@@ -315,30 +395,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.input,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    minHeight: 68,
+    paddingVertical: 12,
   },
-  weekRowToday: { backgroundColor: theme.colors.eventSoft, borderColor: theme.colors.eventBorder },
-  weekRowHighlighted: { borderColor: theme.colors.accent, backgroundColor: theme.colors.accentSoft },
+  weekRowToday: {},
+  weekRowHighlighted: { marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 14, backgroundColor: theme.colors.accentSoft },
   check: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     borderWidth: 2,
     borderColor: theme.colors.textDim,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkOn: { backgroundColor: theme.colors.green, borderColor: theme.colors.green },
-  weekLabel: { fontSize: theme.font.small, fontWeight: '700', color: theme.colors.accent, minWidth: 48 },
-  weekText: { flex: 1, fontSize: theme.font.body, color: theme.colors.text },
+  weekLabel: { fontSize: 15, fontWeight: '700', color: theme.colors.accent, minWidth: 66 },
+  weekText: { flex: 1, fontSize: 16, lineHeight: 22, color: theme.colors.text },
   weekTextDone: { textDecorationLine: 'line-through', color: theme.colors.textDim },
   eventsLoading: { marginVertical: 18 },
   eventsError: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   eventsErrorText: { color: theme.colors.textDim, fontSize: theme.font.small },
   eventsRetry: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
   eventsEmpty: { color: theme.colors.textDim, fontSize: theme.font.small, paddingVertical: 10 },
+  watchingCard: { position: 'relative', minHeight: 152, flexDirection: 'row', alignItems: 'center', borderRadius: theme.radius.card, backgroundColor: '#FFF1E4', padding: 18, overflow: 'hidden', ...theme.shadow },
+  watchingOrb: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFE5D2', marginRight: 14 },
+  watchingContent: { flex: 1, gap: 5 },
+  watchingTitle: { color: theme.colors.text, fontSize: 20, lineHeight: 26, fontWeight: theme.fontWeight.bold, paddingRight: 24 },
+  watchingState: { color: '#5D5149', fontSize: 15, lineHeight: 21 },
+  watchingLink: { color: theme.colors.accent, fontSize: 15, lineHeight: 22, fontWeight: theme.fontWeight.semibold, textAlign: 'right', marginTop: 7 },
+  pinAction: { position: 'absolute', top: 8, right: 8, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  recentCard: { backgroundColor: theme.colors.card, borderRadius: theme.radius.card, paddingHorizontal: 16, ...theme.shadow },
+  eventRow: { minHeight: 88, flexDirection: 'row', alignItems: 'center' },
+  eventIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  eventIconGreen: { backgroundColor: theme.colors.greenSoft },
+  eventIconViolet: { backgroundColor: theme.colors.violetSoft },
+  eventIconOrange: { backgroundColor: theme.colors.accentSoft },
+  eventContent: { flex: 1, paddingHorizontal: 13, paddingVertical: 12, gap: 2 },
+  eventTitle: { color: theme.colors.text, fontSize: 16, lineHeight: 22, fontWeight: theme.fontWeight.semibold },
+  eventState: { color: '#6E655E', fontSize: 13, lineHeight: 18 },
+  eventTime: { color: theme.colors.textDim, fontSize: 12, lineHeight: 17 },
+  eventChevron: { width: 38, height: 48, alignItems: 'flex-end', justifyContent: 'center' },
+  eventDivider: { height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border, marginLeft: 61 },
+  pressed: { opacity: 0.65 },
 });

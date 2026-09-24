@@ -3,32 +3,38 @@ import { Platform } from 'react-native';
 /** 统一的视觉语言：暖色、克制、阅读友好 */
 export const theme = {
   colors: {
-    bg: '#FFFFFF',
+    bg: '#FFF9F4',
     card: '#FFFFFF',
-    border: '#E8E2D9',
-    text: '#2B2622',
-    textDim: '#8A837B',
-    accent: '#E0733A',       // 暖橙，主要强调
-    accentSoft: '#F9E8DD',
+    tabBar: '#FFFCF9',
+    border: '#EEE8E2',
+    text: '#241F1B',
+    textDim: '#948B84',
+    accent: '#EC6B2D',       // 暖橙，主要强调
+    accentDark: '#C6531F',
+    accentSoft: '#FFF0E5',
+    accentMist: '#FFF6EE',
     green: '#4C8A6E',        // 完成态
+    greenSoft: '#ECF7F0',
+    violet: '#6657D9',
+    violetSoft: '#F0EEFF',
     red: '#C05A4E',          // 逾期/负向
     gold: '#C99A2E',         // 提醒卡
     goldSoft: '#F8EFD9',
     eventBorder: '#E2C77F',
     eventSoft: '#FFFCF3',
   },
-  radius: { card: 16, pill: 20, input: 12 },
+  radius: { card: 20, pill: 24, input: 16 },
   spacing: { xxs: 4, xs: 8, sm: 12, md: 16, lg: 24, xl: 32 },
   touchTarget: 44,
   shadow: Platform.select({
-    ios: { shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+    ios: { shadowColor: '#8A5B3D', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
     android: { elevation: 2 },
     default: {},
   }),
   font: {
-    title: 22,
-    heading: 17,
-    body: 15,
+    title: 32,
+    heading: 20,
+    body: 16,
     small: 13,
   },
   fontWeight: { regular: '400', medium: '500', semibold: '600', bold: '700' } as const,
