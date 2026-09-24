@@ -7,6 +7,7 @@ const bubbleSource = fs.readFileSync('src/components/AssistantMessageBubble.tsx'
 const markdownSource = fs.readFileSync('src/components/AssistantMarkdown.tsx', 'utf8');
 const sourceListSource = fs.readFileSync('src/components/AssistantWebSources.tsx', 'utf8');
 const llmSettingsSource = fs.readFileSync('app/settings/llm.tsx', 'utf8');
+const tabsSource = fs.readFileSync('app/(tabs)/_layout.tsx', 'utf8');
 
 assert.match(
   assistantSource,
@@ -69,6 +70,18 @@ assert.match(assistantSource, /composerShadowFade: \{[\s\S]*top: -58,[\s\S]*bott
   '白色渐隐必须从输入框上方平滑延伸到底部，不能形成实色面板');
 assert.match(composerSource, /elevation > 0 && styles\.composerElevated/,
   '滚动阴影必须保留在输入框卡片自身，不能因移除整宽渐变层而丢失');
+assert.match(composerSource, /borderColor: '#DCD4CA',[\s\S]*backgroundColor: '#FFFEFD'/,
+  '输入框必须用清晰但克制的边界与暖白卡片底色形成基础层次');
+assert.match(composerSource, /shadowColor: '#6E5E52',[\s\S]*shadowOpacity: 0\.10,[\s\S]*shadowRadius: 10,[\s\S]*shadowOffset: \{ width: 0, height: 3 \}/,
+  '输入框在置底状态也必须保留轻微外凸阴影');
+assert.match(composerSource, /shadowOpacity: 0\.10 \+ 0\.06 \* elevation/,
+  '用户离开底部时，输入框阴影必须从基础外凸连续增强');
+assert.match(tabsSource, /sceneStyle: styles\.scene/,
+  '首页、小知、我的三个 Tab 场景必须统一使用纯白背景');
+assert.match(tabsSource, /tabBarBackground: \(\) => <View style=\{styles\.tabBarBackground\} \/>/,
+  '底部 Tab Bar 必须使用实体背景，不能透出系统灰色或模糊材质');
+assert.match(tabsSource, /scene: \{ backgroundColor: '#FFFFFF' \}[\s\S]*tabBarBackground: \{ flex: 1, backgroundColor: '#FFFFFF' \}/,
+  '三个 Tab 页面与底部导航背景必须明确为纯白');
 assert.ok((assistantSource.match(/loadLatest\('if-following'\)/g) ?? []).length >= 3,
   '完成、停止和重试刷新都必须尊重用户是否仍在末端');
 assert.doesNotMatch(assistantSource, /loadLatest\((true|false)\)/,
