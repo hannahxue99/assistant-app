@@ -64,7 +64,7 @@ export function MemorySection({ state, memories, summary, busyId, onRetry, onSav
             <View style={styles.memoryIcon}>
               <Ionicons
                 name={memory.category === 'preference' ? 'heart-outline' : memory.category === 'long_term_goal' ? 'locate-outline' : memory.category === 'important_relationship' ? 'people-outline' : 'sparkles-outline'}
-                size={21}
+                size={18}
                 color={theme.colors.accent}
               />
             </View>
@@ -120,11 +120,11 @@ const styles = StyleSheet.create({
   card: { backgroundColor: theme.colors.card, borderRadius: theme.radius.card, paddingHorizontal: 16, paddingVertical: 14, gap: 3, ...theme.shadow },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 38 },
   categoryWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  memoryIcon: { width: 38, height: 38, borderRadius: 15, backgroundColor: theme.colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
-  category: { color: theme.colors.accent, fontSize: 14, fontWeight: '700' },
+  memoryIcon: { width: 34, height: 34, borderRadius: 13, backgroundColor: theme.colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  category: { color: theme.colors.accent, fontSize: 16, lineHeight: 22, fontWeight: '700' },
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   iconAction: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
-  memoryBody: { marginLeft: 48, gap: 5 },
+  memoryBody: { marginLeft: 44, gap: 5 },
   content: { color: theme.colors.text, fontSize: 15, lineHeight: 22 },
   date: { color: theme.colors.textDim, fontSize: 12, lineHeight: 17 },
   input: { minHeight: 68, borderRadius: 10, borderWidth: 1.5, borderColor: theme.colors.accent, backgroundColor: theme.colors.bg, paddingHorizontal: 11, paddingVertical: 9, color: theme.colors.text, fontSize: theme.font.body, lineHeight: 21, textAlignVertical: 'top' },
