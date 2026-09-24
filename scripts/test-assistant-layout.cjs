@@ -15,12 +15,12 @@ assert.match(
 );
 assert.match(assistantSource, /<View style=\{styles\.header\}>[\s\S]*<KeyboardAvoidingView/,
   '标题区必须留在键盘位移容器外，键盘只移动对话正文和输入框');
-assert.match(assistantSource, /<KeyboardAvoidingView[\s\S]*<FlatList[\s\S]*style=\{styles\.composerWrap\}[\s\S]*<\/KeyboardAvoidingView>/,
-  '消息列表与悬浮输入框必须位于同一个键盘动画容器');
 assert.match(assistantSource, /enabled=\{keyboardMovementMode === 'following'\}[\s\S]*<FlatList/,
-  '置底聚焦时外层必须整体移动消息列表和输入框');
-assert.match(assistantSource, /style=\{styles\.composerKeyboardStage\}[\s\S]*enabled=\{keyboardMovementMode === 'history'\}/,
-  '历史位置聚焦时必须只启用输入框自己的键盘位移层');
+  '置底聚焦时外层必须移动消息列表');
+assert.match(assistantSource, /<\/KeyboardAvoidingView>\s*<KeyboardAvoidingView[\s\S]*style=\{styles\.composerKeyboardStage\}[\s\S]*style=\{styles\.composerWrap\}/,
+  '输入框必须使用页面根部的独立原生避让层，不能嵌套在消息区局部坐标中');
+assert.doesNotMatch(assistantSource, /style=\{styles\.composerKeyboardStage\}[\s\S]{0,220}enabled=/,
+  '输入框避让层必须在 following 和 history 两种模式下始终跟随键盘');
 assert.match(assistantSource, /onInputFocus=\{\(\) => \{[\s\S]*setKeyboardMovementMode\(scrollModeRef\.current\);/,
   '键盘出现前必须冻结本轮 following/history 位移模式');
 assert.doesNotMatch(assistantSource, /setKeyboardMovementMode\([^)]*\)[\s\S]*onScrollBeginDrag/,

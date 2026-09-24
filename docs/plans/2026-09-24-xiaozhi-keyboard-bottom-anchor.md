@@ -4,7 +4,7 @@
 
 **Goal:** Make a bottom-following Xiaozhi conversation move its latest message, composer, and keyboard upward as one anchored unit.
 
-**Architecture:** Keep the header fixed and place the message list plus floating composer inside an outer iOS `KeyboardAvoidingView` position container. A second, composer-sized absolute position container handles history mode. The two native containers are mutually exclusive: following moves the full conversation stage, history moves only the composer.
+**Architecture:** Keep the header fixed. Put the message list in an outer iOS `KeyboardAvoidingView` position container and the composer in a root-level, composer-sized absolute position container. The composer container always follows the keyboard; the list container is enabled only for following mode, so history mode leaves message pixels fixed.
 
 **Tech Stack:** Expo 57.0.17, React Native 0.86.3, TypeScript, React Native `FlatList` and `Keyboard` APIs, Node assertion scripts.
 
@@ -30,7 +30,7 @@
 2. Run `npm run test:assistant-layout` and verify the new assertions fail.
 3. Move the header and banners outside `KeyboardAvoidingView`.
 4. Use iOS `position` behavior with a flex content container containing both `FlatList` and composer for `following`.
-5. Add a composer-sized absolute `position` container for `history`; freeze the selected mode on input focus.
+5. Add a root-level, composer-sized absolute `position` container that always follows the keyboard; freeze whether the list also moves on input focus.
 6. Clip the moving conversation stage at the fixed header boundary and remove keyboard-event-driven `Animated.timing`.
 7. Preserve history mode and existing shadow/jump-button calculations.
 8. Rerun `npm run test:assistant-layout` and `npm run test:assistant-ui`.

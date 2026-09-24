@@ -686,49 +686,49 @@ export default function AssistantScreen() {
           />
         )}
 
-        <KeyboardAvoidingView
-          pointerEvents="box-none"
-          style={styles.composerKeyboardStage}
-          behavior={Platform.OS === 'ios' ? 'position' : undefined}
-          enabled={keyboardMovementMode === 'history'}
-          keyboardVerticalOffset={0}
+      </KeyboardAvoidingView>
+
+      <KeyboardAvoidingView
+        pointerEvents="box-none"
+        style={styles.composerKeyboardStage}
+        behavior={Platform.OS === 'ios' ? 'position' : undefined}
+        keyboardVerticalOffset={0}
+      >
+        <View
+          style={styles.composerWrap}
+          onLayout={handleComposerLayout}
         >
-          <View
-            style={styles.composerWrap}
-            onLayout={handleComposerLayout}
-          >
-            {scrollPresentation.elevation > 0 ? (
-              <View
-                pointerEvents="none"
-                style={[styles.composerShadowFade, { opacity: scrollPresentation.elevation }]}
-              />
-            ) : null}
-            {scrollPresentation.showJumpToLatest ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="回到最新消息"
-                hitSlop={4}
-                onPress={jumpToLatest}
-                style={({ pressed }) => [styles.jumpToLatest, pressed && styles.jumpToLatestPressed]}
-              >
-                <View style={styles.jumpToLatestCircle}>
-                  <Ionicons name="chevron-down" size={18} color={theme.colors.textDim} />
-                </View>
-              </Pressable>
-            ) : null}
-            <AssistantComposer
-              onSend={send}
-              onStop={() => stopCurrentTurn(activeRequestId)}
-              onInputFocus={() => {
-                userScrollInProgressRef.current = false;
-                setKeyboardMovementMode(scrollModeRef.current);
-              }}
-              disabled={composerDisabled}
-              processing={composerProcessing || stoppingRequestId !== null}
-              elevation={scrollPresentation.elevation}
+          {scrollPresentation.elevation > 0 ? (
+            <View
+              pointerEvents="none"
+              style={[styles.composerShadowFade, { opacity: scrollPresentation.elevation }]}
             />
-          </View>
-        </KeyboardAvoidingView>
+          ) : null}
+          {scrollPresentation.showJumpToLatest ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="回到最新消息"
+              hitSlop={4}
+              onPress={jumpToLatest}
+              style={({ pressed }) => [styles.jumpToLatest, pressed && styles.jumpToLatestPressed]}
+            >
+              <View style={styles.jumpToLatestCircle}>
+                <Ionicons name="chevron-down" size={18} color={theme.colors.textDim} />
+              </View>
+            </Pressable>
+          ) : null}
+          <AssistantComposer
+            onSend={send}
+            onStop={() => stopCurrentTurn(activeRequestId)}
+            onInputFocus={() => {
+              userScrollInProgressRef.current = false;
+              setKeyboardMovementMode(scrollModeRef.current);
+            }}
+            disabled={composerDisabled}
+            processing={composerProcessing || stoppingRequestId !== null}
+            elevation={scrollPresentation.elevation}
+          />
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
