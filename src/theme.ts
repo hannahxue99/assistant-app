@@ -1,15 +1,20 @@
 import { Platform } from 'react-native';
 
-/** 统一的视觉语言：暖色、克制、阅读友好 */
+/** 统一的视觉语言：雾白、墨黑、克制的环境智能感 */
 export const theme = {
   colors: {
-    bg: '#FFFFFF',
+    bg: '#F7F7F5',
+    ink: '#111318',
+    graphite: '#6F737B',
+    fog: '#EEF0F2',
+    surface: '#FFFFFF',
     card: '#FFFFFF',
-    border: '#E8E2D9',
-    text: '#2B2622',
-    textDim: '#8A837B',
-    accent: '#E0733A',       // 暖橙，主要强调
-    accentSoft: '#F9E8DD',
+    border: '#D9DCDE',
+    divider: '#E3E5E6',
+    text: '#111318',
+    textDim: '#6F737B',
+    accent: '#E9783D',       // 小知人格色，不承担全局选中态
+    accentSoft: '#F8ECE6',
     green: '#4C8A6E',        // 完成态
     red: '#C05A4E',          // 逾期/负向
     gold: '#C99A2E',         // 提醒卡
@@ -21,7 +26,7 @@ export const theme = {
   spacing: { xxs: 4, xs: 8, sm: 12, md: 16, lg: 24, xl: 32 },
   touchTarget: 44,
   shadow: Platform.select({
-    ios: { shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+    ios: { shadowColor: '#111318', shadowOpacity: 0.07, shadowRadius: 16, shadowOffset: { width: 0, height: 8 } },
     android: { elevation: 2 },
     default: {},
   }),

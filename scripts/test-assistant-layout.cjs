@@ -8,6 +8,10 @@ const markdownSource = fs.readFileSync('src/components/AssistantMarkdown.tsx', '
 const sourceListSource = fs.readFileSync('src/components/AssistantWebSources.tsx', 'utf8');
 const llmSettingsSource = fs.readFileSync('app/settings/llm.tsx', 'utf8');
 const tabsSource = fs.readFileSync('app/(tabs)/_layout.tsx', 'utf8');
+const themeSource = fs.readFileSync('src/theme.ts', 'utf8');
+const orbitSource = fs.existsSync('src/components/AmbientOrbit.tsx')
+  ? fs.readFileSync('src/components/AmbientOrbit.tsx', 'utf8')
+  : '';
 
 assert.match(
   assistantSource,
@@ -83,11 +87,19 @@ assert.match(markdownSource, /body: \{ color: theme\.colors\.text, fontSize: 16,
 assert.match(markdownSource, /listMarker: \{ width: 18, color: theme\.colors\.text, fontSize: 16, lineHeight: 23 \}/,
   'Markdown 列表标记必须与 16px 回复正文对齐');
 assert.match(tabsSource, /sceneStyle: styles\.scene/,
-  '首页、小知、我的三个 Tab 场景必须统一使用纯白背景');
+  '首页、小知、我的三个 Tab 场景必须统一使用共享背景');
 assert.match(tabsSource, /tabBarBackground: \(\) => <View style=\{styles\.tabBarBackground\} \/>/,
   '底部 Tab Bar 必须使用实体背景，不能透出系统灰色或模糊材质');
-assert.match(tabsSource, /scene: \{ backgroundColor: '#FFFFFF' \}[\s\S]*tabBarBackground: \{ flex: 1, backgroundColor: '#FFFFFF' \}/,
-  '三个 Tab 页面与底部导航背景必须明确为纯白');
+assert.match(tabsSource, /scene: \{ backgroundColor: theme\.colors\.bg \}[\s\S]*tabBarBackground: \{ flex: 1, backgroundColor: theme\.colors\.bg \}/,
+  '三个 Tab 页面与底部导航必须复用雾白实体背景');
+assert.match(themeSource, /bg: '#F7F7F5',[\s\S]*ink: '#111318',[\s\S]*graphite: '#6F737B'/,
+  '轻未来视觉必须由共享雾白、墨黑与石墨灰令牌驱动');
+assert.match(tabsSource, /tabBarActiveTintColor: theme\.colors\.ink,[\s\S]*tabBarInactiveTintColor: theme\.colors\.graphite/,
+  '底部导航只能以墨黑表示选中，未选中必须回到中性石墨灰');
+assert.match(orbitSource, /pointerEvents="none"[\s\S]*accessibilityElementsHidden[\s\S]*importantForAccessibility="no-hide-descendants"/,
+  '环境轨道必须完全不参与点击和无障碍树');
+assert.doesNotMatch(assistantSource, /hero|mascot|centralOrb|assistantOrb/i,
+  '小知页不得加入中央球体或占内容高度的英雄区');
 assert.ok((assistantSource.match(/loadLatest\('if-following'\)/g) ?? []).length >= 3,
   '完成、停止和重试刷新都必须尊重用户是否仍在末端');
 assert.doesNotMatch(assistantSource, /loadLatest\((true|false)\)/,
