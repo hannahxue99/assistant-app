@@ -14,6 +14,7 @@ import type { AssistantMessage } from '../assistant/types';
 import type { AssistantRuntimeStage } from '../assistant/runtime-state';
 import { theme } from '../theme';
 import { AssistantActionReceipt } from './AssistantActionReceipt';
+import { AssistantMarkdown } from './AssistantMarkdown';
 import { AssistantWebSources } from './AssistantWebSources';
 
 const META_ICON_COLOR = '#5577F2';
@@ -165,9 +166,7 @@ export function AssistantMessageBubble({
       {surface === 'assistant-bubble' && (message.content || message.errorCode === 'cancelled') ? (
         <View style={styles.assistantBubble}>
           {message.content ? (
-            <Text selectable style={styles.content}>
-              {message.content}{isStreaming ? <Text style={styles.cursor}>▋</Text> : null}
-            </Text>
+            <AssistantMarkdown content={message.content} streaming={isStreaming} />
           ) : null}
           {message.errorCode === 'cancelled' ? (
             <View style={styles.statusRow}>
@@ -215,7 +214,6 @@ const styles = StyleSheet.create({
   assistantBubble: { maxWidth: '94%', borderRadius: 18, borderBottomLeftRadius: 6, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: theme.colors.card, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.border },
   content: { color: theme.colors.text, fontSize: theme.font.body, lineHeight: 22 },
   userContent: { color: '#FFFFFF' },
-  cursor: { color: theme.colors.accent },
   runtimeRow: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 4, marginBottom: 2 },
   runtimeText: { flexShrink: 1, color: theme.colors.textDim, fontSize: 13 },
   reasoningHeader: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 4, marginBottom: 2 },

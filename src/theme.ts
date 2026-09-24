@@ -14,6 +14,8 @@ export const theme = {
     red: '#C05A4E',          // 逾期/负向
     gold: '#C99A2E',         // 提醒卡
     goldSoft: '#F8EFD9',
+    eventBorder: '#E2C77F',
+    eventSoft: '#FFFCF3',
   },
   radius: { card: 16, pill: 20, input: 12 },
   spacing: { xxs: 4, xs: 8, sm: 12, md: 16, lg: 24, xl: 32 },

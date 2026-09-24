@@ -50,7 +50,14 @@ export function CalendarSyncSetting({ embedded = false, topDividerStyle }: Calen
   }
   return <View style={[styles.card, embedded && styles.embeddedCard, topDividerStyle]}>
     <View style={styles.row}><Text style={styles.title}>同步到苹果日历</Text>
-      <Switch accessibilityLabel="同步到苹果日历" disabled={busy || !status} value={!!status?.enabled} onValueChange={toggle} />
+      <Switch
+        accessibilityLabel="同步到苹果日历"
+        disabled={busy || !status}
+        value={!!status?.enabled}
+        onValueChange={toggle}
+        trackColor={{ false: theme.colors.border, true: theme.colors.accentSoft }}
+        thumbColor={status?.enabled ? theme.colors.accent : '#fff'}
+      />
     </View>
     <Text style={styles.detail}>{busy ? '正在设置…' : !status?.enabled ? '关闭后保留已有日程' : status.error ? '日历未同步' : status.pending ? `待同步 ${status.pending} 条` : '已同步 · 私人助手专用日历'}</Text>
     {!!status?.error && !!status.enabled && <>

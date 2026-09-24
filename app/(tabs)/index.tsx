@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
-  weekRowToday: { backgroundColor: theme.colors.goldSoft, borderColor: theme.colors.gold },
+  weekRowToday: { backgroundColor: theme.colors.eventSoft, borderColor: theme.colors.eventBorder },
   weekRowHighlighted: { borderColor: theme.colors.accent, backgroundColor: theme.colors.accentSoft },
   check: {
     width: 20,
