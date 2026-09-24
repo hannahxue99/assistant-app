@@ -1,5 +1,7 @@
 # 主人的备忘录设计系统
 
+> **历史基线（截至 2026-09-03）**：本文保留早期备忘录界面的组件规则，不代表当前三主页面的完整视觉令牌。现行视觉结论见 [`docs/knowledge/generated-three-screen-visual-system.md`](./docs/knowledge/generated-three-screen-visual-system.md)，具体实现以当前共享主题和组件为准。
+
 ## 设计方向
 
 克制、温暖、接近苹果备忘录的阅读体验。界面优先保证内容清晰和操作可预期，不用装饰性控件争夺注意力。

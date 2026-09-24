@@ -1,330 +1,113 @@
-# 我的助手（assistant-app）
+# 私人助手（assistant-app）
 
 **一个长期懂你的私人 AI：像秘书一样帮你料理当下，像导师一样帮你看清方向。**
 
-V1 的完整闭环是：
+私人助手是一款 iPhone 优先、本地数据优先的个人 AI 应用。用户只需要和“小知”自然对话，系统会在保留完整表达的同时，安全地形成和维护待办、事件与长期记忆。
+
+完整闭环是：
 
 `自然表达 → 小知理解 → 安全执行 → 结构化沉淀 → 持续理解 → 复盘发现 → 回到对话推进`
 
 用户只面对三个地方：
 
-- **首页**：本周 / 全部待办、教练提醒和持续事件，回答“现在值得关注什么”。
-- **小知**：连续对话的统一输入与执行中心，记录、事务和困惑不需要先分类。
-- **我的**：长期记忆及设置，回答“它已经懂我什么”。
+- **首页**：本周 / 全部待办和持续事件，回答“现在值得关注什么”。
+- **小知**：连续对话、查询和执行的统一入口，记录、事务和困惑不需要预先分类。
+- **我的**：长期记忆、理解引擎、联网搜索、通知、日历和数据管理。
 
-完整产品定义、进度矩阵和 V1 完成标准见 [`PRD.md`](./PRD.md)。整体图见 [`design/v1-product-overview.svg`](./design/v1-product-overview.svg)。
+完整产品定义、V1 完成标准和进度矩阵见 [`PRD.md`](./PRD.md)。文档分工与阅读路径见 [`docs/README.md`](./docs/README.md)。
 
-## V1 目标与当前进度
+## 当前能力
 
-V1 指完整的“秘书 + 导师”愿景，不表示所有能力都已上线。当前版本已经实现主要基础能力，尚待完成主动导师闭环。
+> 最近核对：2026-09-25。这里描述当前 `main` 的能力；是否已经安装到生产手机，必须以对应 Release 记录为准。
 
-| 能力 | 状态 | 说明 |
-|---|---|
-| 连续对话 | 已实现 | 消息立即保存、后台分段、有界上下文、流式回复、停止与重试 |
-| 待办 | 已实现 | 模型判断与日期解析；本周 / 全部待办；完成、删除、通知、日历和撤销 |
+| 能力 | 状态 | 当前说明 |
+|---|---|---|
+| 连续对话 | 已实现 | 消息立即保存、后台分段、有界上下文、流式回复、Markdown、停止与重试 |
+| 真实数据读取与执行 | 已实现 | 小知按需读取本地对象；写入前校验对象、revision、协议、事务和幂等 |
+| 待办 | 已实现 | 创建、修改、完成、删除、通知、苹果日历、关联事件和撤销 |
 | 事件 | 已实现 | 稳定主线、当前状态、增量进展、关联待办、置顶、删除和撤销 |
-| 长期记忆 | 主要实现 | 分级准入、在“我的”展示、修改与忘记；冲突确认仍需强化 |
-| 数据迁移与主权 | 已实现 | 旧对话 / 待办 / 事件导入，Markdown 备份恢复，本地 SQLite |
+| 长期记忆 | 主要实现 | 分级准入、展示、修改与忘记；冲突确认仍需强化 |
+| DeepSeek 联网搜索 | 已实现 | 可关闭；搜索轮只读，来源随回复保存并进入完整备份 |
+| 本地数据与完整备份 | 已实现 | SQLite 为事实来源；V3 Markdown 可恢复对话、待办、事件、关系、回执和记忆 |
 | 当前状态快照 | 未实现 | V1 后续开发 |
-| 每日复盘与教练提醒 | 未实现 | V1 后续开发；提醒只在首页，不主动推送 |
+| 每日复盘与教练提醒 | 未实现 | V1 后续开发；教练提醒只在首页，不主动推送 |
 | 四类对象统一搜索 | 未实现 | V1 后续开发 |
 
-## V1 的核心数据
+## 核心数据与安全边界
 
 - **对话消息**保存“当时说了什么”。
 - **待办**保存“接下来要做什么”。
 - **事件**保存“一件持续的事进展如何”。
 - **长期记忆**保存“未来应该怎样理解我”。
 
-模型负责理解用户想做什么并提出操作；本地代码负责校验、事务、撤销和数据安全。模型或网络失败时原话仍然保留，未校验的操作不会落库。
+模型负责理解、查询和提出操作候选；本地代码负责对象权限、revision、日期、事务、撤销和数据安全。SQLite 是事实来源，搜索索引、通知、日历、摘要和快照都属于可重建投影。模型、网络或投影失败时，用户原话和已经提交的事实不能丢失。
+
+联网搜索只用于回答，不允许在同一轮修改待办、事件或长期记忆。搜索结果属于不可信外部输入，只有经过本地安全检查的 HTTP(S) 来源才会展示。
 
 ## 技术栈
 
-Expo SDK 57（React Native 0.86 / TypeScript）· expo-router · expo-sqlite（FTS5 trigram）· expo-notifications · expo-speech-recognition 56（社区包，需 dev build）
+Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript · Expo Router · SQLite / FTS5 · Expo Notifications · Expo Speech Recognition
 
-## 目录结构
-
-```
-app/(tabs)/        首页(index) · 小知(assistant) · 我的(profile)
-app/event/[id].tsx 事件详情页 · app/settings/llm.tsx 理解引擎子页
-src/assistant/     对话上下文、模型协议、待办/事件/记忆操作、校验、事务与撤销
-src/db.ts          SQLite 数据层（消息/待办/事件/记忆/决策日志/导入导出）
-src/engine/time.ts 中文时间归一化（纯函数，可离线单测）
-src/engine/schedule.ts  待办分窗（本周/长期/逾期，纯函数可单测）
-src/engine/llm.ts  OpenAI 兼容 Provider 与流式请求
-src/engine/notifications.ts  晨间/夜间待办与到点提醒调度
-src/components/    小知输入、消息、操作回执、事件卡、长期记忆与设置组件
-design/            设计稿示意图（SVG，嵌入 DESIGN.md）
-scripts/           纯逻辑、数据库、协议、上下文、UI 状态和构建回归测试
+```text
+app/                 页面和导航：首页、小知、我的、事件及设置
+src/assistant/       对话运行时、按需读取、协议、操作、事件和记忆领域逻辑
+src/db.ts            SQLite 入口、迁移与旧记录能力
+src/engine/          时间、通知、日历、LLM、备份与可重建投影
+src/components/      对话、回执、事件、记忆和设置组件
+scripts/             协议、数据库、UI 状态、构建与工具链回归测试
+docs/knowledge/      已验收并可复用的产品与工程结论
 ```
 
----
+更精确的代码地图见 [`docs/CURRENT.md`](./docs/CURRENT.md)。
 
-## 一、在 Mac 上跑起来（三步）
+## 本地开发
 
-### 第 0 步 · 环境检查（一次性）
-
-- Mac 已装 **Xcode**（App Store）及命令行工具：`xcode-select --install`
-- Node ≥ 18、iPhone 与 Mac 连同一 Wi-Fi，数据线连接 iPhone 并信任此电脑
-
-### 第 1 步 · 冒烟验证（**先打通最后一公里，强烈建议**）
-
-> 原则：先用最小代价证明"代码能装到你 iPhone 上"，再谈功能。证书/编译是这个流程最大的坑，早暴露早解决。
+准备 Xcode、Node.js 18 或更高版本，并连接已信任且开启开发者模式的 iPhone。
 
 ```bash
 npm install
 npm run ios:dev
-```
-
-- 脚本会自动选择唯一连接的真机，并让 Xcode 创建或续期 Personal Team 描述文件；连接多台设备时可执行 `npm run ios:dev -- <设备 UDID 或名称>` 指定。
-- 编译完成后会安装独立的“私人助手 Dev”，不会覆盖手机上的“私人助手” Release。首次打开若提示"不受信任的开发者"：
-  **设置 → 通用 → VPN与设备管理 → 信任你的 Apple ID**。
-- 免费证书 7 天过期，到期重跑一次命令即可（自用完全够）。
-
-能打开看到"今天"页 = 冒烟通过 ✅。之后的迭代 90% 时间不再需要完整编译。
-
-### 第 2 步 · 日常开发（快速预览，大部分功能）
-
-```bash
 npm run start:dev
 ```
 
-用 iPhone 打开“私人助手 Dev”并连接终端二维码。改代码可秒级热更新，语音识别、本地通知等原生能力也能正常验收。手机上的“私人助手” Release 不连接 Metro，也不会显示开发中的代码。
+- `npm run ios:dev` 生成并安装“私人助手 Dev”；只有原生依赖、权限、图标或 App Config 改变时才需要重新安装。
+- `npm run start:dev` 启动日常开发服务；普通 TypeScript、文案和样式改动通过 Reload 验收。
+- “私人助手 Dev”和生产版“私人助手”使用不同 Bundle ID 和独立 SQLite，测试数据不会自动进入生产版。
+- 生产覆盖安装必须使用 `npm run ios:release`，并遵循 [`docs/RELEASE_CHECKLIST.md`](./docs/RELEASE_CHECKLIST.md)。
 
-### 第 3 步 · 完整功能（dev build）
+真机连接、Tunnel、签名、构建、安装和启动排障见 [`Agent 开发实战手册`](./docs/knowledge/agent-dev-playbook.md)。
 
-第 1 步编译出的就是 dev client。`npm run ios:dev` 只负责生成和安装，不会重复启动 Metro；安装后再执行 `npm run start:dev`。只有原生依赖、权限、图标或 App Config 改变时才需要重新安装，普通 JS、文案和样式改动只需启动 Metro。
+## 配置理解引擎与联网搜索
 
-## 二、配置 LLM 理解（可选但推荐）
+在 **我的 → 理解引擎** 中保存 OpenAI 兼容配置，例如：
 
-App → 我的 → 理解引擎：
+- API 地址：`https://api.deepseek.com/v1`
+- 模型：`deepseek-chat`
+- API Key：只保存在本机，不进入备份
 
-1. 打开"启用 LLM 理解"
-2. 填入 OpenAI 兼容配置，例如 DeepSeek：
-   - API 地址：`https://api.deepseek.com/v1`
-   - 模型：`deepseek-chat`
-   - Key：你自己的 key（仅存本机，不上传任何服务器）
-3. 保存。不配置也能用——自动降级为本地规则理解（时间识别照常工作）。
+有效模型配置是小知对话和语义理解能力的前提；模型或网络不可用时，本地已有数据仍可读取，未完成的模型操作不会伪装成成功。
 
-成本参考：每条记录一次调用 ≈ 300 token，国产模型一年几块钱。
+DeepSeek 官方地址可在 **我的 → 联网搜索** 中启用服务端搜索。搜索的实际调用轮数和消耗由问题、模型与服务端规划共同决定，项目不承诺固定 token 或固定单次成本。
 
-## 三、开发习惯（防踩坑）
+## 完整备份与恢复
 
-```bash
-npm run typecheck   # 改完代码跑一遍
-npm run test:time   # 动过时间解析后必跑（14 条中文口语回归）
-```
+- **我的 → 导出完整备份** 生成一份人类可读、同时包含 `assistant-app-export-v3` 数据胶囊的 Markdown 文件。
+- V3 覆盖旧记录、连续对话、待办、事件与进展、对象关系、操作回执、长期记忆及来源；联网搜索来源也随对应消息保存。
+- 备份不包含 API Key、接口地址或模型设置。文件包含私人对话与记忆，应只保存在可信位置。
+- 导入前会验证文件并预览新增、更新、忽略和保留本地的数量；确认后在事务中合并，不删除本地独有数据。
+- V2 和旧日志仍可兼容导入，但当前版本只生成 V3 完整备份。
 
-- **纯逻辑先上电脑测**：`src/engine/time.ts` 无 RN 依赖，`tsx` 直接跑。新逻辑照此办理。
-- **LLM 评测集**：`scripts/` 下按 `test-time.ts` 的模式沉淀真实 case（绘本进度、复合输入、模糊时间），每次改 prompt 跑一遍防漂移。
-- **依赖升级单独做**：Expo SDK 与社区库版本对应（speech-recognition 56 ↔ SDK 57），错配会闪退。
+详细的格式、冲突和回滚规则见 [`可导入 Markdown 备份`](./docs/knowledge/importable-markdown-backups.md)。
 
-## 四、Markdown 备份与恢复
-
-- 在「我的 → 数据管理」中选择「导出数据」，可将 `.md` 文件保存到文件 App、AirDrop 或其他系统分享目标。
-- 选择「导入数据」后，App 会先展示新增、更新、忽略和保留本地冲突的数量；确认后才写入数据库。
-- 导入采用记录 ID + 内部版本时间合并，不会删除本地独有记录；同一文件可重复导入而不产生重复记录。
-- 只有带 `assistant-app-export-v2` 数据胶囊的新版 App 导出文件支持完整恢复。旧版纯展示 Markdown 和任意手写 Markdown 不自动猜测导入。
-- 备份包含记录、画像和主题置顶，不包含 LLM Key、接口地址或模型设置。
-
-## 常见问题
-
-| 症状 | 原因与解决 |
-|---|---|
-| 真机打开闪退/白屏 | Dev 证书过期（免费 7 天）→ 重跑 `npm run ios:dev` |
-| 语音按钮提示不可用 | 在 Expo Go 里 → 用 dev build 打开 |
-| 通知不弹 | 首次需授权；检查"我的→每日提醒"开关；Expo Go 里不支持 |
-| LLM 报错降级 | 检查 key/余额/网络；条目会以规则结果保存，不丢数据 |
-| 搜索没结果 | 关键词需 ≥3 字符（trigram 限制），过短词用标签筛 |
-
-## 真机调试踩坑存档（2026-08-31 实录）
-
-**红屏 `No script URL provided... unsanitizedScriptURLString = (null)`**
-
-- 含义：dev client（手机上的 app 壳）里没存到 Metro 地址，取不到 JS 代码。**不是代码 bug**。
-- 正确姿势：**先在 Mac 起 Metro（`npm run start:dev`），再打开“私人助手 Dev”**。顺序反了可能出现连接失败。
-- 只点「Reload JS」无效：URL 是 null 时重载多少次都没用，必须先让它知道地址。
-
-**点 Reload 还是红屏：Mac 在内网，手机路由不到**
-
-- 现象：Metro 明明在跑（`curl localhost:8081/status` 正常），手机就是连不上。
-- 原因：Mac 的 IP 是 11.x 企业内网段，手机（家庭 Wi-Fi/5G）路由不到。`ifconfig | grep inet` 可自查，正常家用应是 192.168.x。
-- 解法（隧道模式）：
-  ```bash
-  npm install -g @expo/ngrok        # 一次性
-  npm run start:dev
-  ```
-  杀掉手机 app 重开 → 启动页手动输入隧道地址（形如 `https://xxx-8081.exp.direct`）。
-- **隧道地址每次重启服务都会变**，连不上先要新地址。
-
-**其他**
-
-- **`expo-dev-client` 必须装**：没装的话 dev build 只是个裸壳——没有启动页、无处手动输入 Metro 地址，红屏 null URL 时无解（2026-08-31 下午红屏反复的根因）。补装：`npx expo install expo-dev-client && npm run ios:dev`。
-- `--dev-client` 参数：不带时 expo start 默认 Expo Go 模式，语音/通知不可用；跑错模式按 `s` 切换或加参数重启。
-- `CI=1 npx expo start` 会禁用 watch 热更新（非交互模式专用，日常别加）。
-- `npm run test:time` / `test:schedule` 依赖 `tsx`，未装时 `npx tsx` 会自动提示安装，输 y 即可。
-- Metro 是「打包+运送代码的本地服务」：手机 app 只是播放器，代码实时从 Mac 加载；想完全离线运行需打 release 包（内嵌 bundle）。
-
-## 真机调试踩坑存档 · 二（2026-09-01 实录：换图标 / 换 bundle ID / 数据迁移）
-
-**换 App 图标不是热更新——必须重编译**
-
-- 图标是原生资源，修改后 JS 热更新推不过去，必须用 `npm run ios:dev` 或 `npm run ios:release` 重新生成对应变体并安装
-- 两条变体脚本已内含干净 Prebuild，会把对应图标同步进原生工程，不要再手工混用旧命令
-- 电脑上验证新旧图标：预览打开 `assets/images/icon.png` 和 `AppIcon.appiconset/App-Icon-1024x1024@1x.png` 对比即可，真机效果只有装上才能确认（圆角/渲染是系统行为）
-
-**`expo prebuild` 曾经会重置签名配置（历史问题，现已自动化）**
-
-- 历史上 Prebuild 会丢掉手工设置的 `DEVELOPMENT_TEAM`；现在 `ios.appleTeamId` 已写入 App Config，会自动恢复
-- 历史上 expo-notifications 会注入 Personal Team 不支持的 `aps-environment`；现在本地通知配置插件会稳定移除
-- 干净 Prebuild 会重建 workspace 和 Pods；`npm run ios:dev` / `npm run ios:release` 已包含完整流程
-- expo CLI 调 xcodebuild 不带 `-allowProvisioningUpdates`，自动签名报 provisioning profile 错时直接用 xcodebuild 命令编（见下方命令）
-
-**免费账号 bundle ID 被 Apple 抢注，被迫换 ID（两个 App 的由来）**
-
-- 2026-09-01 编译时 Apple 拒绝 `com.anonymous.assistantapp`（Expo 默认前缀，易撞名）："cannot be registered to your development team because it is not available"
-- 解法：换成个人化 ID `com.huanxue.assistantapp`，三处同步：`app.json`（ios.bundleIdentifier）+ `ios/app.xcodeproj/project.pbxproj`（两处 PRODUCT_BUNDLE_IDENTIFIER）+ `ios/app/Info.plist`
-- 代价：iOS 按 bundle ID 识别 App，**换 ID = 全新 App**，老 App 数据不跟过来 → 才有了后面的数据迁移
-
-**编译命令备忘（绕开 expo CLI 的签名问题）**
+## 验证与协作
 
 ```bash
-export PATH="/opt/homebrew/bin:$PATH"   # pod 在这，zsh 默认 PATH 没有
-xcodebuild -workspace ios/app.xcworkspace -scheme app -configuration Debug \
-  -destination 'id=<设备UDID>' -allowProvisioningUpdates build
-# DerivedData 里的产物直接 devicectl 安装会被沙箱拒，拷出来再装：
-ditto ~/Library/Developer/Xcode/DerivedData/app-*/Build/Products/Debug-iphoneos/app.app /tmp/app-install/app.app
-xcrun devicectl device install app --device <UDID> /tmp/app-install/app.app
-xcrun devicectl device process launch --device <UDID> com.huanxue.assistantapp
+npm run ci:agent   # 开发中使用：给出精简结果和完整临时日志
+npm run ci         # 交付前使用：类型检查 + 全部聚合测试
 ```
 
-- 手机**锁屏会掉线**（devicectl 报 "unable to locate a device"），操作前先解锁
-- `devicectl` 报 "Locked" 只是拉不起来，解锁后手动开即可
+功能开发、真机验收、Release 和知识沉淀必须遵循 [`docs/DEVELOPMENT_WORKFLOW.md`](./docs/DEVELOPMENT_WORKFLOW.md)。自动检查通过只表示可以进入验收，不等于代码已合并或设备已更新。
 
-**新装 App 连不上 Metro：本地网络权限是隐形门槛**
+## V1 尚未完成的部分
 
-- 现象：老 App 连 Metro 正常，新装的 App 手动输 URL 一直失败——**网络和隧道都没问题**，是 iOS 的「本地网络」权限按 App（bundle ID）单独发放，新 App 没弹过授权窗，连接被静默拦截
-- 最省事的解法：数据线连着时从 Mac 用 `devicectl ... launch` 拉起 App（带正确启动参数），绕过手输 URL；首次弹「查找本地设备」授权时点允许
-- 规律：**手动打开报 URL 失效、USB 拉起正常** → 就是 App 里存的自动重连地址坏了，USB 拉起一次即修复
-
-**隧道 URL 手输的正确格式：`https://` 开头（2026-09-01 血泪）**
-
-- 新 App 手动输入 Metro 地址时，**必须用 `https://xxx-8081.exp.direct`**（https 开头、无端口尾巴）
-- `exp://xxx.exp.direct:80` 格式对 ngrok 隧道**无效**——它会一直报 URL 失效，看起来像网络问题，其实是格式不对。别犯这个错
-- 判断 App 是否真的拿到代码：盯 Metro 终端有没有新的 `iOS Bundled ...` 行；没有就是没连上，有就是加载了
-- A/B 排查法：同一手机前后脚拉老/新 App，谁不产生 `iOS Bundled` 谁的配置坏了——网络问题会两个都不行，单边不行必是 App 侧
-- ngrok 隧道子域名固定（同一台 Mac 不变），所以 `https://69aq7n0-anonymous-8081.exp.direct` 重启 Metro 后依然有效
-- 隧道走公网中转首次加载 10~20 秒属正常；Mac 侧 `curl https://xxx.exp.direct/status` 返回 `packager-status:running` 即隧道健康
-- USB 直连（iproxy）方案试过不可行：iPhone 的 USB 网络接口（en6）默认无 IP，需要 Mac 开互联网共享才能组网，不值得折腾，隧道 + https:// 地址够用
-
-**老 App → 新 App 数据迁移（bundle ID 换了只能这么搬）**
-
-- 老 App「我的 → 导出数据」生成 Markdown → 微信文件传输（没有 AirDrop 的话）传到 Mac
-- 导出格式可完整还原：kind（待办/想法/信息）、原文、理解 summary、主题、标签（顿号分隔）、时间、✅完成状态、createdAt
-- 迁移实现：`src/engine/migrate-legacy.ts` 一次性导入，双保险防重跑（`migration_flags` 表标记 + entries 非空跳过），挂在 `_layout.tsx` 启动流程
-- 注意：迁移只在**新 App 数据库为空**时执行——先迁移再开始记新内容，顺序反了会静默跳过
-- 确认新 App 里 5 条都在、主题聚合正常后再删老 App
-
-**本机环境备注**
-
-- Homebrew 装了两份：`/opt/homebrew`（ARM，正常使用中，pod 在这）+ `/usr/local`（坏掉的 Intel 残留，不影响，别用）
-- zsh 默认 PATH 不含 `/opt/homebrew/bin`，脚本里要手动 `export PATH="/opt/homebrew/bin:$PATH"`
-
-## iPhone 免费签名与独立运行存档（2026-09-02）
-
-### 先分清 Debug 和 Release
-
-| 安装方式 | 命令 | 是否依赖 Mac / Metro | 适用场景 |
-|---|---|---|---|
-| 开发版（私人助手 Dev） | `npm run ios:dev` | 运行代码时依赖 Metro | 日常开发、热更新、排查问题 |
-| 独立版（私人助手） | `npm run ios:release` | 不依赖 Metro，JS Bundle 已内嵌 | 自己或家人日常试用 |
-
-Release 版安装成功后可以关闭终端、断开数据线和关闭 Mac。App 的记录存在手机本地 SQLite，不依赖 Mac；LLM 会直接请求配置的 DeepSeek/OpenAI 兼容地址，因此使用 LLM 时仍需联网。
-
-两个版本可同时安装：Dev 使用 `com.huanxue.assistantapp.dev` 和独立测试数据；Release 继续使用 `com.huanxue.assistantapp` 并承接现有生产数据。Dev 数据不会自动进入 Release，删除 Dev 不影响 Release。
-
-### 免费 Personal Team 的完整安装流程
-
-1. 用数据线连接 iPhone，解锁并点击“信任此电脑”。
-2. iPhone 打开 **设置 → 隐私与安全性 → 开发者模式**；首次开启需要重启并再次确认。
-3. Xcode 打开 **Window → Devices and Simulators**，等待设备准备完成。
-4. 在项目根目录安装独立版：
-
-   ```bash
-   npm run ios:release
-   ```
-
-5. 选择目标 iPhone，安装过程中保持手机解锁。
-6. 安装完成后关闭 Metro/Mac，用手机单独打开 App 验证；LLM 联网测试不要开飞行模式。
-
-如果 Expo CLI 自动签名失败，打开 `ios/app.xcworkspace`，在 **app → Signing & Capabilities** 中确认：
-
-- `Automatically manage signing` 已开启
-- `Team` 仍是原来的 Personal Team
-- Bundle Identifier 仍是 `com.huanxue.assistantapp`
-- Scheme/Configuration 选择 app/Release，目标设备选择已连接的 iPhone
-
-### 7 天到期后的续签流程
-
-免费 Apple Account 的 Personal Team 描述文件签发后 7 天过期。到期后 App 通常仍在桌面，但会打不开或提示不可用。续签时：
-
-1. **不要卸载手机上的旧 App**。
-2. 连接、解锁 iPhone。
-3. 使用原来的 Apple ID / Personal Team，在项目根目录重新执行：
-
-   ```bash
-   npm run ios:release
-   ```
-
-4. 直接覆盖安装，获得新的约 7 天有效期。
-
-使用相同 Team 和 Bundle Identifier 覆盖安装时，本地数据通常会保留；但重要记录仍建议先在 **我的 → 导出数据** 导出 Markdown。删除 App 会删除它的 SQLite 数据，改 Bundle Identifier 则会被 iOS 当成另一个全新 App。
-
-Apple Personal Team 当前限制包括：描述文件 7 天过期、每个平台最多 3 台测试设备、同时注册的 App ID 有限。官方说明：<https://developer.apple.com/support/compare-memberships/>。
-
-### 设备连接与构建常见坑
-
-**`Developer Disk Image is not mounted` / `Development services need to be enabled`**
-
-- 这发生在编译前，不是项目代码错误。
-- 保持 iPhone 解锁，确认已信任 Mac 并开启开发者模式。
-- 打开 Xcode 的 **Devices and Simulators**，等待 `Preparing device` / Developer Disk Image 挂载结束。
-- 如果 `CoreDeviceService`、`simdiskimaged` 仍超时：拔插数据线，重启 iPhone 与 Mac，再先打开 Xcode 等设备就绪。
-- iPhone 系统版本高于 Xcode 支持范围时，需要升级 Xcode。
-
-**显示 `Build Succeeded`、`Complete 100%` 后怎么判断成功**
-
-- Debug 版出现 `Waiting on http://localhost:8081` 是在等待 Metro，终端必须保持运行。
-- Release 版不会依赖这个地址；断开 Mac 后仍能打开才算独立运行验证通过。
-- `[Expo Dev Launcher] Strip Local Network Keys for Release` 一类 Build Phase warning 通常不影响安装。
-
-**签名和能力限制**
-
-- 免费 Personal Team 不支持远程 Push Notifications；本项目使用的本地提醒不等同于远程推送。
-- `npm run ios:dev` 与 `npm run ios:release` 会用匹配的 App 身份执行干净 Prebuild，并从 App Config 恢复签名 Team 和本地通知 entitlement；不要绕过脚本混用变体。
-- `eas update` 或 JS 热更新不能延长免费签名有效期；7 天到期仍必须重新签名覆盖安装。
-
-### 给家人安装时的现实限制
-
-- 每台 iPhone 都要连接这台 Mac、信任电脑、开启开发者模式并安装一次。
-- 每约 7 天，每台手机都要重新连接并覆盖安装。
-- 不要让家人自行删除旧 App；先导出数据再处理异常安装。
-- 每台手机拥有独立 SQLite 数据库，不会自动互相同步。
-- 每台手机需要单独配置 LLM API Key；共用同一个 Key 会共用额度和费用，也增加泄露风险。
-- 免费签名适合短期家庭试用，不适合长期无维护分发。想减少维护需使用付费 Apple Developer Program，通过 TestFlight 或 App Store 分发；TestFlight 每个构建最多测试 90 天。
-
-### 不要误判为解决方案
-
-- 只停止 Metro：Debug 版会失去代码来源，不会自动变成独立版。
-- 把开发版留在手机里：不能绕过 7 天签名过期。
-- AltStore/SideStore：免费 Apple ID 仍需要周期性刷新签名，不是一次安装永久使用。
-- 换 Bundle Identifier：只会生成新 App，并造成原 App 的本地数据无法自动继承。
-- 删除再重装：可能解决安装表象，但会直接丢失本机记录，应作为最后手段且必须先导出。
-
----
-
-## 迭代路线（对应 PRD）
-
-- **P1（当前）**：待办/提醒 + 理解归档 → 用 2 周、攒 50 条记录
-- **P2**：知识库（主题演化、语义搜索、画像沉淀）
-- **P3**：启发引擎四种触发 + LLM 深度分析（现在可用"导出 Markdown → 发给 AI"代替）
+当前版本已经具备主要“秘书”能力和可靠的连续对话基础，但完整 V1 仍需要统一当前状态快照、每日复盘、首页教练提醒和四类对象统一搜索。项目不会因为包版本是 `1.0.0` 就把这些能力描述成已经上线。
