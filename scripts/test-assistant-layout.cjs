@@ -33,6 +33,8 @@ assert.match(assistantSource, /onScrollBeginDrag=\{\(\) => \{\s*userScrollInProg
   '只有用户主动拖动消息区时才允许进入历史阅读状态');
 assert.match(assistantSource, /onScrollBeginDrag=\{\(\) => \{[\s\S]*keyboardAnchorRef\.current = \{ active: false, following: false \};/,
   '键盘过渡期间真实拖动必须立即取消自动置底，让用户手势优先');
+assert.match(assistantSource, /onScrollBeginDrag=\{\(\) => \{[\s\S]*stopKeyboardScrollAnimation\(\);/,
+  '用户开始拖动时必须停止正在进行的键盘联动动画');
 assert.match(assistantSource, /onInputFocus=\{\(\) => \{\s*userScrollInProgressRef\.current = false;/,
   '输入框聚焦前必须清理可能因 Tab 切换遗留的拖动状态');
 assert.match(assistantSource, /if \(fromUser\) \{\s*scrollModeRef\.current = nextPresentation\.atBottom \? 'following' : 'history';/,
@@ -47,6 +49,12 @@ assert.match(assistantSource, /listRef\.current\?\.scrollToOffset\(\{[\s\S]*offs
   '底部锚点事务必须使用精确 offset，不能只靠延迟 scrollToEnd');
 assert.match(assistantSource, /Keyboard\.addListener\('keyboardDidShow',[\s\S]*settleKeyboardAnchor\(\)/,
   '键盘完全出现后必须做一次无动画收敛，消除动画取整误差');
+assert.match(assistantSource, /Keyboard\.addListener\('keyboardWillHide',[\s\S]*animateBottomOffsetWithKeyboard\(event, closedViewportHeightRef\.current\)/,
+  '收键盘必须从 willHide 开始按关闭态视口同步移动正文，不能等输入框落下后再补滚动');
+assert.match(assistantSource, /Animated\.timing\([\s\S]*duration: event\.duration[\s\S]*useNativeDriver: false/,
+  '正文回落必须复用系统键盘事件时长，避免与输入框形成两条不同速度的动画');
+assert.match(assistantSource, /addListener\(\(\{ value \}\) => \{[\s\S]*scrollToOffset\(\{ offset: value, animated: false \}\)/,
+  '键盘联动期间应逐帧设置正文位置，不能再启动 UIScrollView 自带的第二条动画');
 assert.match(assistantSource, /if \(shouldFollow\) keepLatestVisibleAfterLayout\(\)/,
   '只有原本位于末端时才跟随键盘上移，历史阅读位置必须保持不动');
 assert.match(assistantSource, /Keyboard\.addListener\('keyboardDidHide',[\s\S]*scrollModeRef\.current === 'following';[\s\S]*keepLatestVisibleAfterLayout\(\)/,

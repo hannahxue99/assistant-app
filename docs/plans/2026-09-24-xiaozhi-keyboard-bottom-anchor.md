@@ -31,9 +31,10 @@
 2. Run `npm run test:assistant-layout` and verify the new assertions fail.
 3. Track keyboard anchor state separately from `following / history`.
 4. On list layout, update measured viewport and scroll to the exact bottom offset only when the frozen keyboard anchor is following.
-5. On keyboard completion, settle once without animation; reset stale drag state on focus and navigation focus.
-6. Preserve history mode and existing shadow/jump-button calculations.
-7. Rerun `npm run test:assistant-layout` and `npm run test:assistant-ui`.
+5. On keyboard hide, animate the list offset frame-by-frame with the system keyboard event duration so the message body and composer return together.
+6. On keyboard completion, settle once without animation; reset stale drag state on focus and navigation focus.
+7. Preserve history mode and existing shadow/jump-button calculations.
+8. Rerun `npm run test:assistant-layout` and `npm run test:assistant-ui`.
 
 ### Task 3: Verify behavior and repository quality
 
@@ -45,4 +46,3 @@
 3. Record the long-history keyboard-anchor regression and rollback scope in the existing knowledge topic.
 4. Commit the reviewable change set, push the branch, and create a PR against `main`.
 5. Deliver to the Dev app and verify the reference-video motion from Home → Xiaozhi before any Release rebuild.
-
