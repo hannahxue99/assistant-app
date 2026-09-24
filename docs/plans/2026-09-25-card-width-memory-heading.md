@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Match the home todo card width to the event card and rebalance long-term memory category icons and headings.
+**Goal:** Match the home todo card width to the event card, rebalance long-term memory category rows, and simplify home todo date labels.
 
 **Architecture:** Keep the existing components, content, navigation, and persistence unchanged. Limit the implementation to React Native style constants in the home screen and `MemorySection`, then verify through static checks, TypeScript, the full CI suite, and a physical-device Dev build.
 
@@ -17,6 +17,7 @@
 - Match memory category headings to the setting-row body font size while preserving their orange color and bold weight.
 - Match the memory card's 14-point horizontal padding to setting rows and use a 42-point body offset so headings, icons, and content share the same left grid.
 - Preserve card height, padding, colors, shadows, actions, data flow, edit behavior, and empty/loading/error states.
+- Format home week labels as `M/D 今天`, `M/D 明天`, or `M/D 周X`; never combine relative day, date, and weekday in one label.
 
 ## Acceptance criteria
 
@@ -26,6 +27,7 @@
 4. Memory content and editor align consistently with the adjusted category row.
 5. No persistence, navigation, native configuration, or database behavior changes.
 6. TypeScript and `npm run ci` pass; the Dev build loads on the connected iPhone for acceptance.
+7. Today and tomorrow labels use the date-first compact format, while later dates keep their weekday.
 
 ### Task 1: Apply the visual refinements
 
@@ -50,3 +52,13 @@
 3. Commit the design and implementation on the dedicated branch.
 4. Push and create a new pull request.
 5. Follow the documented Dev device flow and load the branch on the connected iPhone.
+
+### Task 3: Simplify todo date labels
+
+**Files:**
+- Modify: `src/engine/schedule.ts`
+- Test: `scripts/test-schedule.ts`
+
+1. Change the today expectation to `M/D 今天` and tomorrow to `M/D 明天`.
+2. Preserve `M/D 周X` for later dates and `全天` for undated rows.
+3. Run the focused schedule test, then the full CI suite.

@@ -136,8 +136,8 @@ export function dateLabel(dueAt: number): string {
   return `${mdLabel(dueAt)} ${weekdayLabel(dueAt)}`;
 }
 
-/** 本周待办行标签（2026-09-01 需求：无小时；今天/明天带具体日期）：
- *  今天 → 「今天 9/1 周一」；明天 → 「明天 9/2 周二」；后天起 → 「9/3 周三」 */
+/** 本周待办行标签（2026-09-25 需求：日期在前，今天/明天替代星期）：
+ *  今天 → 「9/1 今天」；明天 → 「9/2 明天」；后天起 → 「9/3 周三」 */
 export function weekTaskLabel(dueAt: number | null, now = Date.now()): string {
   if (!dueAt) return '全天';
   const d = new Date(dueAt);
@@ -149,7 +149,7 @@ export function weekTaskLabel(dueAt: number | null, now = Date.now()): string {
     return q.getTime();
   };
   const days = Math.round((dayOf(d) - dayOf(new Date(now))) / 86400000);
-  if (days === 0) return `今天 ${md} ${wd}`;
-  if (days === 1) return `明天 ${md} ${wd}`;
+  if (days === 0) return `${md} 今天`;
+  if (days === 1) return `${md} 明天`;
   return `${md} ${wd}`;
 }
