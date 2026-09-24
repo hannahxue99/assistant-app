@@ -1,4 +1,4 @@
-/** 「首页」只呈现待办与持续事件；所有新输入统一进入小知。 */
+/** 「首页」只呈现待办与事件；所有新输入统一进入小知。 */
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState, useRef } from 'react';
@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { WarmAmbientBackground } from '../../src/components/WarmAmbientBackground';
 import { XiaozhiMascot } from '../../src/components/XiaozhiMascot';
 import {
   listLongTermTasks,
@@ -39,6 +38,42 @@ import {
 import { theme } from '../../src/theme';
 
 type TodoView = 'week' | 'all';
+
+type EventVisual = {
+  name: keyof typeof Ionicons.glyphMap;
+  color: string;
+  backgroundColor: string;
+};
+
+const EVENT_VISUAL_RULES: Array<{ pattern: RegExp; visual: EventVisual }> = [
+  { pattern: /学校|小学|教育|课程|老师|孩子|团团|优优|school|education/i, visual: { name: 'school-outline', color: '#6657D9', backgroundColor: '#F0EEFF' } },
+  { pattern: /旅行|出行|机票|航班|酒店|阿尔山|travel|flight|trip/i, visual: { name: 'airplane-outline', color: '#287AA7', backgroundColor: '#EAF6FC' } },
+  { pattern: /签证|证件|护照|申请|材料|visa|passport/i, visual: { name: 'document-text-outline', color: '#4C8A6E', backgroundColor: '#ECF7F0' } },
+  { pattern: /健康|医院|医生|牙医|体检|药|health|medical/i, visual: { name: 'medical-outline', color: '#C05A4E', backgroundColor: '#FBEDEC' } },
+  { pattern: /家庭|家人|父母|孩子|亲子|family/i, visual: { name: 'people-outline', color: '#B06A24', backgroundColor: '#FFF2E3' } },
+  { pattern: /房|家装|搬家|居住|home|house/i, visual: { name: 'home-outline', color: '#EC6B2D', backgroundColor: '#FFF0E5' } },
+  { pattern: /模型|AI|科技|产品|软件|应用|代码|tech|model|product/i, visual: { name: 'hardware-chip-outline', color: '#5577F2', backgroundColor: '#EDF1FF' } },
+  { pattern: /工作|项目|公司|业务|会议|work|project|business/i, visual: { name: 'briefcase-outline', color: '#6F665F', backgroundColor: '#F2EFEC' } },
+  { pattern: /理财|银行|投资|股票|预算|finance|money/i, visual: { name: 'wallet-outline', color: '#A07717', backgroundColor: '#FBF3DB' } },
+  { pattern: /读书|阅读|学习|考试|book|read|study/i, visual: { name: 'book-outline', color: '#4C8A6E', backgroundColor: '#ECF7F0' } },
+  { pattern: /餐厅|美食|吃饭|饮食|food|restaurant/i, visual: { name: 'restaurant-outline', color: '#C05A4E', backgroundColor: '#FBEDEC' } },
+  { pattern: /购物|购买|订单|快递|shopping|order/i, visual: { name: 'cart-outline', color: '#8B5BB4', backgroundColor: '#F5ECFB' } },
+];
+
+const EVENT_VISUAL_FALLBACKS: EventVisual[] = [
+  { name: 'compass-outline', color: '#287AA7', backgroundColor: '#EAF6FC' },
+  { name: 'bulb-outline', color: '#A07717', backgroundColor: '#FBF3DB' },
+  { name: 'flag-outline', color: '#C05A4E', backgroundColor: '#FBEDEC' },
+  { name: 'calendar-outline', color: '#6657D9', backgroundColor: '#F0EEFF' },
+  { name: 'sparkles-outline', color: '#EC6B2D', backgroundColor: '#FFF0E5' },
+  { name: 'bookmark-outline', color: '#4C8A6E', backgroundColor: '#ECF7F0' },
+];
+
+function eventVisual(event: AssistantEvent, index: number): EventVisual {
+  const content = `${event.title} ${event.currentState ?? ''}`;
+  return EVENT_VISUAL_RULES.find(rule => rule.pattern.test(content))?.visual
+    ?? EVENT_VISUAL_FALLBACKS[index % EVENT_VISUAL_FALLBACKS.length];
+}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -161,12 +196,9 @@ export default function HomeScreen() {
   const greeting = greetingHour < 11 ? '早上好' : greetingHour < 18 ? '下午好' : '晚上好';
   const visibleTodoGroups = todoView === 'week' ? weekGroups : longTermGroups;
   const visibleTodos = visibleTodoGroups.flatMap(group => group.entries.map(entry => ({ entry, isToday: group.isToday })));
-  const spotlightEvent = events[0] ?? null;
-  const recentEvents = events.slice(1);
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
-      <WarmAmbientBackground />
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
           <View style={styles.hero}>
             <View style={styles.heroCopy}>
@@ -189,15 +221,21 @@ export default function HomeScreen() {
               tryFocusTodo();
             }}
           >
-            <View style={styles.sectionHead}>
-              <Text style={styles.sectionTitle}>{todoView === 'week' ? '今日待办' : '全部待办'}</Text>
+            <View style={styles.todoTabs} accessibilityRole="tablist">
               <Pressable
-                accessibilityRole="button"
-                onPress={() => setTodoView(todoView === 'week' ? 'all' : 'week')}
-                style={styles.sectionAction}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: todoView === 'week' }}
+                onPress={() => setTodoView('week')}
               >
-                <Text style={styles.sectionActionText}>{todoView === 'week' ? '查看全部' : '查看本周'}</Text>
-                <Ionicons name="chevron-forward" size={17} color={theme.colors.textDim} />
+                <Text style={[styles.todoTabText, todoView === 'week' && styles.todoTabTextActive]}>本周待办</Text>
+              </Pressable>
+              <Text style={styles.todoTabDivider}>｜</Text>
+              <Pressable
+                accessibilityRole="tab"
+                accessibilityState={{ selected: todoView === 'all' }}
+                onPress={() => setTodoView('all')}
+              >
+                <Text style={[styles.todoTabText, todoView === 'all' && styles.todoTabTextActive]}>全部待办</Text>
               </Pressable>
             </View>
             {todosState === 'loading' ? (
@@ -240,61 +278,29 @@ export default function HomeScreen() {
             )}
           </View>
 
-          {/* 模块二：持续事件。失败只影响本区，不阻断待办。 */}
-          <View style={styles.sectionHead} accessibilityLabel="小知正在关注">
-            <Text style={styles.sectionTitle}>小知正在关注</Text>
-            <View style={styles.sectionAction}>
-              <Text style={styles.sectionActionText}>持续事件</Text>
+          {/* 模块二：事件完整列表。失败只影响本区，不阻断待办。 */}
+          <View style={styles.eventsSection}>
+            <View style={styles.sectionHead} accessibilityLabel="小知正在关注">
+              <Text style={styles.sectionTitle}>小知正在关注</Text>
             </View>
-          </View>
-          {eventsState === 'loading' ? (
-            <ActivityIndicator color={theme.colors.accent} style={styles.eventsLoading} />
-          ) : eventsState === 'error' ? (
-            <Pressable style={styles.eventsError} onPress={() => { void loadEvents(); }}>
-              <Text style={styles.eventsErrorText}>事件暂时加载不了</Text>
-              <Text style={styles.eventsRetry}>重试</Text>
-            </Pressable>
-          ) : !spotlightEvent ? (
-            <Text style={styles.eventsEmpty}>还没有需要持续跟进的事</Text>
-          ) : (
-            <View style={styles.watchingCard}>
-              <View style={styles.watchingOrb}>
-                <Ionicons name="trending-up" size={27} color={theme.colors.accent} />
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`查看事件${spotlightEvent.title}`}
-                onPress={() => router.push(`/event/${spotlightEvent.id}`)}
-                style={({ pressed }) => [styles.watchingContent, pressed && styles.pressed]}
-              >
-                <Text style={styles.watchingTitle} numberOfLines={1}>{spotlightEvent.title}</Text>
-                <Text style={styles.watchingState} numberOfLines={2}>{spotlightEvent.currentState || '暂时还没有明确进展'}</Text>
-                <Text style={styles.watchingLink}>查看更新 <Ionicons name="arrow-forward" size={15} /></Text>
+            {eventsState === 'loading' ? (
+              <ActivityIndicator color={theme.colors.accent} style={styles.eventsLoading} />
+            ) : eventsState === 'error' ? (
+              <Pressable style={styles.eventsError} onPress={() => { void loadEvents(); }}>
+                <Text style={styles.eventsErrorText}>事件暂时加载不了</Text>
+                <Text style={styles.eventsRetry}>重试</Text>
               </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={spotlightEvent.pinnedAt !== null ? `取消置顶${spotlightEvent.title}` : `置顶${spotlightEvent.title}`}
-                disabled={pinningEventId === spotlightEvent.id}
-                onPress={() => { void handleEventPin(spotlightEvent); }}
-                style={styles.pinAction}
-              >
-                <Ionicons name={spotlightEvent.pinnedAt !== null ? 'bookmark' : 'bookmark-outline'} size={18} color={theme.colors.accent} />
-              </Pressable>
-            </View>
-          )}
-
-          {recentEvents.length > 0 ? (
-            <>
-              <View style={styles.sectionHead}>
-                <Text style={styles.sectionTitle}>最近事件</Text>
-                <Text style={styles.sectionActionText}>{recentEvents.length} 件</Text>
-              </View>
-              <View style={styles.recentCard}>
-                {recentEvents.map((event, index) => (
+            ) : events.length === 0 ? (
+              <Text style={styles.eventsEmpty}>还没有需要持续跟进的事</Text>
+            ) : (
+              <View style={styles.eventCard}>
+                {events.map((event, index) => {
+                  const visual = eventVisual(event, index);
+                  return (
                   <View key={event.id}>
                     <View style={styles.eventRow}>
-                      <View style={[styles.eventIcon, index % 3 === 1 ? styles.eventIconViolet : index % 3 === 2 ? styles.eventIconOrange : styles.eventIconGreen]}>
-                        <Ionicons name={index % 3 === 1 ? 'airplane-outline' : index % 3 === 2 ? 'home-outline' : 'book-outline'} size={22} color={index % 3 === 1 ? theme.colors.violet : index % 3 === 2 ? theme.colors.accent : theme.colors.green} />
+                      <View style={[styles.eventIcon, { backgroundColor: visual.backgroundColor }]}>
+                        <Ionicons name={visual.name} size={22} color={visual.color} />
                       </View>
                       <Pressable
                         accessibilityRole="button"
@@ -316,12 +322,13 @@ export default function HomeScreen() {
                         <Ionicons name={event.pinnedAt !== null ? 'bookmark' : 'chevron-forward'} size={18} color={theme.colors.textDim} />
                       </Pressable>
                     </View>
-                    {index < recentEvents.length - 1 ? <View style={styles.eventDivider} /> : null}
+                    {index < events.length - 1 ? <View style={styles.eventDivider} /> : null}
                   </View>
-                ))}
+                  );
+                })}
               </View>
-            </>
-          ) : null}
+            )}
+          </View>
 
       </ScrollView>
     </SafeAreaView>
@@ -363,17 +370,21 @@ function WeekTaskRow({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
-  content: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 42, gap: 20 },
-  hero: { minHeight: 122, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  safe: { flex: 1, backgroundColor: '#FFFFFF' },
+  content: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 42, gap: 6 },
+  hero: { minHeight: 82, position: 'relative' },
   heroCopy: { paddingTop: 9, gap: 7 },
   greeting: { color: theme.colors.text, fontSize: 32, lineHeight: 40, fontWeight: theme.fontWeight.bold },
   dateLine: { fontSize: 15, color: theme.colors.textDim },
-  heroAssistant: { width: 180, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginRight: -8 },
+  heroAssistant: { position: 'absolute', top: -5, right: -8, width: 180, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
   speechBubble: { maxWidth: 106, borderRadius: 22, borderBottomRightRadius: 5, backgroundColor: '#FFF0E3', paddingHorizontal: 14, paddingVertical: 12, marginRight: -5 },
   speechText: { color: '#765A49', fontSize: 12, lineHeight: 18 },
-  todoSection: { gap: 11 },
-  sectionHead: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  todoSection: { gap: 10 },
+  todoTabs: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  todoTabText: { color: theme.colors.textDim, fontSize: 18, lineHeight: 26, fontWeight: theme.fontWeight.semibold },
+  todoTabTextActive: { color: theme.colors.text, fontSize: 22, lineHeight: 30, fontWeight: theme.fontWeight.bold },
+  todoTabDivider: { color: theme.colors.border, fontSize: 18 },
+  sectionHead: { minHeight: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: { color: theme.colors.text, fontSize: 22, lineHeight: 30, fontWeight: theme.fontWeight.bold },
   sectionAction: { minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 2, paddingLeft: 10 },
   sectionActionText: { color: theme.colors.textDim, fontSize: 14 },
@@ -395,8 +406,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     backgroundColor: theme.colors.card,
-    minHeight: 68,
-    paddingVertical: 12,
+    minHeight: 50,
+    paddingVertical: 4,
   },
   weekRowToday: {},
   weekRowHighlighted: { marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 14, backgroundColor: theme.colors.accentSoft },
@@ -418,23 +429,14 @@ const styles = StyleSheet.create({
   eventsErrorText: { color: theme.colors.textDim, fontSize: theme.font.small },
   eventsRetry: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
   eventsEmpty: { color: theme.colors.textDim, fontSize: theme.font.small, paddingVertical: 10 },
-  watchingCard: { position: 'relative', minHeight: 152, flexDirection: 'row', alignItems: 'center', borderRadius: theme.radius.card, backgroundColor: '#FFF1E4', padding: 18, overflow: 'hidden', ...theme.shadow },
-  watchingOrb: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFE5D2', marginRight: 14 },
-  watchingContent: { flex: 1, gap: 5 },
-  watchingTitle: { color: theme.colors.text, fontSize: 20, lineHeight: 26, fontWeight: theme.fontWeight.bold, paddingRight: 24 },
-  watchingState: { color: '#5D5149', fontSize: 15, lineHeight: 21 },
-  watchingLink: { color: theme.colors.accent, fontSize: 15, lineHeight: 22, fontWeight: theme.fontWeight.semibold, textAlign: 'right', marginTop: 7 },
-  pinAction: { position: 'absolute', top: 8, right: 8, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  recentCard: { backgroundColor: theme.colors.card, borderRadius: theme.radius.card, paddingHorizontal: 16, ...theme.shadow },
-  eventRow: { minHeight: 88, flexDirection: 'row', alignItems: 'center' },
+  eventsSection: { gap: 2, marginTop: 10 },
+  eventCard: { marginHorizontal: -8, backgroundColor: theme.colors.card, borderRadius: theme.radius.card, paddingHorizontal: 16, ...theme.shadow },
+  eventRow: { minHeight: 94, flexDirection: 'row', alignItems: 'center' },
   eventIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  eventIconGreen: { backgroundColor: theme.colors.greenSoft },
-  eventIconViolet: { backgroundColor: theme.colors.violetSoft },
-  eventIconOrange: { backgroundColor: theme.colors.accentSoft },
   eventContent: { flex: 1, paddingHorizontal: 13, paddingVertical: 12, gap: 2 },
-  eventTitle: { color: theme.colors.text, fontSize: 16, lineHeight: 22, fontWeight: theme.fontWeight.semibold },
-  eventState: { color: '#6E655E', fontSize: 13, lineHeight: 18 },
-  eventTime: { color: theme.colors.textDim, fontSize: 12, lineHeight: 17 },
+  eventTitle: { color: theme.colors.text, fontSize: 18, lineHeight: 24, fontWeight: theme.fontWeight.semibold },
+  eventState: { color: '#6E655E', fontSize: 15, lineHeight: 20 },
+  eventTime: { color: theme.colors.textDim, fontSize: 13, lineHeight: 18 },
   eventChevron: { width: 38, height: 48, alignItems: 'flex-end', justifyContent: 'center' },
   eventDivider: { height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border, marginLeft: 61 },
   pressed: { opacity: 0.65 },

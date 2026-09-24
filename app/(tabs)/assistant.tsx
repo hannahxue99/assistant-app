@@ -54,7 +54,6 @@ import { AssistantComposer } from '../../src/components/AssistantComposer';
 import { AssistantEmptyState } from '../../src/components/AssistantEmptyState';
 import { AssistantLoadErrorState } from '../../src/components/AssistantLoadErrorState';
 import { AssistantMessageBubble } from '../../src/components/AssistantMessageBubble';
-import { WarmAmbientBackground } from '../../src/components/WarmAmbientBackground';
 import { XiaozhiMascot } from '../../src/components/XiaozhiMascot';
 import { getSettings } from '../../src/db';
 import { theme } from '../../src/theme';
@@ -574,27 +573,14 @@ export default function AssistantScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
-      <WarmAmbientBackground />
       <View style={styles.header}>
         <View style={styles.headerCopy}>
           <Text style={styles.title}>小知</Text>
           <Text style={styles.caption}>连续对话 · 自动保存</Text>
         </View>
         <View style={styles.headerAssistant}>
-          <View style={styles.speechBubble}><Text style={styles.speechText}>有我在，{`\n`}一切井井有条。</Text></View>
           <XiaozhiMascot size={84} />
         </View>
-        {__DEV__ ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="打开决策日志调试页"
-            onPress={() => navigateAway('/debug/decisions')}
-            hitSlop={8}
-            style={({ pressed }) => [styles.debugEntry, pressed && styles.pressed]}
-          >
-            <Ionicons name="terminal-outline" size={20} color={theme.colors.textDim} />
-          </Pressable>
-        ) : null}
       </View>
 
       {engineStatus === 'unconfigured' && initialLoad === 'ready' ? (
@@ -766,15 +752,12 @@ export default function AssistantScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
+  safe: { flex: 1, backgroundColor: '#FFFFFF' },
   keyboardStage: { flex: 1, overflow: 'hidden' },
   composerKeyboardStage: { position: 'absolute', zIndex: 10, left: 0, right: 0, bottom: 0 },
-  header: { minHeight: 116, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10, justifyContent: 'space-between', alignItems: 'flex-start', flexDirection: 'row' },
-  headerCopy: { paddingTop: 5, gap: 5 },
-  headerAssistant: { width: 174, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginRight: -7 },
-  speechBubble: { maxWidth: 98, borderRadius: 21, borderBottomRightRadius: 5, backgroundColor: '#FFF0E3', paddingHorizontal: 13, paddingVertical: 11, marginRight: -5 },
-  speechText: { color: '#765A49', fontSize: 12, lineHeight: 18 },
-  debugEntry: { position: 'absolute', right: 13, bottom: 3, width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  header: { minHeight: 90, position: 'relative', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 4 },
+  headerCopy: { paddingTop: 8, gap: 5 },
+  headerAssistant: { position: 'absolute', top: 4, right: 13, width: 84, alignItems: 'center', justifyContent: 'center' },
   title: { color: theme.colors.text, fontSize: 32, lineHeight: 40, fontWeight: theme.fontWeight.bold },
   caption: { color: theme.colors.textDim, fontSize: 14, marginTop: 1 },
   configBanner: { minHeight: 44, marginHorizontal: theme.spacing.md, marginBottom: 6, paddingHorizontal: 12, borderRadius: 12, backgroundColor: theme.colors.goldSoft, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
@@ -787,7 +770,7 @@ const styles = StyleSheet.create({
   contextClose: { width: theme.touchTarget, height: theme.touchTarget, alignItems: 'center', justifyContent: 'center' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { flex: 1 },
-  listContent: { paddingHorizontal: 20, paddingTop: 5 },
+  listContent: { paddingHorizontal: 20, paddingTop: 0 },
   emptyList: { flexGrow: 1 },
   olderSpinner: { marginVertical: 8 },
   olderError: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 },

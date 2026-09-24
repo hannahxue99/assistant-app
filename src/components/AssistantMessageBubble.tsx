@@ -16,7 +16,6 @@ import { theme } from '../theme';
 import { AssistantActionReceipt } from './AssistantActionReceipt';
 import { AssistantMarkdown } from './AssistantMarkdown';
 import { AssistantWebSources } from './AssistantWebSources';
-import { XiaozhiMascot } from './XiaozhiMascot';
 
 const META_ICON_COLOR = '#5577F2';
 
@@ -166,7 +165,6 @@ export function AssistantMessageBubble({
       ) : null}
       {surface === 'assistant-bubble' && (message.content || message.errorCode === 'cancelled') ? (
         <View style={styles.assistantMessageLine}>
-          <View style={styles.avatar}><XiaozhiMascot size={32} /></View>
           <View style={styles.assistantBubble}>
             {message.content ? (
               <AssistantMarkdown content={message.content} streaming={isStreaming} />
@@ -215,9 +213,21 @@ const styles = StyleSheet.create({
   userRow: { alignItems: 'flex-end' },
   assistantRow: { alignItems: 'flex-start' },
   userBubble: { maxWidth: '84%', borderRadius: 20, borderBottomRightRadius: 7, paddingHorizontal: 16, paddingVertical: 11, backgroundColor: theme.colors.accent, ...theme.shadow },
-  assistantMessageLine: { width: '100%', flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#FFF3E9', alignItems: 'center', justifyContent: 'center', marginTop: 3 },
-  assistantBubble: { flexShrink: 1, maxWidth: '88%', borderRadius: 20, borderBottomLeftRadius: 7, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFFAF5', ...theme.shadow },
+  assistantMessageLine: { width: '94%', alignItems: 'flex-start' },
+  assistantBubble: {
+    width: '100%',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: theme.colors.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.border,
+    shadowColor: '#302923',
+    shadowOpacity: 0.045,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
   content: { color: theme.colors.text, fontSize: 16, lineHeight: 23 },
   userContent: { color: '#FFFFFF' },
   runtimeRow: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 4, marginBottom: 2 },

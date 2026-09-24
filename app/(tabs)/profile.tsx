@@ -21,7 +21,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CalendarSyncSetting } from '../../src/components/CalendarSyncSetting';
 import { MemorySection } from '../../src/components/MemorySection';
-import { WarmAmbientBackground } from '../../src/components/WarmAmbientBackground';
 import { XiaozhiMascot } from '../../src/components/XiaozhiMascot';
 import { ImportFeedbackModal } from '../../src/components/ImportFeedbackModal';
 import { ImportPreviewModal, type ImportPreviewData } from '../../src/components/ImportPreviewModal';
@@ -384,16 +383,14 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
-      <WarmAmbientBackground />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.hero}>
           <View style={styles.heroCopy}>
             <Text style={styles.pageTitle}>我的</Text>
-            <Text style={styles.pageSubtitle}>管理你的记忆与偏好，让小知更懂你。</Text>
+            <Text numberOfLines={1} style={styles.pageSubtitle}>管理你的记忆与偏好，让小知更懂你。</Text>
           </View>
           <View style={styles.heroAssistant}>
-            <View style={styles.speechBubble}><Text style={styles.speechText}>记得你，{`\n`}所以更懂你。</Text></View>
-            <XiaozhiMascot size={88} />
+            <XiaozhiMascot size={84} />
           </View>
         </View>
         <MemorySection
@@ -415,7 +412,6 @@ export default function ProfileScreen() {
 
         <View style={styles.settingsHeading}>
           <Text style={styles.sectionTitle}>设置</Text>
-          <Text style={styles.settingsHint}>个性化小知的能力与提醒方式。</Text>
         </View>
         <Text style={styles.sectionLabel}>助手与同步</Text>
         <View style={styles.settingsCard}>
@@ -444,8 +440,8 @@ export default function ProfileScreen() {
         </View>
 
         <Text style={styles.sectionLabel}>待办通知</Text>
-        <View style={styles.notifyCard}>
-          <View style={styles.notifyRow}>
+        <View style={styles.settingsCard}>
+          <View style={styles.settingsRow}>
             <View style={styles.rowMain}>
               <View style={styles.rowIcon}><Ionicons name="notifications-outline" size={19} color={theme.colors.accent} /></View>
               <Text style={styles.rowLabel}>早 8:00 晨间待办</Text>
@@ -458,7 +454,7 @@ export default function ProfileScreen() {
               thumbColor={profile?.notifyMorning ? theme.colors.accent : '#fff'}
             />
           </View>
-          <View style={[styles.notifyRow, styles.dataRowBorder]}>
+          <View style={[styles.settingsRow, styles.dataRowBorder]}>
             <View style={styles.rowMain}>
               <View style={styles.rowIcon}><Ionicons name="moon-outline" size={18} color={theme.colors.accent} /></View>
               <Text style={styles.rowLabel}>晚 21:00 夜间待办</Text>
@@ -474,9 +470,9 @@ export default function ProfileScreen() {
         </View>
 
         <Text style={styles.sectionLabel}>数据管理</Text>
-        <View style={styles.dataCard}>
+        <View style={styles.settingsCard}>
           <Pressable
-            style={styles.dataRow}
+            style={styles.settingsRow}
             onPress={doExport}
           >
             <View style={styles.rowMain}>
@@ -485,7 +481,7 @@ export default function ProfileScreen() {
             </View>
             <Text style={styles.rowValue}>Markdown ⤴</Text>
           </Pressable>
-          <Pressable style={[styles.dataRow, styles.dataRowBorder]} onPress={chooseImportFile}>
+          <Pressable style={[styles.settingsRow, styles.dataRowBorder]} onPress={chooseImportFile}>
             <View style={styles.rowMain}>
               <View style={styles.rowIcon}><Ionicons name="refresh-outline" size={19} color={theme.colors.accent} /></View>
               <Text style={styles.rowLabel}>从备份恢复</Text>
@@ -526,18 +522,15 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
-  content: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 82, gap: 10 },
-  hero: { minHeight: 132, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  heroCopy: { flex: 1, paddingTop: 8, gap: 8 },
+  safe: { flex: 1, backgroundColor: '#FFFFFF' },
+  content: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 82, gap: 8 },
+  hero: { minHeight: 80, position: 'relative' },
+  heroCopy: { flex: 1, paddingTop: 8, gap: 5 },
   pageTitle: { color: theme.colors.text, fontSize: 32, lineHeight: 40, fontWeight: theme.fontWeight.bold },
-  pageSubtitle: { maxWidth: 210, color: theme.colors.textDim, fontSize: 14, lineHeight: 21 },
-  heroAssistant: { width: 174, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginRight: -8 },
-  speechBubble: { maxWidth: 96, borderRadius: 21, borderBottomRightRadius: 5, backgroundColor: '#FFF0E3', paddingHorizontal: 13, paddingVertical: 11, marginRight: -6 },
-  speechText: { color: '#765A49', fontSize: 12, lineHeight: 18 },
+  pageSubtitle: { flexShrink: 1, color: theme.colors.textDim, fontSize: 13, lineHeight: 19, marginTop: 1 },
+  heroAssistant: { position: 'absolute', top: -6, right: -7, width: 84, justifyContent: 'center', alignItems: 'center' },
   settingsHeading: { flexDirection: 'row', alignItems: 'baseline', gap: 9, marginTop: 16 },
   sectionTitle: { color: theme.colors.text, fontSize: 22, lineHeight: 30, fontWeight: theme.fontWeight.bold },
-  settingsHint: { flex: 1, color: theme.colors.textDim, fontSize: 12 },
   rowLabel: { fontSize: theme.font.body, color: theme.colors.text },
   rowValue: { fontSize: theme.font.small, color: theme.colors.textDim },
   rowMain: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -548,20 +541,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginLeft: 4,
     marginBottom: -2,
-  },
-  dataCard: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.card,
-    overflow: 'hidden',
-    ...theme.shadow,
-  },
-  dataRow: {
-    minHeight: 56,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
   },
   dataRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
   settingsCard: {
@@ -577,20 +556,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 8,
-  },
-  notifyCard: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.card,
-    paddingVertical: 2,
-    ...theme.shadow,
-  },
-  notifyRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    minHeight: 58,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
   },
   undoBar: {
     position: 'absolute',

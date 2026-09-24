@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
-import { XiaozhiEyesIcon } from '@/src/components/XiaozhiEyesIcon';
+import { XiaozhiMascot } from '@/src/components/XiaozhiMascot';
 import { theme } from '@/src/theme';
 
 export default function TabLayout() {
@@ -42,8 +42,14 @@ export default function TabLayout() {
         name="assistant"
         options={{
           title: '小知',
-          tabBarIcon: ({ size, focused }) => (
-            <XiaozhiEyesIcon size={size} focused={focused} />
+          tabBarLabel: () => null,
+          tabBarIconStyle: styles.xiaozhiTabIcon,
+          tabBarIcon: ({ focused }) => (
+            <View style={styles.xiaozhiTabSlot}>
+              <View style={[styles.xiaozhiTabGlyph, focused && styles.xiaozhiTabGlyphFocused]}>
+                <XiaozhiMascot size={64} />
+              </View>
+            </View>
           ),
         }}
       />
@@ -61,6 +67,10 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  scene: { backgroundColor: theme.colors.bg },
-  tabBarBackground: { flex: 1, backgroundColor: theme.colors.tabBar },
+  scene: { backgroundColor: '#FFFFFF' },
+  tabBarBackground: { flex: 1, backgroundColor: '#FFFFFF' },
+  xiaozhiTabIcon: { width: 70, height: 54, marginTop: -1, overflow: 'visible' },
+  xiaozhiTabSlot: { width: 70, height: 54, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
+  xiaozhiTabGlyph: { position: 'absolute', bottom: 0, width: 64, height: 64, alignItems: 'center', justifyContent: 'center', transformOrigin: 'center bottom' },
+  xiaozhiTabGlyphFocused: { transform: [{ scale: 1.28 }] },
 });

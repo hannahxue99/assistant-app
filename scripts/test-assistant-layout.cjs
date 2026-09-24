@@ -4,31 +4,89 @@ const fs = require('node:fs');
 const assistantSource = fs.readFileSync('app/(tabs)/assistant.tsx', 'utf8');
 const composerSource = fs.readFileSync('src/components/AssistantComposer.tsx', 'utf8');
 const bubbleSource = fs.readFileSync('src/components/AssistantMessageBubble.tsx', 'utf8');
+const receiptSource = fs.readFileSync('src/components/AssistantActionReceipt.tsx', 'utf8');
 const markdownSource = fs.readFileSync('src/components/AssistantMarkdown.tsx', 'utf8');
 const sourceListSource = fs.readFileSync('src/components/AssistantWebSources.tsx', 'utf8');
 const llmSettingsSource = fs.readFileSync('app/settings/llm.tsx', 'utf8');
 const tabsSource = fs.readFileSync('app/(tabs)/_layout.tsx', 'utf8');
 const homeSource = fs.readFileSync('app/(tabs)/index.tsx', 'utf8');
 const profileSource = fs.readFileSync('app/(tabs)/profile.tsx', 'utf8');
-const ambientSource = fs.readFileSync('src/components/WarmAmbientBackground.tsx', 'utf8');
 const mascotSource = fs.readFileSync('src/components/XiaozhiMascot.tsx', 'utf8');
 
 assert.match(homeSource, /accessibilityLabel="小知正在关注"/,
   '首页必须保留生成图中的“小知正在关注”主视觉区');
 assert.match(homeSource, /<XiaozhiMascot size=\{92\}/,
   '首页标题区必须使用可复用的小知 3D 形象');
+assert.match(homeSource, /有我在，\{`\\n`\}一切井井有条。/,
+  '首页标题区必须保留小知左侧的陪伴文案');
+assert.match(homeSource, /events\.map\(\(event, index\) =>/,
+  '“小知正在关注”必须直接展示完整事件列表');
+assert.doesNotMatch(homeSource, /spotlightEvent|recentEvents|最近事件|watchingCard/,
+  '首页不得再拆分重点事件和最近事件');
+assert.ok(homeSource.includes('本周待办') && homeSource.includes('全部待办'),
+  '首页待办筛选必须并列展示“本周待办｜全部待办”');
+assert.doesNotMatch(homeSource, /查看全部|持续事件/,
+  '首页不得显示旧的“查看全部”或“持续事件”文案');
+assert.ok(homeSource.includes('EVENT_VISUAL_RULES')
+  && homeSource.includes('hardware-chip-outline')
+  && homeSource.includes('EVENT_VISUAL_FALLBACKS'),
+  '事件图标必须根据内容匹配，并提供丰富的兜底图标');
+assert.match(homeSource, /hero: \{ minHeight: 82, position: 'relative' \}/,
+  '首页待办必须紧接头部，不得由小知图片撑开大段留白');
+assert.match(homeSource, /todoSection: \{ gap: 10 \}/,
+  '首页待办卡与本周待办标题之间必须保留清晰留白');
+assert.match(homeSource, /weekRow: \{[\s\S]*minHeight: 50,[\s\S]*paddingVertical: 4/,
+  '首页待办卡必须保持小巧紧凑');
+assert.match(homeSource, /eventsSection: \{ gap: 2, marginTop: 10 \}/,
+  '小知正在关注与待办卡之间必须保留清晰留白');
+assert.match(homeSource, /eventTitle: \{[^\n]*fontSize: 18,[^\n]*lineHeight: 24/,
+  '事件标题字号必须提升');
+assert.match(homeSource, /eventState: \{[^\n]*fontSize: 15,[^\n]*lineHeight: 20/,
+  '事件内容字号必须提升');
+assert.match(homeSource, /eventTime: \{[^\n]*fontSize: 13,[^\n]*lineHeight: 18/,
+  '事件时间字号必须提升');
 assert.match(profileSource, /管理你的记忆与偏好，让小知更懂你。/,
   '我的页必须保留生成图中的页面说明');
-assert.match(profileSource, /<XiaozhiMascot size=\{88\}/,
+assert.match(profileSource, /<XiaozhiMascot size=\{84\}/,
   '我的页标题区必须使用可复用的小知 3D 形象');
+assert.doesNotMatch(profileSource, /speechBubble|记得你|个性化小知的能力与提醒方式。/,
+  '我的页右侧只保留小知图标，设置标题不带说明');
+assert.match(profileSource, /<Text numberOfLines=\{1\} style=\{styles\.pageSubtitle\}>/,
+  '我的页说明必须保持单行');
+assert.match(profileSource, /hero: \{ minHeight: 80, position: 'relative' \}/,
+  '我的页外层顶距加头部高度必须与小知页头部总高一致');
+assert.match(profileSource, /heroCopy: \{ flex: 1, paddingTop: 8, gap: 5 \}/,
+  '我的页标题与第二行间距必须和小知页一致');
+assert.match(profileSource, /pageSubtitle: \{[^\n]*marginTop: 1 \}/,
+  '我的页第二行微调必须和小知页说明位置一致');
+assert.match(profileSource, /heroAssistant: \{ position: 'absolute', top: -6, right: -7, width: 84/,
+  '我的页右上角小知必须固定显示，不得被副标题挤出');
+assert.equal((profileSource.match(/style=\{styles\.settingsCard\}/g) ?? []).length, 3,
+  '三个设置分组必须复用助手与同步的卡片样式');
+assert.doesNotMatch(profileSource, /notifyCard|dataCard|notifyRow|\bdataRow\b/,
+  '设置区不得保留与助手与同步不一致的卡片样式');
 assert.match(assistantSource, /连续对话 · 自动保存/,
   '小知页必须保留生成图中的会话说明');
 assert.match(assistantSource, /<XiaozhiMascot size=\{84\}/,
   '小知页标题区必须使用可复用的小知 3D 形象');
-assert.match(ambientSource, /pointerEvents="none"/,
-  '暖色氛围背景不能拦截页面交互');
+assert.doesNotMatch(assistantSource, /speechBubble|打开决策日志调试页|terminal-outline/,
+  '小知页右侧只保留小知图标，不暴露调试入口');
+assert.match(assistantSource, /header: \{ minHeight: 90, position: 'relative', paddingHorizontal: 20, paddingTop: 10/,
+  '小知页消息列表必须紧接压缩后的标题区');
+assert.match(assistantSource, /headerCopy: \{ paddingTop: 8,[^\n]*\}[\s\S]*headerAssistant: \{ position: 'absolute', top: 4, right: 13/,
+  '小知页右上角图标必须与左侧标题顶线对齐');
+for (const [name, source] of [['首页', homeSource], ['小知页', assistantSource], ['我的页', profileSource]]) {
+  assert.doesNotMatch(source, /WarmAmbientBackground/,
+    `${name}必须使用纯白背景，不得叠加暖色氛围层`);
+  assert.match(source, /safe: \{ flex: 1, backgroundColor: '#FFFFFF' \}/,
+    `${name}页面底色必须为纯白`);
+}
 assert.match(mascotSource, /xiaozhi-mascot\.png/,
   '三个页面必须复用项目内的小知形象资产');
+assert.match(mascotSource, /defaultSource=\{xiaozhiMascotSource\}/,
+  '小知形象必须使用同一本地图片作为原生占位，避免页面挂载时出现空白帧');
+assert.match(mascotSource, /fadeDuration=\{0\}/,
+  '小知形象不得在页面切换时重复淡入');
 
 assert.match(
   assistantSource,
@@ -99,6 +157,18 @@ assert.match(composerSource, /shadowOpacity: 0\.10 \+ 0\.06 \* elevation/,
   '用户离开底部时，输入框阴影必须从基础外凸连续增强');
 assert.match(bubbleSource, /content: \{ color: theme\.colors\.text, fontSize: 16, lineHeight: 23 \}/,
   '用户发送后的消息气泡必须使用 16px 正文');
+assert.doesNotMatch(bubbleSource, /styles\.avatar|<XiaozhiMascot/,
+  '小知回复不得保留头像占位造成右缩进');
+assert.ok(bubbleSource.includes("assistantBubble: {\n    width: '100%',"),
+  '小知回复内容必须使用消息卡全部可用宽度');
+assert.match(bubbleSource, /assistantMessageLine: \{ width: '94%'/,
+  '小知回复卡必须与已处理卡使用相同宽度');
+assert.match(bubbleSource, /assistantBubble: \{[\s\S]*backgroundColor: theme\.colors\.card,[\s\S]*borderColor: theme\.colors\.border/,
+  '小知回复卡必须与已处理卡使用相同白底和边框色');
+assert.match(receiptSource, /wrap: \{[\s\S]*width: '100%',[\s\S]*backgroundColor: theme\.colors\.card,[\s\S]*borderColor: theme\.colors\.border/,
+  '已处理卡必须保留统一卡片底色和边框');
+assert.match(bubbleSource, /receiptWrap: \{ width: '94%'/,
+  '已处理卡外层宽度必须与小知回复卡一致');
 assert.match(markdownSource, /body: \{ color: theme\.colors\.text, fontSize: 16, lineHeight: 23 \}/,
   '小知最终回复正文必须使用 16px');
 assert.match(markdownSource, /listMarker: \{ width: 18, color: theme\.colors\.text, fontSize: 16, lineHeight: 23 \}/,
@@ -107,8 +177,24 @@ assert.match(tabsSource, /sceneStyle: styles\.scene/,
   '首页、小知、我的三个 Tab 场景必须统一使用纯白背景');
 assert.match(tabsSource, /tabBarBackground: \(\) => <View style=\{styles\.tabBarBackground\} \/>/,
   '底部 Tab Bar 必须使用实体背景，不能透出系统灰色或模糊材质');
-assert.match(tabsSource, /scene: \{ backgroundColor: theme\.colors\.bg \}[\s\S]*tabBarBackground: \{ flex: 1, backgroundColor: theme\.colors\.tabBar \}/,
-  '三个 Tab 页面与底部导航必须使用统一的暖白设计令牌');
+assert.match(tabsSource, /tabBarLabel: \(\) => null/,
+  '小知底部 Tab 必须隐藏“小知”文字');
+assert.match(tabsSource, /<XiaozhiMascot size=\{64\} \/>/,
+  '小知底部 Tab 必须复用页面顶部的小知形象');
+assert.doesNotMatch(tabsSource, /size=\{focused \?/,
+  '小知底部图标切换选中态时不得改变布局尺寸');
+assert.match(tabsSource, /xiaozhiTabSlot: \{ width: 70, height: 54,[^\n]*overflow: 'visible' \}/,
+  '小知底部图标必须使用固定且不裁剪的布局槽');
+assert.match(tabsSource, /xiaozhiTabIcon: \{ width: 70, height: 54, marginTop: -1,[^\n]*overflow: 'visible' \}/,
+  '小知底部图标槽必须上移到与其他 Tab 的底边基线一致');
+assert.match(tabsSource, /xiaozhiTabGlyph: \{ position: 'absolute', bottom: 0,[^\n]*transformOrigin: 'center bottom' \}/,
+  '小知底部图标必须固定底边，选中时只向上放大');
+assert.match(tabsSource, /xiaozhiTabGlyphFocused: \{ transform: \[\{ scale: 1\.28 \}\] \}/,
+  '小知底部图标选中态必须仅通过缩放形成明显差异');
+assert.doesNotMatch(tabsSource, /XiaozhiEyesIcon/,
+  '小知底部 Tab 不得继续使用旧眼睛图标');
+assert.match(tabsSource, /scene: \{ backgroundColor: '#FFFFFF' \}[\s\S]*tabBarBackground: \{ flex: 1, backgroundColor: '#FFFFFF' \}/,
+  '三个 Tab 页面与底部导航必须使用纯白背景');
 assert.ok((assistantSource.match(/loadLatest\('if-following'\)/g) ?? []).length >= 3,
   '完成、停止和重试刷新都必须尊重用户是否仍在末端');
 assert.doesNotMatch(assistantSource, /loadLatest\((true|false)\)/,

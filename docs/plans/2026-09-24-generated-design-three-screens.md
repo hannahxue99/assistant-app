@@ -4,7 +4,7 @@
 
 **Goal:** Faithfully implement the three generated UI references for Home, Profile, and Xiaozhi without changing product behavior.
 
-**Architecture:** Keep existing screens as data and interaction owners, add small reusable visual primitives for the warm ambient background and Xiaozhi mascot, and centralize shared tokens in the theme. Static reference images remain design documentation; the app consumes only the optimized mascot asset.
+**Architecture:** Keep existing screens as data and interaction owners, add a reusable Xiaozhi mascot primitive, and centralize shared tokens in the theme. Static reference images remain design documentation; the app consumes only the optimized mascot asset. User acceptance refinements replace the proposed ambient background with pure white surfaces.
 
 **Tech Stack:** Expo SDK 57, React Native 0.86, Expo Router, TypeScript, static PNG assets, existing SQLite and assistant modules.
 
@@ -24,11 +24,10 @@
 
 **Files:**
 - Modify: `src/theme.ts`
-- Create: `src/components/WarmAmbientBackground.tsx`
 - Create: `src/components/XiaozhiMascot.tsx`
 - Modify: `scripts/test-assistant-layout.cjs`
 
-**Steps:** Add failing source-level assertions for shared primitives and page markers, run `npm run test:assistant-layout`, implement the minimal components/tokens, rerun the test, then commit.
+**Steps:** Add failing source-level assertions for the shared mascot and page markers, run `npm run test:assistant-layout`, implement the minimal component/tokens, rerun the test, then commit.
 
 ### Task 3: Rebuild Home from the generated reference
 
@@ -66,3 +65,6 @@
 
 **Steps:** Match the reference tab bar, run focused checks, run `npm run ci`, inspect the final diff, push the branch, create a new PR against `main`, attach it, and wait for GitHub `CI / validate`.
 
+## Acceptance refinements
+
+Physical-device review finalized pure-white page backgrounds, a direct full event list, compact todos with deliberate surrounding space, unified assistant/receipt cards, consistent Profile settings cards, aligned headers, and a mascot-only center Tab. The center mascot uses a fixed bottom anchor so selection grows upward, while all mascot images use the bundled asset as their native placeholder with no fade to prevent blank frames during Tab transitions.
