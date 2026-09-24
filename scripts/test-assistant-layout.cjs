@@ -10,17 +10,21 @@ const llmSettingsSource = fs.readFileSync('app/settings/llm.tsx', 'utf8');
 
 assert.match(
   assistantSource,
-  /contentContainerStyle=\{styles\.keyboardStageContent\}[\s\S]*behavior=\{Platform\.OS === 'ios' \? 'position' : undefined\}/,
-  'iOS 小知页必须用一个原生位移容器同步移动消息区和输入框',
+  /const keyboard = useAnimatedKeyboard\(\);[\s\S]*const keyboardLift = useDerivedValue/,
+  '小知页必须直接订阅系统键盘实时帧，不能另起布局动画',
 );
-assert.match(assistantSource, /<View style=\{styles\.header\}>[\s\S]*<KeyboardAvoidingView/,
+assert.match(assistantSource, /keyboard\.height\.value - composerClosedBottomGap\.value/,
+  '键盘位移必须扣除输入框关闭态到底部屏幕的固定间隙');
+assert.match(assistantSource, /const conversationKeyboardStyle = useAnimatedStyle\([\s\S]*keyboardMovementMode === 'following' \? -keyboardLift\.value : 0/,
+  '只有置底模式才允许正文跟随键盘实时位移');
+assert.match(assistantSource, /const composerKeyboardStyle = useAnimatedStyle\([\s\S]*translateY: -keyboardLift\.value/,
+  '输入框必须在两种阅读模式下复用同一份键盘实时位移');
+assert.match(assistantSource, /<View style=\{styles\.header\}>[\s\S]*<Animated\.View style=\{\[styles\.keyboardStage, conversationKeyboardStyle\]\}/,
   '标题区必须留在键盘位移容器外，键盘只移动对话正文和输入框');
-assert.match(assistantSource, /enabled=\{keyboardMovementMode === 'following'\}[\s\S]*<FlatList/,
-  '置底聚焦时外层必须移动消息列表');
-assert.match(assistantSource, /<\/KeyboardAvoidingView>\s*<KeyboardAvoidingView[\s\S]*style=\{styles\.composerKeyboardStage\}[\s\S]*style=\{styles\.composerWrap\}/,
-  '输入框必须使用页面根部的独立原生避让层，不能嵌套在消息区局部坐标中');
-assert.doesNotMatch(assistantSource, /style=\{styles\.composerKeyboardStage\}[\s\S]{0,220}enabled=/,
-  '输入框避让层必须在 following 和 history 两种模式下始终跟随键盘');
+assert.match(assistantSource, /<\/Animated\.View>\s*<Animated\.View[\s\S]*style=\{\[styles\.composerKeyboardStage, composerKeyboardStyle\]\}/,
+  '输入框必须使用页面根部的独立实时位移层，不能嵌套在消息区局部坐标中');
+assert.doesNotMatch(assistantSource, /KeyboardAvoidingView/,
+  '正文和输入框不得再各自提交 KeyboardAvoidingView 动画');
 assert.match(assistantSource, /onInputFocus=\{\(\) => \{[\s\S]*setKeyboardMovementMode\(scrollModeRef\.current\);/,
   '键盘出现前必须冻结本轮 following/history 位移模式');
 assert.doesNotMatch(assistantSource, /setKeyboardMovementMode\([^)]*\)[\s\S]*onScrollBeginDrag/,

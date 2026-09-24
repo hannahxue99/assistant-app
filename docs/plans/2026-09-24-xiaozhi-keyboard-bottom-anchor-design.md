@@ -10,20 +10,24 @@ Release 使用生产长历史时，从首页进入小知并在消息末端点击
 
 真机视频证明 `height` 模式加 JavaScript 逐帧滚动仍是两套动画：`KeyboardAvoidingView` 用原生布局曲线移动输入框，`FlatList` 通过 JS bridge 更新 offset，收键盘时正文会先跳、输入框再独立回落。相同时长并不代表同一帧。
 
-最终方案改用 React Native 0.86.3 `KeyboardAvoidingView` 的 `position` 模式，并调整页面层级：标题、配置提示和事件上下文保持固定；消息列表位于外层 `position` 内容容器，输入框使用页面根部、按自身高度测量的绝对悬浮避让容器。输入框层始终跟随键盘，列表层只在置底模式启用；两层都使用同一原生键盘布局动画，不再由 JavaScript 模拟滚动。
+后续真机视频又证明两个 `KeyboardAvoidingView` 即使都走原生布局动画，提交时机仍可能错开：历史模式会出现输入框先到、键盘后到，置底模式会出现键盘先到、正文和输入框后到。因此最终方案不再使用 `KeyboardAvoidingView`。
 
-输入框聚焦前冻结当前 `following / history` 模式。本轮从 `following` 开始时，列表层和输入框层同时启用，二者作为一个整体跟随键盘；本轮从 `history` 开始时，只启用输入框层，列表 viewport 与 offset 完全不变。输入框避让层必须位于页面根部，不能嵌套在标题下方的列表坐标中，否则会低估键盘重叠高度而被遮挡。模式在一次键盘开合期间不因拖动切换，避免层级中途跳变。
+项目已有 Reanimated 原生键盘帧能力。页面直接在 UI 线程订阅系统 `keyboard.height`，减去输入框关闭态底边到屏幕底部的固定间隙，得到唯一 `keyboardLift`。消息区和输入框都只消费这一个 Shared Value，不再各自启动动画、推测曲线或通过 JS bridge 逐帧滚动。
+
+输入框聚焦前冻结当前 `following / history` 模式。本轮从 `following` 开始时，消息层和输入框层同时应用 `-keyboardLift`；本轮从 `history` 开始时，消息层位移恒为 0，只有输入框层应用 `-keyboardLift`。输入框层位于页面根部，模式在一次键盘开合期间不因拖动切换。
 
 ## 交互与数据流
 
 ```text
 固定标题 / 配置提示 / 事件上下文
                 │
-      KeyboardAvoidingView(position)
+      系统键盘实时 height
+                │
+       keyboardLift（唯一值）
                 │
         ┌───────┴────────┐
         │                │
-   FlatList 消息区    根部悬浮输入框避让层
+   FlatList 消息区    根部悬浮输入框层
         │                │
  following：两层同步移动  │
  history：列表固定 ──────> 输入框层单独移动
@@ -40,6 +44,7 @@ Release 使用生产长历史时，从首页进入小知并在消息末端点击
 - 历史位置点击输入框不得跳底。
 - 历史位置键盘开合时正文像素位置不得变化，输入框必须始终位于键盘上方。
 - 键盘过渡时用户主动拖动，用户手势优先并结束自动锚定。
+- 交互式收键盘时位移继续跟随系统实时帧，不依赖预设时长。
 - 流式回复和 Markdown 高度继续变化时，`following` 保持末端，`history` 保持阅读位置。
 
 ## 验收标准

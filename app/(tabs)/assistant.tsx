@@ -3,16 +3,21 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
   Keyboard,
-  KeyboardAvoidingView,
   type LayoutChangeEvent,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import Animated, {
+  useAnimatedKeyboard,
+  useAnimatedStyle,
+  useDerivedValue,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -83,6 +88,8 @@ export default function AssistantScreen() {
   const pendingEndScrollRef = useRef<{ animated: boolean } | null>(null);
   const viewportHeightRef = useRef<number | null>(null);
   const composerHeightRef = useRef<number | null>(null);
+  const composerMeasureRef = useRef<View>(null);
+  const composerClosedGapMeasuredRef = useRef(false);
   const userScrollInProgressRef = useRef(false);
   const scrollModeRef = useRef<'following' | 'history'>('following');
   const lastScrollMetricsRef = useRef({ contentHeight: 0, viewportHeight: 0, offsetY: 0 });
@@ -106,6 +113,19 @@ export default function AssistantScreen() {
     showJumpToLatest: false,
     elevation: 0,
   });
+  const keyboard = useAnimatedKeyboard();
+  const composerClosedBottomGap = useSharedValue(0);
+  const keyboardLift = useDerivedValue(() => (
+    Math.max(0, keyboard.height.value - composerClosedBottomGap.value)
+  ));
+  const conversationKeyboardStyle = useAnimatedStyle(() => ({
+    transform: [{
+      translateY: keyboardMovementMode === 'following' ? -keyboardLift.value : 0,
+    }],
+  }));
+  const composerKeyboardStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -keyboardLift.value }],
+  }));
 
   const displayMessages = useMemo(() => mergeAssistantMessages(messages, Object.values(streamingReplies)), [messages, streamingReplies]);
   const requestStartedAt = useMemo(() => new Map(
@@ -180,8 +200,19 @@ export default function AssistantScreen() {
     });
     composerHeightRef.current = nextHeight;
     setComposerHeight(nextHeight);
+    if (!composerClosedGapMeasuredRef.current && !Keyboard.isVisible()) {
+      requestAnimationFrame(() => {
+        composerMeasureRef.current?.measureInWindow((_x, y, _width, height) => {
+          composerClosedBottomGap.value = Math.max(
+            0,
+            Dimensions.get('screen').height - (y + height),
+          );
+          composerClosedGapMeasuredRef.current = true;
+        });
+      });
+    }
     if (shouldMaintain) keepLatestVisibleAfterLayout();
-  }, [keepLatestVisibleAfterLayout]);
+  }, [composerClosedBottomGap, keepLatestVisibleAfterLayout]);
 
   const updateStreamingReply = useCallback((input: {
     requestId: string;
@@ -589,13 +620,7 @@ export default function AssistantScreen() {
         </View>
       ) : null}
 
-      <KeyboardAvoidingView
-        style={styles.keyboardStage}
-        contentContainerStyle={styles.keyboardStageContent}
-        behavior={Platform.OS === 'ios' ? 'position' : undefined}
-        enabled={keyboardMovementMode === 'following'}
-        keyboardVerticalOffset={0}
-      >
+      <Animated.View style={[styles.keyboardStage, conversationKeyboardStyle]}>
 
         {initialLoad === 'loading' ? (
           <View style={styles.loading}><ActivityIndicator color={theme.colors.accent} /></View>
@@ -686,15 +711,14 @@ export default function AssistantScreen() {
           />
         )}
 
-      </KeyboardAvoidingView>
+      </Animated.View>
 
-      <KeyboardAvoidingView
+      <Animated.View
         pointerEvents="box-none"
-        style={styles.composerKeyboardStage}
-        behavior={Platform.OS === 'ios' ? 'position' : undefined}
-        keyboardVerticalOffset={0}
+        style={[styles.composerKeyboardStage, composerKeyboardStyle]}
       >
         <View
+          ref={composerMeasureRef}
           style={styles.composerWrap}
           onLayout={handleComposerLayout}
         >
@@ -729,7 +753,7 @@ export default function AssistantScreen() {
             elevation={scrollPresentation.elevation}
           />
         </View>
-      </KeyboardAvoidingView>
+      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -737,7 +761,6 @@ export default function AssistantScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   keyboardStage: { flex: 1, overflow: 'hidden' },
-  keyboardStageContent: { flex: 1 },
   composerKeyboardStage: { position: 'absolute', zIndex: 10, left: 0, right: 0, bottom: 0 },
   header: { minHeight: 62, paddingHorizontal: theme.spacing.md, paddingTop: 7, paddingBottom: 8, justifyContent: 'space-between', alignItems: 'center', flexDirection: 'row' },
   debugEntry: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
