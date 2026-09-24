@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
+  type LayoutChangeEvent,
   Platform,
   Pressable,
   StyleSheet,
@@ -20,10 +22,12 @@ import {
   isAssistantComposerDisabled,
   mergeAssistantMessages,
   pendingAssistantRequestId,
-  shouldFollowAssistantEnd,
-  assistantComposerElevation,
+  assistantScrollPresentation,
+  shouldMaintainAssistantEndAfterLayout,
+  shouldScrollAssistantAfterRefresh,
   shouldScrollAssistantOnFocus,
 } from '../../src/assistant/ui-state';
+import type { AssistantRefreshScrollMode } from '../../src/assistant/ui-state';
 import { cancelAssistantTurn, retryAssistantTurn, sendAssistantTurn } from '../../src/assistant/orchestrator';
 import { listOperationsByRequestIds } from '../../src/assistant/action-store';
 import { undoAssistantRequest } from '../../src/assistant/action-undo';
@@ -77,8 +81,14 @@ export default function AssistantScreen() {
   const loadedOnceRef = useRef(false);
   const olderLoadRef = useRef<AssistantOlderLoadStatus>('idle');
   const pendingEndScrollRef = useRef<{ animated: boolean } | null>(null);
+  const viewportHeightRef = useRef<number | null>(null);
+  const composerHeightRef = useRef<number | null>(null);
+  const followEndOnKeyboardOpenRef = useRef<boolean | null>(null);
+  const userScrollInProgressRef = useRef(false);
+  const scrollModeRef = useRef<'following' | 'history'>('following');
+  const lastScrollMetricsRef = useRef({ contentHeight: 0, viewportHeight: 0, offsetY: 0 });
+  const pendingPrependAnchorRef = useRef<{ contentHeight: number; offsetY: number } | null>(null);
   const stageSegmentsRef = useRef<Map<string, AssistantStageSegment[]>>(new Map());
-  const followEndRef = useRef(true);
   const preservePositionOnNextFocusRef = useRef(false);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [initialLoad, setInitialLoad] = useState<AssistantInitialLoadStatus>('loading');
@@ -91,7 +101,11 @@ export default function AssistantScreen() {
   const [undoErrors, setUndoErrors] = useState<Record<string, string>>({});
   const [streamingReplies, setStreamingReplies] = useState<Record<string, AssistantMessage>>({});
   const [composerHeight, setComposerHeight] = useState(68);
-  const [composerElevation, setComposerElevation] = useState(0);
+  const [scrollPresentation, setScrollPresentation] = useState({
+    atBottom: true,
+    showJumpToLatest: false,
+    elevation: 0,
+  });
 
   const displayMessages = useMemo(() => mergeAssistantMessages(messages, Object.values(streamingReplies)), [messages, streamingReplies]);
   const requestStartedAt = useMemo(() => new Map(
@@ -102,15 +116,89 @@ export default function AssistantScreen() {
 
   const scrollToLatest = useCallback((animated: boolean, keepPending = true) => {
     if (keepPending) pendingEndScrollRef.current = { animated };
-    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated }));
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated }));
+    });
   }, []);
 
-  const handleContentSizeChange = useCallback(() => {
+  const handleContentSizeChange = useCallback((_contentWidth: number, contentHeight: number) => {
+    lastScrollMetricsRef.current = {
+      ...lastScrollMetricsRef.current,
+      contentHeight,
+    };
+    const prependAnchor = pendingPrependAnchorRef.current;
+    if (prependAnchor) {
+      pendingPrependAnchorRef.current = null;
+      const addedHeight = Math.max(0, contentHeight - prependAnchor.contentHeight);
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToOffset({
+          offset: prependAnchor.offsetY + addedHeight,
+          animated: false,
+        });
+      });
+      return;
+    }
     const pending = pendingEndScrollRef.current;
-    if (!pending && !followEndRef.current) return;
+    if (!pending && scrollModeRef.current !== 'following') return;
     pendingEndScrollRef.current = null;
-    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: pending?.animated ?? false }));
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: pending?.animated ?? false }));
+    });
   }, []);
+
+  const keepLatestVisibleAfterLayout = useCallback(() => {
+    if (scrollModeRef.current !== 'following') return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (scrollModeRef.current !== 'following') return;
+        listRef.current?.scrollToEnd({ animated: false });
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => {
+      const shouldFollow = followEndOnKeyboardOpenRef.current
+        ?? scrollModeRef.current === 'following';
+      if (shouldFollow) keepLatestVisibleAfterLayout();
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
+      const shouldFollow = followEndOnKeyboardOpenRef.current === true
+        && scrollModeRef.current === 'following';
+      if (shouldFollow) keepLatestVisibleAfterLayout();
+      followEndOnKeyboardOpenRef.current = null;
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, [keepLatestVisibleAfterLayout]);
+
+  const handleListLayout = useCallback((event: LayoutChangeEvent) => {
+    const nextHeight = event.nativeEvent.layout.height;
+    const shouldMaintain = shouldMaintainAssistantEndAfterLayout({
+      previousSize: viewportHeightRef.current,
+      nextSize: nextHeight,
+      followingEnd: scrollModeRef.current === 'following',
+    });
+    const shouldPinForKeyboard = followEndOnKeyboardOpenRef.current === true
+      && scrollModeRef.current === 'following';
+    viewportHeightRef.current = nextHeight;
+    if (shouldPinForKeyboard) keepLatestVisibleAfterLayout();
+    else if (shouldMaintain) keepLatestVisibleAfterLayout();
+  }, [keepLatestVisibleAfterLayout]);
+
+  const handleComposerLayout = useCallback((event: LayoutChangeEvent) => {
+    const nextHeight = event.nativeEvent.layout.height;
+    const shouldMaintain = shouldMaintainAssistantEndAfterLayout({
+      previousSize: composerHeightRef.current,
+      nextSize: nextHeight,
+      followingEnd: scrollModeRef.current === 'following',
+    });
+    composerHeightRef.current = nextHeight;
+    setComposerHeight(nextHeight);
+    if (shouldMaintain) keepLatestVisibleAfterLayout();
+  }, [keepLatestVisibleAfterLayout]);
 
   const updateStreamingReply = useCallback((input: {
     requestId: string;
@@ -151,7 +239,7 @@ export default function AssistantScreen() {
         },
       };
     });
-    if (followEndRef.current) scrollToLatest(false, false);
+    if (scrollModeRef.current === 'following') scrollToLatest(false, false);
   }, [scrollToLatest]);
 
   /** 阶段切换时逐行累加：上一阶段定格为一行耗时，当前阶段继续转圈计时。 */
@@ -198,7 +286,7 @@ export default function AssistantScreen() {
       : message);
   }, []);
 
-  const loadLatest = useCallback(async (scroll = false) => {
+  const loadLatest = useCallback(async (scrollMode: AssistantRefreshScrollMode = 'never') => {
     const [rawPage, settings] = await Promise.all([
       listMessages({ limit: PAGE_SIZE }),
       getSettings().catch(() => null),
@@ -212,8 +300,8 @@ export default function AssistantScreen() {
       : 'unknown');
     loadedOnceRef.current = true;
     setInitialLoad('ready');
-    if (scroll) {
-      followEndRef.current = true;
+    if (shouldScrollAssistantAfterRefresh(scrollMode, scrollModeRef.current === 'following')) {
+      scrollModeRef.current = 'following';
       scrollToLatest(false);
     }
   }, [attachOperations, scrollToLatest]);
@@ -228,25 +316,40 @@ export default function AssistantScreen() {
       preservePositionOnNextFocusRef.current = false;
       const shouldScroll = shouldScrollAssistantOnFocus({
         loadedOnce,
-        followingEnd: followEndRef.current,
+        followingEnd: scrollModeRef.current === 'following',
         preserveReturn,
       });
       if (preserveReturn) {
         pendingEndScrollRef.current = null;
-        followEndRef.current = false;
+        scrollModeRef.current = 'history';
+      } else if (shouldScroll) {
+        scrollModeRef.current = 'following';
+        setScrollPresentation({ atBottom: true, showJumpToLatest: false, elevation: 0 });
       }
       if (!loadedOnce) setInitialLoad('loading');
-      void loadLatest(shouldScroll).catch(() => {
+      void loadLatest(shouldScroll ? 'always' : 'never').catch(() => {
         if (mountedRef.current && !loadedOnceRef.current) setInitialLoad('error');
       });
-      return () => { mountedRef.current = false; };
+      return () => {
+        mountedRef.current = false;
+        Keyboard.dismiss();
+      };
     }, [loadLatest]),
   );
 
   const navigateFromMessage = useCallback((target: string) => {
     preservePositionOnNextFocusRef.current = true;
     pendingEndScrollRef.current = null;
-    followEndRef.current = false;
+    scrollModeRef.current = 'history';
+    Keyboard.dismiss();
+    router.push(target as never);
+  }, [router]);
+
+  const navigateAway = useCallback((target: string) => {
+    preservePositionOnNextFocusRef.current = true;
+    pendingEndScrollRef.current = null;
+    scrollModeRef.current = 'history';
+    Keyboard.dismiss();
     router.push(target as never);
   }, [router]);
 
@@ -258,6 +361,11 @@ export default function AssistantScreen() {
     try {
       const page = await attachOperations(await listMessages({ limit: PAGE_SIZE, before: messages[0] }));
       if (!mountedRef.current) return;
+      const metrics = lastScrollMetricsRef.current;
+      pendingPrependAnchorRef.current = {
+        contentHeight: metrics.contentHeight,
+        offsetY: metrics.offsetY,
+      };
       setMessages(current => mergeAssistantMessages(current, page));
       setHasOlder(page.length === PAGE_SIZE);
       olderLoadRef.current = 'idle';
@@ -274,7 +382,7 @@ export default function AssistantScreen() {
   function retryInitialLoad() {
     if (retryingInitialLoad) return;
     setRetryingInitialLoad(true);
-    void loadLatest(true)
+    void loadLatest('always')
       .catch(() => {})
       .finally(() => { if (mountedRef.current) setRetryingInitialLoad(false); });
   }
@@ -286,7 +394,8 @@ export default function AssistantScreen() {
     if (mountedRef.current) {
       setMessages(current => mergeAssistantMessages(current, [userMessage]));
       advanceStage(requestId, 'planning', { messageCreatedAt: userMessage.createdAt, runtimeStartedAt });
-      followEndRef.current = true;
+      scrollModeRef.current = 'following';
+      setScrollPresentation({ atBottom: true, showJumpToLatest: false, elevation: 0 });
       scrollToLatest(true);
     }
     const job = sendAssistantTurn({
@@ -335,7 +444,7 @@ export default function AssistantScreen() {
       .finally(async () => {
         clearStreamingReply(requestId);
         clearStageSegments(requestId);
-        await loadLatest(true).catch(() => {});
+        await loadLatest('if-following').catch(() => {});
       });
   }
 
@@ -345,7 +454,7 @@ export default function AssistantScreen() {
     try {
       await cancelAssistantTurn(requestId);
       clearStreamingReply(requestId);
-      await loadLatest(true);
+      await loadLatest('if-following');
     } finally {
       if (mountedRef.current) setStoppingRequestId(null);
     }
@@ -393,7 +502,7 @@ export default function AssistantScreen() {
           }),
         });
         await Promise.resolve();
-        await loadLatest(false);
+        await loadLatest('never');
         const result = await job;
         if (mountedRef.current) {
           clearStreamingReply(requestId);
@@ -412,7 +521,7 @@ export default function AssistantScreen() {
       } finally {
         clearStreamingReply(requestId);
         clearStageSegments(requestId);
-        await loadLatest(true).catch(() => {});
+        await loadLatest('if-following').catch(() => {});
       }
     })();
   }
@@ -431,7 +540,7 @@ export default function AssistantScreen() {
         setUndoErrors(current => ({ ...current, [requestId]: '暂时没能撤销，请稍后再试。' }));
       })
       .finally(async () => {
-        await loadLatest(false).catch(() => {});
+        await loadLatest('never').catch(() => {});
         if (mountedRef.current) setUndoingRequestId(null);
       });
   }
@@ -440,11 +549,18 @@ export default function AssistantScreen() {
   const activeRequestId = pendingAssistantRequestId(messages);
   const composerProcessing = hasPendingAssistantReply(messages);
 
+  const jumpToLatest = useCallback(() => {
+    scrollModeRef.current = 'following';
+    followEndOnKeyboardOpenRef.current = true;
+    setScrollPresentation({ atBottom: true, showJumpToLatest: false, elevation: 0 });
+    scrollToLatest(true, false);
+  }, [scrollToLatest]);
+
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'height' : undefined}
         keyboardVerticalOffset={0}
       >
         <View style={styles.header}>
@@ -456,7 +572,7 @@ export default function AssistantScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="打开决策日志调试页"
-              onPress={() => router.push('/debug/decisions')}
+              onPress={() => navigateAway('/debug/decisions')}
               hitSlop={8}
               style={({ pressed }) => [styles.debugEntry, pressed && styles.pressed]}
             >
@@ -469,7 +585,7 @@ export default function AssistantScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="前往配置理解引擎"
-            onPress={() => router.push('/settings/llm')}
+            onPress={() => navigateAway('/settings/llm')}
             style={({ pressed }) => [styles.configBanner, pressed && styles.pressed]}
           >
             <Text style={styles.configText}>开启理解引擎后，小知才能回复</Text>
@@ -502,6 +618,7 @@ export default function AssistantScreen() {
         ) : (
           <FlatList
             ref={listRef}
+            style={styles.list}
             data={displayMessages}
             keyExtractor={item => item.id}
             renderItem={({ item, index }) => (
@@ -531,7 +648,6 @@ export default function AssistantScreen() {
             )}
             contentContainerStyle={[
               styles.listContent,
-              { paddingBottom: composerHeight + 18 },
               messages.length === 0 && styles.emptyList,
             ]}
             ListEmptyComponent={<AssistantEmptyState />}
@@ -548,7 +664,8 @@ export default function AssistantScreen() {
                 <Text style={styles.olderRetryText}>重试</Text>
               </Pressable>
             ) : null}
-            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+            ListFooterComponent={<View style={{ height: composerHeight + 18 }} />}
+            onLayout={handleListLayout}
             onContentSizeChange={handleContentSizeChange}
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
@@ -558,30 +675,67 @@ export default function AssistantScreen() {
                 viewportHeight: nativeEvent.layoutMeasurement.height,
                 offsetY: nativeEvent.contentOffset.y,
               };
-              followEndRef.current = shouldFollowAssistantEnd(metrics);
-              setComposerElevation(assistantComposerElevation(metrics));
+              lastScrollMetricsRef.current = metrics;
+              const nextPresentation = assistantScrollPresentation(metrics);
+              const fromUser = userScrollInProgressRef.current;
+              if (fromUser) {
+                scrollModeRef.current = nextPresentation.atBottom ? 'following' : 'history';
+                followEndOnKeyboardOpenRef.current = nextPresentation.atBottom;
+              }
+              if (fromUser || followEndOnKeyboardOpenRef.current !== true) {
+                setScrollPresentation(nextPresentation);
+              }
               if (nativeEvent.contentOffset.y < 32) void loadOlder();
             }}
-            scrollEventThrottle={80}
+            onScrollBeginDrag={() => {
+              userScrollInProgressRef.current = true;
+              followEndOnKeyboardOpenRef.current = false;
+            }}
+            onScrollEndDrag={() => {
+              userScrollInProgressRef.current = false;
+            }}
+            onMomentumScrollBegin={() => {
+              userScrollInProgressRef.current = true;
+            }}
+            onMomentumScrollEnd={() => {
+              userScrollInProgressRef.current = false;
+            }}
+            scrollEventThrottle={16}
           />
         )}
 
         <View
           style={styles.composerWrap}
-          onLayout={({ nativeEvent }) => setComposerHeight(nativeEvent.layout.height)}
+          onLayout={handleComposerLayout}
         >
-          {composerElevation > 0 ? (
+          {scrollPresentation.elevation > 0 ? (
             <View
               pointerEvents="none"
-              style={[styles.composerShadowFade, { opacity: composerElevation }]}
+              style={[styles.composerShadowFade, { opacity: scrollPresentation.elevation }]}
             />
+          ) : null}
+          {scrollPresentation.showJumpToLatest ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="回到最新消息"
+              hitSlop={4}
+              onPress={jumpToLatest}
+              style={({ pressed }) => [styles.jumpToLatest, pressed && styles.jumpToLatestPressed]}
+            >
+              <View style={styles.jumpToLatestCircle}>
+                <Ionicons name="chevron-down" size={18} color={theme.colors.textDim} />
+              </View>
+            </Pressable>
           ) : null}
           <AssistantComposer
             onSend={send}
             onStop={() => stopCurrentTurn(activeRequestId)}
+            onInputFocus={() => {
+              followEndOnKeyboardOpenRef.current = scrollModeRef.current === 'following';
+            }}
             disabled={composerDisabled}
             processing={composerProcessing || stoppingRequestId !== null}
-            elevation={composerElevation}
+            elevation={scrollPresentation.elevation}
           />
         </View>
       </KeyboardAvoidingView>
@@ -605,6 +759,7 @@ const styles = StyleSheet.create({
   contextTitle: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold, marginTop: 1 },
   contextClose: { width: theme.touchTarget, height: theme.touchTarget, alignItems: 'center', justifyContent: 'center' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  list: { flex: 1 },
   listContent: { paddingHorizontal: theme.spacing.md, paddingTop: 5 },
   emptyList: { flexGrow: 1 },
   olderSpinner: { marginVertical: 8 },
@@ -613,14 +768,17 @@ const styles = StyleSheet.create({
   olderRetryText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
   dateSeparatorWrap: { alignItems: 'center', paddingTop: 7, paddingBottom: 3 },
   dateSeparatorText: { color: theme.colors.textDim, fontSize: 11, lineHeight: 17, paddingHorizontal: 9, paddingVertical: 2, borderRadius: 11, backgroundColor: theme.colors.card },
-  composerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6 },
+  composerWrap: { position: 'absolute', zIndex: 10, left: 0, right: 0, bottom: 0, paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6 },
   composerShadowFade: {
     position: 'absolute',
     left: 0,
     right: 0,
-    top: 5,
+    top: -58,
     bottom: 0,
-    experimental_backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.58) 54%, #FFFFFF 100%)',
+    experimental_backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.62) 52%, rgba(255,255,255,0.98) 100%)',
   },
+  jumpToLatest: { position: 'absolute', zIndex: 2, top: -49, left: '50%', width: 44, height: 44, marginLeft: -22, alignItems: 'center', justifyContent: 'center' },
+  jumpToLatestCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(28, 28, 30, 0.10)', shadowColor: '#000000', shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, shadowOpacity: 0.12, elevation: 4 },
+  jumpToLatestPressed: { opacity: 0.72, transform: [{ scale: 0.96 }] },
   pressed: { opacity: 0.72 },
 });

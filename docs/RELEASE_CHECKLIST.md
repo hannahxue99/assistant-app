@@ -26,9 +26,10 @@
 ## 发布前原生工具预检
 
 - 本次是否触发干净 prebuild 或 Hermes 源码构建：
-- 实际 CMake 路径（`command -v cmake`）：
-- CMake 版本（`cmake --version`）：
-- 如使用 `CMAKE_BINARY`，已验证的绝对路径与版本：
+- 是否通过 `npm run ios:release` 固定工具链预检：
+- 固定 `CMAKE_BINARY` 路径：`~/.local/share/assistant-app/toolchains/cmake-3.31.8-macos-universal/CMake.app/Contents/bin/cmake`
+- CMake 版本：`3.31.8`
+- 未绕过预检、未回退 `/usr/local/bin/cmake`：
 
 ## 真机验收
 

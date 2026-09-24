@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   assistantWebSourceHost,
@@ -22,6 +22,7 @@ export function AssistantWebSources({ sources }: { sources: AssistantWebSource[]
       return;
     }
     try {
+      Keyboard.dismiss();
       await WebBrowser.openBrowserAsync(url);
     } catch {
       Alert.alert('暂时无法打开', '请稍后再试。');

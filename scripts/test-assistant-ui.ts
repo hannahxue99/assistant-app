@@ -14,7 +14,10 @@ import {
   shouldScrollAssistantOnFocus,
   shouldFollowAssistantEnd,
   assistantComposerElevation,
+  assistantScrollPresentation,
   assistantMessageSurface,
+  shouldMaintainAssistantEndAfterLayout,
+  shouldScrollAssistantAfterRefresh,
 } from '../src/assistant/ui-state';
 import { ASSISTANT_EMPTY_DESCRIPTION } from '../src/assistant/ui-copy';
 import {
@@ -189,8 +192,8 @@ check(canLoadOlderAssistantMessages('idle', false), '空闲时允许自动加载
 check(!canLoadOlderAssistantMessages('error', false), '分页失败后必须停止自动重试');
 check(canLoadOlderAssistantMessages('error', true), '用户点击重试后允许再次分页');
 check(!canLoadOlderAssistantMessages('loading', true), '分页进行中必须阻止重复请求');
-check(shouldFollowAssistantEnd({ contentHeight: 1200, viewportHeight: 600, offsetY: 540 }),
-  '距离末端很近时应跟随流式增长');
+check(shouldFollowAssistantEnd({ contentHeight: 1200, viewportHeight: 600, offsetY: 580 }),
+  '真正贴近末端时应跟随流式增长');
 check(!shouldFollowAssistantEnd({ contentHeight: 1200, viewportHeight: 600, offsetY: 300 }),
   '用户上滑阅读历史时不得强制拉回末端');
 check(shouldFollowAssistantEnd({ contentHeight: 400, viewportHeight: 600, offsetY: 0 }),
@@ -204,6 +207,24 @@ check(partialComposerElevation > 0 && partialComposerElevation < 1,
   '下拉离开最新位置时阴影应连续渐变而不是突然出现');
 check(assistantComposerElevation({ contentHeight: 1200, viewportHeight: 600, offsetY: 420 }) === 1,
   '深入阅读历史消息时输入框应显示完整悬浮层次');
+const nearBottomPresentation = assistantScrollPresentation({
+  contentHeight: 1200, viewportHeight: 600, offsetY: 560,
+});
+check(!nearBottomPresentation.atBottom && !nearBottomPresentation.showJumpToLatest
+  && nearBottomPresentation.elevation > 0,
+  '刚离开末端时应先连续增强渐隐，避免置底按钮突然跳出');
+const historyPresentation = assistantScrollPresentation({
+  contentHeight: 1200, viewportHeight: 600, offsetY: 500,
+});
+check(!historyPresentation.atBottom && historyPresentation.showJumpToLatest
+  && historyPresentation.elevation > nearBottomPresentation.elevation,
+  '深入历史后应显示置底按钮，并继续增强输入区阴影');
+const bottomPresentation = assistantScrollPresentation({
+  contentHeight: 1200, viewportHeight: 600, offsetY: 600,
+});
+check(bottomPresentation.atBottom && !bottomPresentation.showJumpToLatest
+  && bottomPresentation.elevation === 0,
+  '回到末端后置底按钮和额外阴影必须一起消失');
 check(assistantMessageSurface('user') === 'user-bubble', '用户消息应使用品牌色气泡');
 check(assistantMessageSurface('assistant') === 'assistant-bubble', '小知最终回复与处理结果应共用回复气泡');
 
@@ -226,8 +247,24 @@ check(shouldScrollAssistantOnFocus({ loadedOnce: true, followingEnd: true, prese
   '普通切回且原本在末端时应继续跟随最新消息');
 check(!shouldScrollAssistantOnFocus({ loadedOnce: true, followingEnd: true, preserveReturn: true }),
   '从关联待办或事件返回时，即使离开前靠近末端也必须保留原位置');
-check(!shouldScrollAssistantOnFocus({ loadedOnce: true, followingEnd: false, preserveReturn: false }),
-  '用户正在阅读历史时，普通切回也不应抢走滚动位置');
+check(shouldScrollAssistantOnFocus({ loadedOnce: true, followingEnd: false, preserveReturn: false }),
+  '从首页或我的通过 Tab 进入小知时必须定位最新消息');
+check(shouldScrollAssistantAfterRefresh('always', false),
+  '首次进入或明确发送后应允许强制定位最新消息');
+check(shouldScrollAssistantAfterRefresh('if-following', true),
+  '回复落定时若仍在末端应继续显示完整结果');
+check(!shouldScrollAssistantAfterRefresh('if-following', false),
+  '回复完成、停止或重试不得把阅读历史的用户拉回末端');
+check(!shouldScrollAssistantAfterRefresh('never', true),
+  '普通静默刷新不得改变当前位置');
+check(shouldMaintainAssistantEndAfterLayout({ previousSize: 600, nextSize: 320, followingEnd: true }),
+  '键盘缩短消息区域时，位于末端的用户应继续看到最新内容');
+check(shouldMaintainAssistantEndAfterLayout({ previousSize: 68, nextSize: 112, followingEnd: true }),
+  '输入框变为多行时，位于末端的用户应继续看到最新内容');
+check(!shouldMaintainAssistantEndAfterLayout({ previousSize: 600, nextSize: 320, followingEnd: false }),
+  '键盘或输入框布局变化不得抢走历史阅读位置');
+check(!shouldMaintainAssistantEndAfterLayout({ previousSize: null, nextSize: 600, followingEnd: true }),
+  '首次测量布局由初始加载负责定位，不应重复触发滚动');
 
 function operation(overrides: Partial<AssistantOperation> = {}): AssistantOperation {
   return {

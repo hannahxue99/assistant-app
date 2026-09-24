@@ -66,11 +66,11 @@
 
 ### Release 原生构建与交付故障
 
-干净 prebuild 可能使 Hermes 和其他原生依赖从源码重新编译，耗时会明显长于命中缓存的历史构建。首次执行前先运行 `command -v cmake` 和 `cmake --version`，记录构建实际会调用的可执行文件；不要根据 PATH 配置、安装记录或过去成功的缓存构建推断版本。
+干净 prebuild 可能使 Hermes 和其他原生依赖从源码重新编译，耗时会明显长于命中缓存的历史构建。Release 必须从 `npm run ios:release` 进入；该入口会在清理 `ios/` 前验证固定工具链，验证通过后再把同一个 `CMAKE_BINARY` 传给 Prebuild、Pods、Hermes 和 Xcode。
 
 React Native 0.86 的 Hermes 构建会使用 CMake 的 `-S`/`-B` 参数。旧版 CMake 可能把这些参数错误解析成源码目录，进而报出“目录不包含 `CMakeLists.txt`”这类误导信息。遇到该错误时先核对 CMake 路径和版本，再检查真实源码目录；不要先改 Hermes、Pods 或项目路径。
 
-如果系统默认 CMake 不满足当前 Hermes 构建要求，可以先验证一个受信任的现代 CMake，再用绝对路径显式执行：`CMAKE_BINARY=/absolute/path/to/cmake npm run ios:release`。临时下载目录和某次成功的具体版本不是项目契约，不应写死进脚本或 Skill；也不要为了单次发布直接覆盖系统的 `/usr/local/bin/cmake`。
+本项目固定使用已验证的 Kitware CMake 3.31.8：`~/.local/share/assistant-app/toolchains/cmake-3.31.8-macos-universal/CMake.app/Contents/bin/cmake`。发布入口要求路径存在、可执行且版本严格匹配；任一条件不满足都必须在 Prebuild 前失败。不要绕过该入口，不自动下载，不尝试 PATH 中的其他 CMake，也绝不回退到 `/usr/local/bin/cmake` 3.5.2。固定工具缺失时，应从可信备份恢复到该位置后重新执行发布。
 
 交付证据必须分层记录：
 

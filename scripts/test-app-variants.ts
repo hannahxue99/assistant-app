@@ -68,8 +68,12 @@ check(
   'Dev installation must use the signed device build wrapper',
 );
 check(
-  packageJson.scripts['ios:release'].includes('ios-device-build.cjs production'),
-  'Release installation must use the signed device build wrapper',
+  packageJson.scripts['ios:release'] === 'node scripts/ios-release.cjs',
+  'Release installation must use the fixed CMake preflight wrapper',
+);
+check(
+  packageJson.scripts['prebuild:ios:release'] === 'node scripts/ios-release.cjs --prebuild-only',
+  'Release prebuild must use the fixed CMake preflight wrapper',
 );
 
 delete process.env.APP_VARIANT;

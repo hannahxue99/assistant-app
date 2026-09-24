@@ -8,10 +8,11 @@
 | [V1 当前实现基线](secretary-mentor-v03-release.md) | 三入口、数据边界、事件多行状态、模型/代码职责、Release真机记录与回滚 | 2026-09-22 |
 | [小知按需读取与真实回执闭环](xiaozhi-grounded-read-tools.md) | 九只读工具、真实回执、DeepSeek文档相反行为、风控词+数字串组合、三层容错原则、决策日志排障闭环 | 2026-09-21 |
 | [小知 DeepSeek 原生联网搜索与 Agent 对话层级](xiaozhi-deepseek-web-search.md) | 服务端搜索规划、联网轮只读、来源持久化与备份、来源/思考/回复/回执层级、悬浮输入区渐隐 | 2026-09-23 |
+| [小知移动端输入区、滚动状态与 Markdown 回复](xiaozhi-mobile-composer-and-markdown.md) | following/history 状态机、键盘与末端占位、置底按钮、动态渐隐、安全 Markdown、PR #31 验收与回滚 | 2026-09-24 |
 | [小知推理运行状态与可查看思考](xiaozhi-runtime-reasoning.md) | 分层超时、可折叠思考、按需落库、历史时间、复制与单层输入区 | 2026-09-17 |
 | [小知流式回复、模型日期与决策审计](xiaozhi-streaming-date-audit.md) | SSE流式预览、模型解析日期、候选/拒绝/提交日志、紧凑回执与PR #19回滚 | 2026-09-15 |
 | [小知发送状态：可中止运行与草稿安全](xiaozhi-sending-state.md) | 用户消息立即入列、运行中继续输入、停止按钮、落库边界与PR #19回滚 | 2026-09-16 |
-| [Agent 开发实战手册](agent-dev-playbook.md) | 环境铁律、Tunnel/USB/Metro Reload 端点契约、Release CMake/Hermes 诊断、真机验收方法论与流程纪律 | 2026-09-22 |
+| [Agent 开发实战手册](agent-dev-playbook.md) | 环境铁律、Tunnel/USB/Metro Reload 端点契约、Release 固定 CMake 预检、真机验收方法论与流程纪律 | 2026-09-24 |
 | [Agent 上下文路由与 Skill 自维护](agent-context-routing.md) | 稳定入口、动态快照、阶段加载、安静 CI、Skill 同 PR 自维护与回滚 | 2026-09-22 |
 | [App 图标重设计](app-icon-redesign.md) | 一勾即安定稿、60px对比度诊断、iOS 26单尺寸限制与prebuild连环坑 | 2026-09-09 |
 | [苹果日历同步](calendar-sync.md) | 全天/定时、设备映射、删除墓碑、重试、跨日坑与PR #14发布 | 2026-09-08 |

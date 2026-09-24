@@ -57,14 +57,18 @@ async function main() {
     'Dev recovery must require runtime bundle evidence');
   assert.match(skillText, /Release native build or delivery failure/,
     'Project skill must route Release native build and delivery incidents');
-  assert.match(devPlaybookText, /CMAKE_BINARY=\/absolute\/path\/to\/cmake npm run ios:release/,
-    'Release recovery must document an explicit verified CMake override');
+  assert.match(skillText, /fixed CMake 3\.31\.8 preflight/,
+    'Release recovery must require the fixed CMake preflight');
+  assert.match(devPlaybookText, /cmake-3\.31\.8-macos-universal\/CMake\.app\/Contents\/bin\/cmake/,
+    'Release recovery must document the persistent fixed CMake path');
+  assert.match(devPlaybookText, /绝不回退到 `\/usr\/local\/bin\/cmake` 3\.5\.2/,
+    'Release recovery must forbid fallback to the known old system CMake');
   assert.match(devPlaybookText, /Installed com\.huanxue\.assistantapp/,
     'Release recovery must distinguish installation evidence');
-  assert.match(releaseChecklistText, /command -v cmake/,
-    'Release checklist must record the selected CMake executable');
-  assert.match(releaseChecklistText, /cmake --version/,
-    'Release checklist must record the selected CMake version');
+  assert.match(releaseChecklistText, /固定 `CMAKE_BINARY` 路径/,
+    'Release checklist must record the fixed CMake executable');
+  assert.match(releaseChecklistText, /CMake 版本：`3\.31\.8`/,
+    'Release checklist must record the fixed CMake version');
 
   assert.deepEqual(parseArgs(['--query', 'backup v3', '--pr', '27']), {
     query: 'backup v3',

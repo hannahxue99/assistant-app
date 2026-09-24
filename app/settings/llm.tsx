@@ -53,7 +53,7 @@ export default function LlmSettingsScreen() {
     <SafeAreaView edges={['top']} style={styles.safe}>
       <View style={styles.top}>
         <Pressable onPress={() => router.back()} hitSlop={8}>
-          <Text style={styles.back}>‹ 我的</Text>
+          <Text style={styles.back}>‹ 返回</Text>
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">

@@ -26,6 +26,7 @@ import { theme } from '../theme';
 interface AssistantComposerProps {
   onSend: (content: string, source: 'text' | 'voice') => Promise<void>;
   onStop?: () => Promise<void>;
+  onInputFocus?: () => void;
   disabled?: boolean;
   processing?: boolean;
   elevation?: number;
@@ -44,6 +45,7 @@ function VoiceLevelBars({ level }: { level: number }) {
 export function AssistantComposer({
   onSend,
   onStop = async () => {},
+  onInputFocus = () => {},
   disabled = false,
   processing = false,
   elevation = 0,
@@ -234,6 +236,7 @@ export function AssistantComposer({
         {listening ? <VoiceLevelBars level={voiceLevel} /> : null}
         <TextInput
           value={text}
+          onFocus={onInputFocus}
           onChangeText={(value) => {
             setText(value);
             if (submitError) setSubmitError(null);
