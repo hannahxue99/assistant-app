@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 
 import { XiaozhiEyesIcon } from '@/src/components/XiaozhiEyesIcon';
 import { theme } from '@/src/theme';
@@ -10,9 +11,13 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: theme.colors.accent,
         tabBarInactiveTintColor: theme.colors.accent,
+        sceneStyle: styles.scene,
+        tabBarBackground: () => <View style={styles.tabBarBackground} />,
         tabBarStyle: {
-          backgroundColor: theme.colors.bg,
-          borderTopColor: theme.colors.border,
+          backgroundColor: '#FFFFFF',
+          borderTopColor: '#F1EEE9',
+          shadowColor: 'transparent',
+          elevation: 0,
           height: 64,
           paddingBottom: 8,
           paddingTop: 6,
@@ -51,3 +56,8 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  scene: { backgroundColor: '#FFFFFF' },
+  tabBarBackground: { flex: 1, backgroundColor: '#FFFFFF' },
+});

@@ -7,42 +7,53 @@ const bubbleSource = fs.readFileSync('src/components/AssistantMessageBubble.tsx'
 const markdownSource = fs.readFileSync('src/components/AssistantMarkdown.tsx', 'utf8');
 const sourceListSource = fs.readFileSync('src/components/AssistantWebSources.tsx', 'utf8');
 const llmSettingsSource = fs.readFileSync('app/settings/llm.tsx', 'utf8');
+const tabsSource = fs.readFileSync('app/(tabs)/_layout.tsx', 'utf8');
 
 assert.match(
   assistantSource,
-  /behavior=\{Platform\.OS === 'ios' \? 'height' : undefined\}/,
-  'iOS 小知页必须缩短有效高度，让绝对定位输入框停在键盘上方',
+  /const keyboard = useAnimatedKeyboard\(\);[\s\S]*const keyboardLift = useDerivedValue/,
+  '小知页必须直接订阅系统键盘实时帧，不能另起布局动画',
 );
+assert.match(assistantSource, /keyboard\.height\.value - composerClosedBottomGap\.value/,
+  '键盘位移必须扣除输入框关闭态到底部屏幕的固定间隙');
+assert.match(assistantSource, /const conversationKeyboardStyle = useAnimatedStyle\([\s\S]*keyboardMovementMode === 'following' \? -keyboardLift\.value : 0/,
+  '只有置底模式才允许正文跟随键盘实时位移');
+assert.match(assistantSource, /const composerKeyboardStyle = useAnimatedStyle\([\s\S]*translateY: -keyboardLift\.value/,
+  '输入框必须在两种阅读模式下复用同一份键盘实时位移');
+assert.match(assistantSource, /<View style=\{styles\.header\}>[\s\S]*<Animated\.View style=\{\[styles\.keyboardStage, conversationKeyboardStyle\]\}/,
+  '标题区必须留在键盘位移容器外，键盘只移动对话正文和输入框');
+assert.match(assistantSource, /<\/Animated\.View>\s*<Animated\.View[\s\S]*style=\{\[styles\.composerKeyboardStage, composerKeyboardStyle\]\}/,
+  '输入框必须使用页面根部的独立实时位移层，不能嵌套在消息区局部坐标中');
+assert.doesNotMatch(assistantSource, /KeyboardAvoidingView/,
+  '正文和输入框不得再各自提交 KeyboardAvoidingView 动画');
+assert.match(assistantSource, /onInputFocus=\{\(\) => \{[\s\S]*setKeyboardMovementMode\(scrollModeRef\.current\);/,
+  '键盘出现前必须冻结本轮 following/history 位移模式');
+assert.doesNotMatch(assistantSource, /setKeyboardMovementMode\([^)]*\)[\s\S]*onScrollBeginDrag/,
+  '键盘动画期间不得因列表拖动切换位移层级');
+assert.match(assistantSource, /keyboardStage: \{ flex: 1, overflow: 'hidden' \}/,
+  '整体上推时必须裁剪越过标题区的消息，避免覆盖固定标题');
+assert.doesNotMatch(assistantSource, /Animated\.timing|keyboardScrollAnimationRef|animateBottomOffsetWithKeyboard/,
+  '不得再用独立 JavaScript 滚动动画模拟正文与键盘同步');
 assert.match(assistantSource, /onLayout=\{handleListLayout\}/,
-  '消息区可视高度变化必须触发条件贴底');
+  '消息区真实布局变化仍必须触发条件贴底');
 assert.match(assistantSource, /onLayout=\{handleComposerLayout\}/,
   '输入框多行高度变化必须触发条件贴底');
 assert.match(assistantSource, /ListFooterComponent=\{<View style=\{\{ height: composerHeight \+ 18 \}\} \/>\}/,
   '悬浮输入框必须用真实尾部占位保证最新消息可滚到输入框上方');
 assert.doesNotMatch(assistantSource, /paddingBottom: composerHeight/,
   '不得依赖 FlatList 可能忽略的 contentContainer 底部 padding 作为滚动终点');
-assert.match(assistantSource, /composerWrap: \{ position: 'absolute', zIndex: 10/,
-  '输入框必须始终使用线上悬浮结构，不能形成独立底部面板');
+assert.match(assistantSource, /composerKeyboardStage: \{ position: 'absolute', zIndex: 10, left: 0, right: 0, bottom: 0 \}/,
+  '输入框避让层必须始终悬浮在消息区上方，不能形成独立底部面板');
 assert.doesNotMatch(assistantSource, /keyboardVisible|composerWrapKeyboard|style=\{keyboardVisible/,
   '输入框不得在键盘出现时切换定位模式，避免首次聚焦丢失');
-assert.match(assistantSource, /followEndOnKeyboardOpenRef\.current = scrollModeRef\.current === 'following'/,
-  '输入框聚焦时必须按单一滚动模式决定键盘跟随，不能被布局滚动误判');
 assert.doesNotMatch(assistantSource, /userReadingHistoryRef|followEndRef/,
   '不得保留含义重叠的历史阅读与贴底状态');
 assert.match(assistantSource, /onScrollBeginDrag=\{\(\) => \{\s*userScrollInProgressRef\.current = true;/,
   '只有用户主动拖动消息区时才允许进入历史阅读状态');
+assert.match(assistantSource, /onInputFocus=\{\(\) => \{\s*userScrollInProgressRef\.current = false;/,
+  '输入框聚焦前必须清理可能因 Tab 切换遗留的拖动状态');
 assert.match(assistantSource, /if \(fromUser\) \{\s*scrollModeRef\.current = nextPresentation\.atBottom \? 'following' : 'history';/,
   '只有用户手势滚动才能在贴底与历史阅读状态之间切换');
-assert.match(assistantSource, /Keyboard\.addListener\('keyboardDidShow',[\s\S]*keepLatestVisibleAfterLayout\(\)/,
-  '键盘完全出现后，原本位于末端的消息必须重新贴到输入框上方');
-assert.match(assistantSource, /if \(shouldFollow\) keepLatestVisibleAfterLayout\(\)/,
-  '只有原本位于末端时才跟随键盘上移，历史阅读位置必须保持不动');
-assert.match(assistantSource, /Keyboard\.addListener\('keyboardDidHide',[\s\S]*scrollModeRef\.current === 'following';[\s\S]*keepLatestVisibleAfterLayout\(\)/,
-  '键盘收起并恢复页面高度后，原本位于末端的消息必须再次校正贴底，不能留下空白');
-assert.match(assistantSource, /const shouldPinForKeyboard = followEndOnKeyboardOpenRef\.current === true[\s\S]*if \(shouldPinForKeyboard\) keepLatestVisibleAfterLayout\(\)/,
-  '键盘开合改变可视高度的整个过程都必须保持末端，不得只在弹起完成时校正一次');
-assert.match(assistantSource, /followEndOnKeyboardOpenRef\.current = nextPresentation\.atBottom/,
-  '键盘内手动滚回末端后必须恢复收键盘时的贴底校正');
 assert.doesNotMatch(assistantSource, /maintainVisibleContentPosition=/,
   '消息列表不得使用会在键盘缩短视口时抵消主动贴底的原生位置保持');
 assert.match(assistantSource, /pendingPrependAnchorRef\.current = \{\s*contentHeight: metrics\.contentHeight,\s*offsetY: metrics\.offsetY/,
@@ -59,6 +70,24 @@ assert.match(assistantSource, /composerShadowFade: \{[\s\S]*top: -58,[\s\S]*bott
   '白色渐隐必须从输入框上方平滑延伸到底部，不能形成实色面板');
 assert.match(composerSource, /elevation > 0 && styles\.composerElevated/,
   '滚动阴影必须保留在输入框卡片自身，不能因移除整宽渐变层而丢失');
+assert.match(composerSource, /borderColor: '#DCD4CA',[\s\S]*backgroundColor: '#FFFEFD'/,
+  '输入框必须用清晰但克制的边界与暖白卡片底色形成基础层次');
+assert.match(composerSource, /shadowColor: '#6E5E52',[\s\S]*shadowOpacity: 0\.10,[\s\S]*shadowRadius: 10,[\s\S]*shadowOffset: \{ width: 0, height: 3 \}/,
+  '输入框在置底状态也必须保留轻微外凸阴影');
+assert.match(composerSource, /shadowOpacity: 0\.10 \+ 0\.06 \* elevation/,
+  '用户离开底部时，输入框阴影必须从基础外凸连续增强');
+assert.match(bubbleSource, /content: \{ color: theme\.colors\.text, fontSize: 16, lineHeight: 23 \}/,
+  '用户发送后的消息气泡必须使用 16px 正文');
+assert.match(markdownSource, /body: \{ color: theme\.colors\.text, fontSize: 16, lineHeight: 23 \}/,
+  '小知最终回复正文必须使用 16px');
+assert.match(markdownSource, /listMarker: \{ width: 18, color: theme\.colors\.text, fontSize: 16, lineHeight: 23 \}/,
+  'Markdown 列表标记必须与 16px 回复正文对齐');
+assert.match(tabsSource, /sceneStyle: styles\.scene/,
+  '首页、小知、我的三个 Tab 场景必须统一使用纯白背景');
+assert.match(tabsSource, /tabBarBackground: \(\) => <View style=\{styles\.tabBarBackground\} \/>/,
+  '底部 Tab Bar 必须使用实体背景，不能透出系统灰色或模糊材质');
+assert.match(tabsSource, /scene: \{ backgroundColor: '#FFFFFF' \}[\s\S]*tabBarBackground: \{ flex: 1, backgroundColor: '#FFFFFF' \}/,
+  '三个 Tab 页面与底部导航背景必须明确为纯白');
 assert.ok((assistantSource.match(/loadLatest\('if-following'\)/g) ?? []).length >= 3,
   '完成、停止和重试刷新都必须尊重用户是否仍在末端');
 assert.doesNotMatch(assistantSource, /loadLatest\((true|false)\)/,
