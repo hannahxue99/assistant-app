@@ -1,14 +1,14 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ASSISTANT_EMPTY_DESCRIPTION } from '../assistant/ui-copy';
 import { theme } from '../theme';
+import { XiaozhiEyesIcon } from './XiaozhiEyesIcon';
 
 export function AssistantEmptyState() {
   return (
     <View style={styles.wrap}>
       <View style={styles.iconWrap}>
-        <MaterialCommunityIcons name="robot-happy-outline" size={34} color={theme.colors.accent} />
+        <XiaozhiEyesIcon size={34} focused />
       </View>
       <Text style={styles.title}>有什么想法，直接告诉小知</Text>
       <Text style={styles.description}>{ASSISTANT_EMPTY_DESCRIPTION}</Text>
@@ -22,10 +22,10 @@ export function AssistantEmptyState() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 30, paddingBottom: 50 },
-  iconWrap: { width: 64, height: 64, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.accentSoft, marginBottom: 18 },
-  title: { color: theme.colors.text, fontSize: theme.font.heading, fontWeight: theme.fontWeight.semibold, textAlign: 'center' },
+  wrap: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 30, paddingBottom: 44 },
+  iconWrap: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
+  title: { color: theme.colors.ink, fontSize: 20, lineHeight: 28, fontWeight: theme.fontWeight.semibold, textAlign: 'center' },
   description: { color: theme.colors.textDim, fontSize: theme.font.small, lineHeight: 20, textAlign: 'center', marginTop: 8, maxWidth: 300 },
-  examples: { alignSelf: 'stretch', gap: 8, marginTop: 22 },
-  example: { color: theme.colors.textDim, fontSize: theme.font.small, lineHeight: 20, backgroundColor: theme.colors.card, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 12, paddingVertical: 9 },
+  examples: { alignSelf: 'stretch', marginTop: 22, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
+  example: { color: theme.colors.textDim, fontSize: theme.font.small, lineHeight: 20, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.divider, paddingHorizontal: 2, paddingVertical: 11 },
 });

@@ -51,9 +51,11 @@ import {
   shouldShowAssistantDateSeparator,
 } from '../../src/assistant/message-time';
 import { AssistantComposer } from '../../src/components/AssistantComposer';
+import { AmbientOrbit } from '../../src/components/AmbientOrbit';
 import { AssistantEmptyState } from '../../src/components/AssistantEmptyState';
 import { AssistantLoadErrorState } from '../../src/components/AssistantLoadErrorState';
 import { AssistantMessageBubble } from '../../src/components/AssistantMessageBubble';
+import { XiaozhiEyesIcon } from '../../src/components/XiaozhiEyesIcon';
 import { getSettings } from '../../src/db';
 import { theme } from '../../src/theme';
 
@@ -572,12 +574,15 @@ export default function AssistantScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
+      <AmbientOrbit style={styles.orbit} />
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>小知</Text>
           <Text style={styles.caption}>连续对话 · 自动保存</Text>
         </View>
-        {__DEV__ ? (
+        <View style={styles.headerActions}>
+          <XiaozhiEyesIcon size={24} focused />
+          {__DEV__ ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="打开决策日志调试页"
@@ -587,7 +592,8 @@ export default function AssistantScreen() {
           >
             <Ionicons name="terminal-outline" size={20} color={theme.colors.textDim} />
           </Pressable>
-        ) : null}
+          ) : null}
+        </View>
       </View>
 
       {engineStatus === 'unconfigured' && initialLoad === 'ready' ? (
@@ -759,31 +765,33 @@ export default function AssistantScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
+  safe: { flex: 1, backgroundColor: theme.colors.bg, position: 'relative' },
+  orbit: { top: -22, opacity: 0.62 },
   keyboardStage: { flex: 1, overflow: 'hidden' },
   composerKeyboardStage: { position: 'absolute', zIndex: 10, left: 0, right: 0, bottom: 0 },
-  header: { minHeight: 62, paddingHorizontal: theme.spacing.md, paddingTop: 7, paddingBottom: 8, justifyContent: 'space-between', alignItems: 'center', flexDirection: 'row' },
+  header: { zIndex: 1, minHeight: 72, paddingHorizontal: 20, paddingTop: 9, paddingBottom: 10, justifyContent: 'space-between', alignItems: 'center', flexDirection: 'row' },
+  headerActions: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4 },
   debugEntry: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  title: { color: theme.colors.text, fontSize: theme.font.title, fontWeight: theme.fontWeight.semibold },
-  caption: { color: theme.colors.textDim, fontSize: 12, marginTop: 1 },
-  configBanner: { minHeight: 44, marginHorizontal: theme.spacing.md, marginBottom: 6, paddingHorizontal: 12, borderRadius: 12, backgroundColor: theme.colors.goldSoft, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  title: { color: theme.colors.ink, fontSize: 30, lineHeight: 36, fontWeight: theme.fontWeight.bold },
+  caption: { color: theme.colors.textDim, fontSize: 12, marginTop: 1, letterSpacing: 0.2 },
+  configBanner: { minHeight: 44, marginHorizontal: 20, marginBottom: 6, paddingHorizontal: 12, borderRadius: 14, backgroundColor: theme.colors.fog, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   configText: { color: theme.colors.text, fontSize: theme.font.small, flex: 1 },
   configAction: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
-  contextBanner: { minHeight: 52, marginHorizontal: theme.spacing.md, marginBottom: 6, paddingLeft: 12, borderRadius: 13, backgroundColor: theme.colors.accentSoft, flexDirection: 'row', alignItems: 'center', gap: 9 },
+  contextBanner: { minHeight: 52, marginHorizontal: 20, marginBottom: 6, paddingLeft: 12, borderRadius: 15, backgroundColor: theme.colors.accentSoft, flexDirection: 'row', alignItems: 'center', gap: 9 },
   contextTextWrap: { flex: 1, paddingVertical: 7 },
   contextLabel: { color: theme.colors.textDim, fontSize: 11 },
   contextTitle: { color: theme.colors.text, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold, marginTop: 1 },
   contextClose: { width: theme.touchTarget, height: theme.touchTarget, alignItems: 'center', justifyContent: 'center' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { flex: 1 },
-  listContent: { paddingHorizontal: theme.spacing.md, paddingTop: 5 },
+  listContent: { paddingHorizontal: 20, paddingTop: 7 },
   emptyList: { flexGrow: 1 },
   olderSpinner: { marginVertical: 8 },
   olderError: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 },
   olderErrorText: { color: theme.colors.textDim, fontSize: theme.font.small },
   olderRetryText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
   dateSeparatorWrap: { alignItems: 'center', paddingTop: 7, paddingBottom: 3 },
-  dateSeparatorText: { color: theme.colors.textDim, fontSize: 11, lineHeight: 17, paddingHorizontal: 9, paddingVertical: 2, borderRadius: 11, backgroundColor: theme.colors.card },
+  dateSeparatorText: { color: theme.colors.textDim, fontSize: 11, lineHeight: 17, paddingHorizontal: 9, paddingVertical: 2, borderRadius: 11, backgroundColor: theme.colors.fog, fontFamily: 'Menlo' },
   composerWrap: { paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6 },
   composerShadowFade: {
     position: 'absolute',
@@ -791,10 +799,10 @@ const styles = StyleSheet.create({
     right: 0,
     top: -58,
     bottom: 0,
-    experimental_backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.62) 52%, rgba(255,255,255,0.98) 100%)',
+    experimental_backgroundImage: 'linear-gradient(to bottom, rgba(247,247,245,0) 0%, rgba(247,247,245,0.72) 52%, rgba(247,247,245,0.99) 100%)',
   },
   jumpToLatest: { position: 'absolute', zIndex: 2, top: -49, left: '50%', width: 44, height: 44, marginLeft: -22, alignItems: 'center', justifyContent: 'center' },
-  jumpToLatestCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(28, 28, 30, 0.10)', shadowColor: '#000000', shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, shadowOpacity: 0.12, elevation: 4 },
+  jumpToLatestCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.border, shadowColor: theme.colors.ink, shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, shadowOpacity: 0.10, elevation: 4 },
   jumpToLatestPressed: { opacity: 0.72, transform: [{ scale: 0.96 }] },
   pressed: { opacity: 0.72 },
 });

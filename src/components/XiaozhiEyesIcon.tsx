@@ -124,10 +124,14 @@ export function XiaozhiEyesIcon({ size, focused }: XiaozhiEyesIconProps) {
     };
   }, [appState, blink, gazeX, gazeY, reduceMotion]);
 
-  const faceSize = focused ? 38 : 30;
-  const slotSize = Math.round(size + 12);
+  const faceSize = Math.max(24, Math.round(size + (focused ? 8 : 4)));
+  const slotSize = Math.max(faceSize, Math.round(size + 10));
+  const eyeWidth = Math.max(5, Math.round(faceSize * 0.18));
+  const eyeHeight = Math.max(7, Math.round(faceSize * 0.27));
   const eyeStyle = {
-    backgroundColor: '#FFF7F2',
+    width: eyeWidth,
+    height: eyeHeight,
+    backgroundColor: focused ? '#FFF7F2' : theme.colors.graphite,
     transform: [
       { translateX: gazeX },
       { translateY: gazeY },
@@ -142,7 +146,7 @@ export function XiaozhiEyesIcon({ size, focused }: XiaozhiEyesIconProps) {
         {
           width: slotSize,
           height: slotSize,
-          transform: [{ translateY: focused ? -5 : 0 }],
+          transform: [{ translateY: focused ? -3 : 0 }],
         },
       ]}
     >
@@ -153,7 +157,7 @@ export function XiaozhiEyesIcon({ size, focused }: XiaozhiEyesIconProps) {
             width: faceSize,
             height: faceSize,
             borderRadius: faceSize / 2,
-            backgroundColor: theme.colors.accent,
+            backgroundColor: focused ? theme.colors.accent : theme.colors.fog,
           },
         ]}
       >
@@ -181,8 +185,6 @@ const styles = StyleSheet.create({
     transform: [{ translateY: -2 }],
   },
   eye: {
-    width: 7,
-    height: 10,
     borderRadius: 5,
   },
 });

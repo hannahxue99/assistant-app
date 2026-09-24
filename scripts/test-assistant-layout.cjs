@@ -73,14 +73,14 @@ assert.match(assistantSource, /accessibilityLabel="回到最新消息"[\s\S]*onP
   '离开底部后必须提供独立且可访问的置底按钮');
 assert.match(assistantSource, /jumpToLatest: \{ position: 'absolute',[\s\S]*top: -49/,
   '置底按钮必须悬浮在输入框上方，不能参与消息或输入框布局');
-assert.match(assistantSource, /composerShadowFade: \{[\s\S]*top: -58,[\s\S]*bottom: 0,[\s\S]*linear-gradient\(to bottom, rgba\(255,255,255,0\)/,
-  '白色渐隐必须从输入框上方平滑延伸到底部，不能形成实色面板');
+assert.match(assistantSource, /composerShadowFade: \{[\s\S]*top: -58,[\s\S]*bottom: 0,[\s\S]*linear-gradient\(to bottom, rgba\(247,247,245,0\)/,
+  '雾白渐隐必须从输入框上方平滑延伸到底部，不能形成实色面板');
 assert.match(composerSource, /elevation > 0 && styles\.composerElevated/,
   '滚动阴影必须保留在输入框卡片自身，不能因移除整宽渐变层而丢失');
-assert.match(composerSource, /borderColor: '#DCD4CA',[\s\S]*backgroundColor: '#FFFEFD'/,
-  '输入框必须用清晰但克制的边界与暖白卡片底色形成基础层次');
-assert.match(composerSource, /shadowColor: '#6E5E52',[\s\S]*shadowOpacity: 0\.10,[\s\S]*shadowRadius: 10,[\s\S]*shadowOffset: \{ width: 0, height: 3 \}/,
-  '输入框在置底状态也必须保留轻微外凸阴影');
+assert.match(composerSource, /borderColor: theme\.colors\.border,[\s\S]*backgroundColor: theme\.colors\.surface/,
+  '输入框必须用共享细线边界与白色表面形成基础层次');
+assert.match(composerSource, /shadowColor: theme\.colors\.ink,[\s\S]*shadowOpacity: 0\.08,[\s\S]*shadowRadius: 14,[\s\S]*shadowOffset: \{ width: 0, height: 5 \}/,
+  '输入框在置底状态也必须保留轻微墨色外凸阴影');
 assert.match(composerSource, /shadowOpacity: 0\.10 \+ 0\.06 \* elevation/,
   '用户离开底部时，输入框阴影必须从基础外凸连续增强');
 assert.match(bubbleSource, /content: \{ color: theme\.colors\.text, fontSize: 16, lineHeight: 23 \}/,
@@ -103,6 +103,14 @@ assert.match(orbitSource, /pointerEvents="none"[\s\S]*accessibilityElementsHidde
   '环境轨道必须完全不参与点击和无障碍树');
 assert.doesNotMatch(assistantSource, /hero|mascot|centralOrb|assistantOrb/i,
   '小知页不得加入中央球体或占内容高度的英雄区');
+assert.match(assistantSource, /<AmbientOrbit style=\{styles\.orbit\} \/>[\s\S]*<XiaozhiEyesIcon size=\{24\} focused \/>/,
+  '小知只能使用被动环境轨道与标题旁的小尺寸双眼签名');
+assert.match(bubbleSource, /userBubble: \{[\s\S]*backgroundColor: theme\.colors\.ink/,
+  '用户消息使用墨黑紧凑气泡，不再依赖全局橙色');
+assert.match(bubbleSource, /assistantBubble: \{[\s\S]*backgroundColor: 'transparent'/,
+  '小知回复必须融入页面内容流，不能继续使用通用聊天卡片');
+assert.match(composerSource, /sendButton: \{[\s\S]*backgroundColor: theme\.colors\.ink/,
+  '发送与停止主控件必须使用墨黑，不把人格橙扩散为全局操作色');
 assert.match(homeSource, /<AmbientOrbit[\s\S]*本周待办[\s\S]*全部待办[\s\S]*<Text style=\{styles\.h1\}>事件<\/Text>/,
   '首页视觉重构必须保留日期、两种待办和事件且只增加被动环境背景');
 assert.doesNotMatch(homeSource, /今日建议|快捷提问|进度[条环]|每日总结/,
