@@ -6,7 +6,7 @@
 
 | 读者与目的 | 入口 | 说明 |
 |---|---|---|
-| 第一次了解产品 | [`README.md`](../README.md) | 项目定位、当前能力、快速启动和数据安全边界 |
+| 第一次了解产品 | [`README.md`](../README.md) | 产品定位、核心闭环、信息结构和当前边界 |
 | 判断产品范围 | [`PRD.md`](../PRD.md) | V1 完整愿景、完成标准和带日期的实现进度 |
 | Agent 或开发者开始任务 | [`CURRENT.md`](CURRENT.md) | 稳定短入口、代码地图、上下文边界和验证方式 |
 | 开发、验收或发布 | [`DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md) / [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) | 分支、PR、真机验收、Release 与收口顺序 |
@@ -16,7 +16,7 @@
 
 ### 根目录文档
 
-- `README.md` 是面向人的项目入口，应保持简短、准确，不保存某台设备或某次排障的流水账。
+- `README.md` 是面向人的产品入口，只解释核心概念、产品逻辑和当前边界，不承载开发、配置或交付步骤。
 - `PRD.md` 同时维护 V1 目标和带日期的当前进度；不能用愿景替代上线说明。
 - `AGENTS.md` 和项目 Skill 只保存强制工作流与上下文路由，不复制产品或发布细节。
 - `DESIGN.md`、`DESIGN_SYSTEM.md`、`TECH.md`、`TESTCASES.md`、`VERIFICATION.md` 是早期基线，目前只作历史追溯；现行结论以 PRD、CURRENT 和知识库为准。
@@ -40,8 +40,8 @@
 ## 更新规则
 
 1. 产品范围或完成标准变化：更新 `PRD.md`。
-2. 当前能力、启动方式或核心入口变化：同步更新 `README.md`。
-3. 代码地图、命令、阶段资料或交付门禁变化：更新 `CURRENT.md`、项目 Skill 或对应流程文档。
+2. 产品定位、核心闭环、信息结构或当前边界变化：同步更新 `README.md`。
+3. 启动方式、代码地图、命令、阶段资料或交付门禁变化：更新 `CURRENT.md`、项目 Skill 或对应流程文档。
 4. 用户验收后：把可复用结论写入 `docs/knowledge/` 并更新索引。
 5. 单次 PR 的方案和任务拆解：放入 `docs/plans/`，不要让计划代替当前状态。
 6. 历史文档保留时必须标明适用日期和现行替代入口。
