@@ -31,10 +31,22 @@ assert.doesNotMatch(assistantSource, /userReadingHistoryRef|followEndRef/,
   '不得保留含义重叠的历史阅读与贴底状态');
 assert.match(assistantSource, /onScrollBeginDrag=\{\(\) => \{\s*userScrollInProgressRef\.current = true;/,
   '只有用户主动拖动消息区时才允许进入历史阅读状态');
+assert.match(assistantSource, /onScrollBeginDrag=\{\(\) => \{[\s\S]*keyboardAnchorRef\.current = \{ active: false, following: false \};/,
+  '键盘过渡期间真实拖动必须立即取消自动置底，让用户手势优先');
+assert.match(assistantSource, /onInputFocus=\{\(\) => \{\s*userScrollInProgressRef\.current = false;/,
+  '输入框聚焦前必须清理可能因 Tab 切换遗留的拖动状态');
 assert.match(assistantSource, /if \(fromUser\) \{\s*scrollModeRef\.current = nextPresentation\.atBottom \? 'following' : 'history';/,
   '只有用户手势滚动才能在贴底与历史阅读状态之间切换');
 assert.match(assistantSource, /Keyboard\.addListener\('keyboardDidShow',[\s\S]*keepLatestVisibleAfterLayout\(\)/,
   '键盘完全出现后，原本位于末端的消息必须重新贴到输入框上方');
+assert.match(assistantSource, /Keyboard\.addListener\('keyboardWillShow',[\s\S]*keyboardAnchorRef\.current = \{[\s\S]*active: true,[\s\S]*following: shouldFollow/,
+  'iOS 键盘动画开始前必须冻结置底意图，不能等布局变化后再猜测');
+assert.match(assistantSource, /assistantBottomOffset\(\{[\s\S]*contentHeight: metrics\.contentHeight,[\s\S]*viewportHeight: metrics\.viewportHeight/,
+  '键盘过渡必须按最终内容与视口几何计算唯一置底位置');
+assert.match(assistantSource, /listRef\.current\?\.scrollToOffset\(\{[\s\S]*offset: assistantBottomOffset/,
+  '底部锚点事务必须使用精确 offset，不能只靠延迟 scrollToEnd');
+assert.match(assistantSource, /Keyboard\.addListener\('keyboardDidShow',[\s\S]*settleKeyboardAnchor\(\)/,
+  '键盘完全出现后必须做一次无动画收敛，消除动画取整误差');
 assert.match(assistantSource, /if \(shouldFollow\) keepLatestVisibleAfterLayout\(\)/,
   '只有原本位于末端时才跟随键盘上移，历史阅读位置必须保持不动');
 assert.match(assistantSource, /Keyboard\.addListener\('keyboardDidHide',[\s\S]*scrollModeRef\.current === 'following';[\s\S]*keepLatestVisibleAfterLayout\(\)/,

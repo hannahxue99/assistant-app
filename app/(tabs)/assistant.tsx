@@ -22,6 +22,7 @@ import {
   isAssistantComposerDisabled,
   mergeAssistantMessages,
   pendingAssistantRequestId,
+  assistantBottomOffset,
   assistantScrollPresentation,
   shouldMaintainAssistantEndAfterLayout,
   shouldScrollAssistantAfterRefresh,
@@ -84,6 +85,7 @@ export default function AssistantScreen() {
   const viewportHeightRef = useRef<number | null>(null);
   const composerHeightRef = useRef<number | null>(null);
   const followEndOnKeyboardOpenRef = useRef<boolean | null>(null);
+  const keyboardAnchorRef = useRef({ active: false, following: false });
   const userScrollInProgressRef = useRef(false);
   const scrollModeRef = useRef<'following' | 'history'>('following');
   const lastScrollMetricsRef = useRef({ contentHeight: 0, viewportHeight: 0, offsetY: 0 });
@@ -121,6 +123,19 @@ export default function AssistantScreen() {
     });
   }, []);
 
+  const scrollToMeasuredBottom = useCallback((animated: boolean) => {
+    requestAnimationFrame(() => {
+      const metrics = lastScrollMetricsRef.current;
+      listRef.current?.scrollToOffset({
+        offset: assistantBottomOffset({
+          contentHeight: metrics.contentHeight,
+          viewportHeight: metrics.viewportHeight,
+        }),
+        animated,
+      });
+    });
+  }, []);
+
   const handleContentSizeChange = useCallback((_contentWidth: number, contentHeight: number) => {
     lastScrollMetricsRef.current = {
       ...lastScrollMetricsRef.current,
@@ -138,41 +153,70 @@ export default function AssistantScreen() {
       });
       return;
     }
+    if (keyboardAnchorRef.current.active && keyboardAnchorRef.current.following) {
+      scrollToMeasuredBottom(true);
+      return;
+    }
     const pending = pendingEndScrollRef.current;
     if (!pending && scrollModeRef.current !== 'following') return;
     pendingEndScrollRef.current = null;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: pending?.animated ?? false }));
     });
-  }, []);
+  }, [scrollToMeasuredBottom]);
 
   const keepLatestVisibleAfterLayout = useCallback(() => {
     if (scrollModeRef.current !== 'following') return;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (scrollModeRef.current !== 'following') return;
-        listRef.current?.scrollToEnd({ animated: false });
-      });
-    });
-  }, []);
+    scrollToMeasuredBottom(false);
+  }, [scrollToMeasuredBottom]);
+
+  const settleKeyboardAnchor = useCallback(() => {
+    const anchor = keyboardAnchorRef.current;
+    if (anchor.active && anchor.following && scrollModeRef.current === 'following') {
+      keepLatestVisibleAfterLayout();
+    }
+    keyboardAnchorRef.current = { active: false, following: false };
+  }, [keepLatestVisibleAfterLayout]);
 
   useEffect(() => {
+    const willShow = Keyboard.addListener('keyboardWillShow', (event) => {
+      const shouldFollow = followEndOnKeyboardOpenRef.current
+        ?? scrollModeRef.current === 'following';
+      keyboardAnchorRef.current = {
+        active: true,
+        following: shouldFollow,
+      };
+      if (shouldFollow) {
+        Keyboard.scheduleLayoutAnimation(event);
+        scrollToMeasuredBottom(true);
+      }
+    });
     const show = Keyboard.addListener('keyboardDidShow', () => {
       const shouldFollow = followEndOnKeyboardOpenRef.current
         ?? scrollModeRef.current === 'following';
       if (shouldFollow) keepLatestVisibleAfterLayout();
+      settleKeyboardAnchor();
+    });
+    const willHide = Keyboard.addListener('keyboardWillHide', (event) => {
+      const shouldFollow = followEndOnKeyboardOpenRef.current === true
+        && scrollModeRef.current === 'following';
+      keyboardAnchorRef.current = { active: true, following: shouldFollow };
+      if (shouldFollow) Keyboard.scheduleLayoutAnimation(event);
     });
     const hide = Keyboard.addListener('keyboardDidHide', () => {
       const shouldFollow = followEndOnKeyboardOpenRef.current === true
         && scrollModeRef.current === 'following';
       if (shouldFollow) keepLatestVisibleAfterLayout();
+      settleKeyboardAnchor();
       followEndOnKeyboardOpenRef.current = null;
     });
     return () => {
+      willShow.remove();
       show.remove();
+      willHide.remove();
       hide.remove();
     };
-  }, [keepLatestVisibleAfterLayout]);
+  }, [keepLatestVisibleAfterLayout, scrollToMeasuredBottom, settleKeyboardAnchor]);
 
   const handleListLayout = useCallback((event: LayoutChangeEvent) => {
     const nextHeight = event.nativeEvent.layout.height;
@@ -184,9 +228,15 @@ export default function AssistantScreen() {
     const shouldPinForKeyboard = followEndOnKeyboardOpenRef.current === true
       && scrollModeRef.current === 'following';
     viewportHeightRef.current = nextHeight;
-    if (shouldPinForKeyboard) keepLatestVisibleAfterLayout();
+    lastScrollMetricsRef.current = {
+      ...lastScrollMetricsRef.current,
+      viewportHeight: nextHeight,
+    };
+    const keyboardAnchor = keyboardAnchorRef.current;
+    if (keyboardAnchor.active && keyboardAnchor.following) scrollToMeasuredBottom(true);
+    else if (shouldPinForKeyboard) keepLatestVisibleAfterLayout();
     else if (shouldMaintain) keepLatestVisibleAfterLayout();
-  }, [keepLatestVisibleAfterLayout]);
+  }, [keepLatestVisibleAfterLayout, scrollToMeasuredBottom]);
 
   const handleComposerLayout = useCallback((event: LayoutChangeEvent) => {
     const nextHeight = event.nativeEvent.layout.height;
@@ -312,6 +362,8 @@ export default function AssistantScreen() {
       olderLoadRef.current = 'idle';
       setOlderLoad('idle');
       const loadedOnce = loadedOnceRef.current;
+      userScrollInProgressRef.current = false;
+      keyboardAnchorRef.current = { active: false, following: false };
       const preserveReturn = preservePositionOnNextFocusRef.current;
       preservePositionOnNextFocusRef.current = false;
       const shouldScroll = shouldScrollAssistantOnFocus({
@@ -689,6 +741,7 @@ export default function AssistantScreen() {
             }}
             onScrollBeginDrag={() => {
               userScrollInProgressRef.current = true;
+              keyboardAnchorRef.current = { active: false, following: false };
               followEndOnKeyboardOpenRef.current = false;
             }}
             onScrollEndDrag={() => {
@@ -731,6 +784,7 @@ export default function AssistantScreen() {
             onSend={send}
             onStop={() => stopCurrentTurn(activeRequestId)}
             onInputFocus={() => {
+              userScrollInProgressRef.current = false;
               followEndOnKeyboardOpenRef.current = scrollModeRef.current === 'following';
             }}
             disabled={composerDisabled}

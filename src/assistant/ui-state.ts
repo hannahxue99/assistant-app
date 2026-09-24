@@ -19,6 +19,15 @@ export interface AssistantScrollPresentation {
   elevation: number;
 }
 
+export function assistantBottomOffset(input: {
+  contentHeight: number;
+  viewportHeight: number;
+}): number {
+  const contentHeight = Math.max(0, input.contentHeight);
+  const viewportHeight = Math.max(0, input.viewportHeight);
+  return Math.max(0, contentHeight - viewportHeight);
+}
+
 export type AssistantRefreshScrollMode = 'always' | 'if-following' | 'never';
 
 export interface AssistantTodoNavigationIntent {
