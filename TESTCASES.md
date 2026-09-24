@@ -1,5 +1,7 @@
 # 测试案例库 — 个人助手 App V1
 
+> **历史手工用例基线（截至 2026-09-04）**：本文的 F1–F13 和页面名称对应早期备忘录产品，不再代表当前完整回归范围。现行自动测试入口是 `npm test` / `npm run ci`；具体能力的真机验收与回滚证据见 [`docs/knowledge/INDEX.md`](./docs/knowledge/INDEX.md) 及关联 PR。
+
 > 对应：PRD v1.1 / DESIGN v1.0 / TECH v1.0
 > 执行方式：自动（`npm run typecheck`、`npm run test:time`、`npm run test:schedule`）+ 真机手工逐项核验
 > 维护规则：需求变更时同步增删用例；每个 PRD 功能点（F1-F13）至少 1 条正常用例 + 1 条边界/异常用例

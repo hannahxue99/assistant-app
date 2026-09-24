@@ -1,5 +1,7 @@
 # 个人助手 App — 技术方案 v1.0
 
+> **历史基线（截至 2026-09-03）**：本文记录早期双 Tab、`entries` 为中心的技术方案，不覆盖当前连续对话、事件、长期记忆、按需读取工具、联网搜索或完整备份 V3。现行代码地图见 [`docs/CURRENT.md`](./docs/CURRENT.md)，产品边界见 [`PRD.md`](./PRD.md)。
+
 > 依据：`PRD.md` v1.1（2026-08-31 对齐版）、`DESIGN.md` v1.0（含 corner cases）
 > 平台：Expo SDK 57 / React Native 0.86 / expo-router 57 / expo-sqlite / iPhone 优先
 
