@@ -34,7 +34,7 @@ For iOS “不再可用”, a Dev launcher loading failure, or `Error loading ap
 
 ### Release native build or delivery failure
 
-For a clean iOS Release build, Hermes/CMake failure, install failure, or launch failure, read [`docs/RELEASE_CHECKLIST.md`](../../../docs/RELEASE_CHECKLIST.md) and the Release troubleshooting section of [`docs/knowledge/agent-dev-playbook.md`](../../../docs/knowledge/agent-dev-playbook.md). Verify the actual executable path and version before changing source paths. Keep build, install, launch, and runtime evidence separate; do not rebuild after a confirmed install merely because automatic launch failed.
+For a clean iOS Release build, Hermes/CMake failure, install failure, or launch failure, read [`docs/RELEASE_CHECKLIST.md`](../../../docs/RELEASE_CHECKLIST.md) and the Release troubleshooting section of [`docs/knowledge/agent-dev-playbook.md`](../../../docs/knowledge/agent-dev-playbook.md). Use `npm run ios:release`; its fixed CMake 3.31.8 preflight must pass before Prebuild. Never bypass it or fall back to the system CMake. Keep build, install, launch, and runtime evidence separate; do not rebuild after a confirmed install merely because automatic launch failed.
 
 ## Release closeout
 
