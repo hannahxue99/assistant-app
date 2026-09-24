@@ -14,7 +14,6 @@ import {
   shouldScrollAssistantOnFocus,
   shouldFollowAssistantEnd,
   assistantComposerElevation,
-  assistantBottomOffset,
   assistantScrollPresentation,
   assistantMessageSurface,
   shouldMaintainAssistantEndAfterLayout,
@@ -199,12 +198,6 @@ check(!shouldFollowAssistantEnd({ contentHeight: 1200, viewportHeight: 600, offs
   '用户上滑阅读历史时不得强制拉回末端');
 check(shouldFollowAssistantEnd({ contentHeight: 400, viewportHeight: 600, offsetY: 0 }),
   '内容不足一屏时应视为位于末端');
-check(assistantBottomOffset({ contentHeight: 1200, viewportHeight: 600 }) === 600,
-  '长历史必须按内容高度与新视口高度计算唯一置底位置');
-check(assistantBottomOffset({ contentHeight: 400, viewportHeight: 600 }) === 0,
-  '内容不足一屏时置底位置必须保持为零');
-check(assistantBottomOffset({ contentHeight: -20, viewportHeight: 0 }) === 0,
-  '布局过渡中的异常负尺寸不得产生负滚动位置');
 check(assistantComposerElevation({ contentHeight: 400, viewportHeight: 600, offsetY: 0 }) === 0,
   '内容不足一屏时输入框不得凭空产生悬浮阴影');
 check(assistantComposerElevation({ contentHeight: 1200, viewportHeight: 600, offsetY: 600 }) === 0,

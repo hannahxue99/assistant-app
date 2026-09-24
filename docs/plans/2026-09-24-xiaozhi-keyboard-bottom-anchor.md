@@ -4,35 +4,34 @@
 
 **Goal:** Make a bottom-following Xiaozhi conversation move its latest message, composer, and keyboard upward as one anchored unit.
 
-**Architecture:** Keep React Native's iOS `KeyboardAvoidingView` height animation, but replace timing-based end scrolling during keyboard transitions with an explicit bottom-anchor transaction. Derive the exact list offset from measured content and viewport geometry, and preserve history mode unchanged.
+**Architecture:** Keep the header fixed and place the message list plus floating composer inside an outer iOS `KeyboardAvoidingView` position container. A second, composer-sized absolute position container handles history mode. The two native containers are mutually exclusive: following moves the full conversation stage, history moves only the composer.
 
 **Tech Stack:** Expo 57.0.17, React Native 0.86.3, TypeScript, React Native `FlatList` and `Keyboard` APIs, Node assertion scripts.
 
 ---
 
-### Task 1: Specify exact bottom geometry
+### Task 1: Preserve the existing conversation state machine
 
 **Files:**
 - Modify: `src/assistant/ui-state.ts`
 - Modify: `scripts/test-assistant-ui.ts`
 
-1. Add failing cases for long content, short content, and invalid negative geometry.
-2. Run `npm run test:assistant-ui` and verify the helper is missing.
-3. Add a pure `assistantBottomOffset` helper returning `max(0, contentHeight - viewportHeight)`.
-4. Rerun `npm run test:assistant-ui` and verify it passes.
+1. Keep `following / history` as the only scroll intent state.
+2. Preserve the measured footer, prepend compensation, shadow, and jump-to-latest behavior.
+3. Verify history focus never invokes `scrollToEnd`.
 
-### Task 2: Implement the keyboard anchor transaction
+### Task 2: Implement one native keyboard stage
 
 **Files:**
 - Modify: `app/(tabs)/assistant.tsx`
 - Modify: `scripts/test-assistant-layout.cjs`
 
-1. Add source-level regression assertions for keyboard-will-show snapshotting, exact-offset layout anchoring, final did-show settlement, and user-drag cancellation.
+1. Add source-level regression assertions for the fixed header, shared following stage, and composer-only history stage.
 2. Run `npm run test:assistant-layout` and verify the new assertions fail.
-3. Track keyboard anchor state separately from `following / history`.
-4. On list layout, update measured viewport and scroll to the exact bottom offset only when the frozen keyboard anchor is following.
-5. On keyboard hide, animate the list offset frame-by-frame with the system keyboard event duration so the message body and composer return together.
-6. On keyboard completion, settle once without animation; reset stale drag state on focus and navigation focus.
+3. Move the header and banners outside `KeyboardAvoidingView`.
+4. Use iOS `position` behavior with a flex content container containing both `FlatList` and composer for `following`.
+5. Add a composer-sized absolute `position` container for `history`; freeze the selected mode on input focus.
+6. Clip the moving conversation stage at the fixed header boundary and remove keyboard-event-driven `Animated.timing`.
 7. Preserve history mode and existing shadow/jump-button calculations.
 8. Rerun `npm run test:assistant-layout` and `npm run test:assistant-ui`.
 

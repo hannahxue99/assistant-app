@@ -3,12 +3,9 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
-  Easing,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
-  type KeyboardEvent,
   type LayoutChangeEvent,
   Platform,
   Pressable,
@@ -25,7 +22,6 @@ import {
   isAssistantComposerDisabled,
   mergeAssistantMessages,
   pendingAssistantRequestId,
-  assistantBottomOffset,
   assistantScrollPresentation,
   shouldMaintainAssistantEndAfterLayout,
   shouldScrollAssistantAfterRefresh,
@@ -87,16 +83,6 @@ export default function AssistantScreen() {
   const pendingEndScrollRef = useRef<{ animated: boolean } | null>(null);
   const viewportHeightRef = useRef<number | null>(null);
   const composerHeightRef = useRef<number | null>(null);
-  const followEndOnKeyboardOpenRef = useRef<boolean | null>(null);
-  const keyboardAnchorRef = useRef({ active: false, following: false });
-  const keyboardEventRef = useRef<KeyboardEvent | null>(null);
-  const keyboardHidingRef = useRef(false);
-  const closedViewportHeightRef = useRef<number | null>(null);
-  const keyboardScrollAnimationRef = useRef<{
-    animation: ReturnType<typeof Animated.timing>;
-    listenerId: string;
-    value: Animated.Value;
-  } | null>(null);
   const userScrollInProgressRef = useRef(false);
   const scrollModeRef = useRef<'following' | 'history'>('following');
   const lastScrollMetricsRef = useRef({ contentHeight: 0, viewportHeight: 0, offsetY: 0 });
@@ -114,6 +100,7 @@ export default function AssistantScreen() {
   const [undoErrors, setUndoErrors] = useState<Record<string, string>>({});
   const [streamingReplies, setStreamingReplies] = useState<Record<string, AssistantMessage>>({});
   const [composerHeight, setComposerHeight] = useState(68);
+  const [keyboardMovementMode, setKeyboardMovementMode] = useState<'following' | 'history'>('following');
   const [scrollPresentation, setScrollPresentation] = useState({
     atBottom: true,
     showJumpToLatest: false,
@@ -134,61 +121,6 @@ export default function AssistantScreen() {
     });
   }, []);
 
-  const scrollToMeasuredBottom = useCallback((animated: boolean) => {
-    requestAnimationFrame(() => {
-      const metrics = lastScrollMetricsRef.current;
-      listRef.current?.scrollToOffset({
-        offset: assistantBottomOffset({
-          contentHeight: metrics.contentHeight,
-          viewportHeight: metrics.viewportHeight,
-        }),
-        animated,
-      });
-    });
-  }, []);
-
-  const stopKeyboardScrollAnimation = useCallback(() => {
-    const running = keyboardScrollAnimationRef.current;
-    if (!running) return;
-    running.animation.stop();
-    running.value.removeListener(running.listenerId);
-    keyboardScrollAnimationRef.current = null;
-  }, []);
-
-  const animateBottomOffsetWithKeyboard = useCallback((
-    event: KeyboardEvent,
-    viewportHeight: number | null,
-  ) => {
-    if (viewportHeight === null || viewportHeight <= 0) return;
-    stopKeyboardScrollAnimation();
-    const metrics = lastScrollMetricsRef.current;
-    const targetOffset = assistantBottomOffset({
-      contentHeight: metrics.contentHeight,
-      viewportHeight,
-    });
-    const value = new Animated.Value(metrics.offsetY);
-    const listenerId = value.addListener(({ value }) => {
-      lastScrollMetricsRef.current = {
-        ...lastScrollMetricsRef.current,
-        offsetY: value,
-      };
-      listRef.current?.scrollToOffset({ offset: value, animated: false });
-    });
-    const animation = Animated.timing(value, {
-      toValue: targetOffset,
-      duration: event.duration,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: false,
-    });
-    const running = { animation, listenerId, value };
-    keyboardScrollAnimationRef.current = running;
-    animation.start(() => {
-      if (keyboardScrollAnimationRef.current !== running) return;
-      value.removeListener(listenerId);
-      keyboardScrollAnimationRef.current = null;
-    });
-  }, [stopKeyboardScrollAnimation]);
-
   const handleContentSizeChange = useCallback((_contentWidth: number, contentHeight: number) => {
     lastScrollMetricsRef.current = {
       ...lastScrollMetricsRef.current,
@@ -206,86 +138,23 @@ export default function AssistantScreen() {
       });
       return;
     }
-    if (keyboardAnchorRef.current.active && keyboardAnchorRef.current.following) {
-      const keyboardEvent = keyboardEventRef.current;
-      const viewportHeight = keyboardHidingRef.current
-        ? closedViewportHeightRef.current
-        : lastScrollMetricsRef.current.viewportHeight;
-      if (keyboardEvent) animateBottomOffsetWithKeyboard(keyboardEvent, viewportHeight);
-      return;
-    }
     const pending = pendingEndScrollRef.current;
     if (!pending && scrollModeRef.current !== 'following') return;
     pendingEndScrollRef.current = null;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: pending?.animated ?? false }));
     });
-  }, [animateBottomOffsetWithKeyboard]);
+  }, []);
 
   const keepLatestVisibleAfterLayout = useCallback(() => {
     if (scrollModeRef.current !== 'following') return;
-    scrollToMeasuredBottom(false);
-  }, [scrollToMeasuredBottom]);
-
-  const settleKeyboardAnchor = useCallback(() => {
-    const anchor = keyboardAnchorRef.current;
-    stopKeyboardScrollAnimation();
-    if (anchor.active && anchor.following && scrollModeRef.current === 'following') {
-      keepLatestVisibleAfterLayout();
-    }
-    keyboardAnchorRef.current = { active: false, following: false };
-    keyboardEventRef.current = null;
-    keyboardHidingRef.current = false;
-  }, [keepLatestVisibleAfterLayout, stopKeyboardScrollAnimation]);
-
-  useEffect(() => {
-    const willShow = Keyboard.addListener('keyboardWillShow', (event) => {
-      const shouldFollow = followEndOnKeyboardOpenRef.current
-        ?? scrollModeRef.current === 'following';
-      const metrics = lastScrollMetricsRef.current;
-      if (metrics.viewportHeight > 0) closedViewportHeightRef.current = metrics.viewportHeight;
-      keyboardEventRef.current = event;
-      keyboardHidingRef.current = false;
-      keyboardAnchorRef.current = {
-        active: true,
-        following: shouldFollow,
-      };
-      if (shouldFollow) {
-        Keyboard.scheduleLayoutAnimation(event);
-      }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (scrollModeRef.current !== 'following') return;
+        listRef.current?.scrollToEnd({ animated: false });
+      });
     });
-    const show = Keyboard.addListener('keyboardDidShow', () => {
-      const shouldFollow = followEndOnKeyboardOpenRef.current
-        ?? scrollModeRef.current === 'following';
-      if (shouldFollow) keepLatestVisibleAfterLayout();
-      settleKeyboardAnchor();
-    });
-    const willHide = Keyboard.addListener('keyboardWillHide', (event) => {
-      const shouldFollow = followEndOnKeyboardOpenRef.current === true
-        && scrollModeRef.current === 'following';
-      keyboardEventRef.current = event;
-      keyboardHidingRef.current = true;
-      keyboardAnchorRef.current = { active: true, following: shouldFollow };
-      if (shouldFollow) {
-        Keyboard.scheduleLayoutAnimation(event);
-        animateBottomOffsetWithKeyboard(event, closedViewportHeightRef.current);
-      }
-    });
-    const hide = Keyboard.addListener('keyboardDidHide', () => {
-      const shouldFollow = followEndOnKeyboardOpenRef.current === true
-        && scrollModeRef.current === 'following';
-      if (shouldFollow) keepLatestVisibleAfterLayout();
-      settleKeyboardAnchor();
-      followEndOnKeyboardOpenRef.current = null;
-    });
-    return () => {
-      willShow.remove();
-      show.remove();
-      willHide.remove();
-      hide.remove();
-      stopKeyboardScrollAnimation();
-    };
-  }, [animateBottomOffsetWithKeyboard, keepLatestVisibleAfterLayout, settleKeyboardAnchor, stopKeyboardScrollAnimation]);
+  }, []);
 
   const handleListLayout = useCallback((event: LayoutChangeEvent) => {
     const nextHeight = event.nativeEvent.layout.height;
@@ -294,21 +163,13 @@ export default function AssistantScreen() {
       nextSize: nextHeight,
       followingEnd: scrollModeRef.current === 'following',
     });
-    const shouldPinForKeyboard = followEndOnKeyboardOpenRef.current === true
-      && scrollModeRef.current === 'following';
     viewportHeightRef.current = nextHeight;
     lastScrollMetricsRef.current = {
       ...lastScrollMetricsRef.current,
       viewportHeight: nextHeight,
     };
-    const keyboardAnchor = keyboardAnchorRef.current;
-    const keyboardEvent = keyboardEventRef.current;
-    if (keyboardAnchor.active && keyboardAnchor.following && keyboardEvent && !keyboardHidingRef.current) {
-      animateBottomOffsetWithKeyboard(keyboardEvent, nextHeight);
-    }
-    else if (shouldPinForKeyboard) keepLatestVisibleAfterLayout();
-    else if (shouldMaintain) keepLatestVisibleAfterLayout();
-  }, [animateBottomOffsetWithKeyboard, keepLatestVisibleAfterLayout]);
+    if (shouldMaintain) keepLatestVisibleAfterLayout();
+  }, [keepLatestVisibleAfterLayout]);
 
   const handleComposerLayout = useCallback((event: LayoutChangeEvent) => {
     const nextHeight = event.nativeEvent.layout.height;
@@ -434,9 +295,7 @@ export default function AssistantScreen() {
       olderLoadRef.current = 'idle';
       setOlderLoad('idle');
       const loadedOnce = loadedOnceRef.current;
-      stopKeyboardScrollAnimation();
       userScrollInProgressRef.current = false;
-      keyboardAnchorRef.current = { active: false, following: false };
       const preserveReturn = preservePositionOnNextFocusRef.current;
       preservePositionOnNextFocusRef.current = false;
       const shouldScroll = shouldScrollAssistantOnFocus({
@@ -459,7 +318,7 @@ export default function AssistantScreen() {
         mountedRef.current = false;
         Keyboard.dismiss();
       };
-    }, [loadLatest, stopKeyboardScrollAnimation]),
+    }, [loadLatest]),
   );
 
   const navigateFromMessage = useCallback((target: string) => {
@@ -676,65 +535,67 @@ export default function AssistantScreen() {
 
   const jumpToLatest = useCallback(() => {
     scrollModeRef.current = 'following';
-    followEndOnKeyboardOpenRef.current = true;
     setScrollPresentation({ atBottom: true, showJumpToLatest: false, elevation: 0 });
     scrollToLatest(true, false);
   }, [scrollToLatest]);
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'height' : undefined}
-        keyboardVerticalOffset={0}
-      >
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>小知</Text>
-            <Text style={styles.caption}>连续对话 · 自动保存</Text>
-          </View>
-          {__DEV__ ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="打开决策日志调试页"
-              onPress={() => navigateAway('/debug/decisions')}
-              hitSlop={8}
-              style={({ pressed }) => [styles.debugEntry, pressed && styles.pressed]}
-            >
-              <Ionicons name="terminal-outline" size={20} color={theme.colors.textDim} />
-            </Pressable>
-          ) : null}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>小知</Text>
+          <Text style={styles.caption}>连续对话 · 自动保存</Text>
         </View>
-
-        {engineStatus === 'unconfigured' && initialLoad === 'ready' ? (
+        {__DEV__ ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="前往配置理解引擎"
-            onPress={() => navigateAway('/settings/llm')}
-            style={({ pressed }) => [styles.configBanner, pressed && styles.pressed]}
+            accessibilityLabel="打开决策日志调试页"
+            onPress={() => navigateAway('/debug/decisions')}
+            hitSlop={8}
+            style={({ pressed }) => [styles.debugEntry, pressed && styles.pressed]}
           >
-            <Text style={styles.configText}>开启理解引擎后，小知才能回复</Text>
-            <Text style={styles.configAction}>去配置 ›</Text>
+            <Ionicons name="terminal-outline" size={20} color={theme.colors.textDim} />
           </Pressable>
         ) : null}
+      </View>
 
-        {launchContext ? (
-          <View style={styles.contextBanner}>
-            <Ionicons name="git-branch-outline" size={17} color={theme.colors.accent} />
-            <View style={styles.contextTextWrap}>
-              <Text style={styles.contextLabel}>正在聊这件事</Text>
-              <Text style={styles.contextTitle} numberOfLines={1}>{launchContext.label}</Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="退出事件上下文"
-              onPress={() => router.replace('/assistant')}
-              style={styles.contextClose}
-            >
-              <Ionicons name="close" size={20} color={theme.colors.textDim} />
-            </Pressable>
+      {engineStatus === 'unconfigured' && initialLoad === 'ready' ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="前往配置理解引擎"
+          onPress={() => navigateAway('/settings/llm')}
+          style={({ pressed }) => [styles.configBanner, pressed && styles.pressed]}
+        >
+          <Text style={styles.configText}>开启理解引擎后，小知才能回复</Text>
+          <Text style={styles.configAction}>去配置 ›</Text>
+        </Pressable>
+      ) : null}
+
+      {launchContext ? (
+        <View style={styles.contextBanner}>
+          <Ionicons name="git-branch-outline" size={17} color={theme.colors.accent} />
+          <View style={styles.contextTextWrap}>
+            <Text style={styles.contextLabel}>正在聊这件事</Text>
+            <Text style={styles.contextTitle} numberOfLines={1}>{launchContext.label}</Text>
           </View>
-        ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="退出事件上下文"
+            onPress={() => router.replace('/assistant')}
+            style={styles.contextClose}
+          >
+            <Ionicons name="close" size={20} color={theme.colors.textDim} />
+          </Pressable>
+        </View>
+      ) : null}
+
+      <KeyboardAvoidingView
+        style={styles.keyboardStage}
+        contentContainerStyle={styles.keyboardStageContent}
+        behavior={Platform.OS === 'ios' ? 'position' : undefined}
+        enabled={keyboardMovementMode === 'following'}
+        keyboardVerticalOffset={0}
+      >
 
         {initialLoad === 'loading' ? (
           <View style={styles.loading}><ActivityIndicator color={theme.colors.accent} /></View>
@@ -805,18 +666,12 @@ export default function AssistantScreen() {
               const fromUser = userScrollInProgressRef.current;
               if (fromUser) {
                 scrollModeRef.current = nextPresentation.atBottom ? 'following' : 'history';
-                followEndOnKeyboardOpenRef.current = nextPresentation.atBottom;
               }
-              if (fromUser || followEndOnKeyboardOpenRef.current !== true) {
-                setScrollPresentation(nextPresentation);
-              }
+              setScrollPresentation(nextPresentation);
               if (nativeEvent.contentOffset.y < 32) void loadOlder();
             }}
             onScrollBeginDrag={() => {
               userScrollInProgressRef.current = true;
-              stopKeyboardScrollAnimation();
-              keyboardAnchorRef.current = { active: false, following: false };
-              followEndOnKeyboardOpenRef.current = false;
             }}
             onScrollEndDrag={() => {
               userScrollInProgressRef.current = false;
@@ -831,41 +686,49 @@ export default function AssistantScreen() {
           />
         )}
 
-        <View
-          style={styles.composerWrap}
-          onLayout={handleComposerLayout}
+        <KeyboardAvoidingView
+          pointerEvents="box-none"
+          style={styles.composerKeyboardStage}
+          behavior={Platform.OS === 'ios' ? 'position' : undefined}
+          enabled={keyboardMovementMode === 'history'}
+          keyboardVerticalOffset={0}
         >
-          {scrollPresentation.elevation > 0 ? (
-            <View
-              pointerEvents="none"
-              style={[styles.composerShadowFade, { opacity: scrollPresentation.elevation }]}
+          <View
+            style={styles.composerWrap}
+            onLayout={handleComposerLayout}
+          >
+            {scrollPresentation.elevation > 0 ? (
+              <View
+                pointerEvents="none"
+                style={[styles.composerShadowFade, { opacity: scrollPresentation.elevation }]}
+              />
+            ) : null}
+            {scrollPresentation.showJumpToLatest ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="回到最新消息"
+                hitSlop={4}
+                onPress={jumpToLatest}
+                style={({ pressed }) => [styles.jumpToLatest, pressed && styles.jumpToLatestPressed]}
+              >
+                <View style={styles.jumpToLatestCircle}>
+                  <Ionicons name="chevron-down" size={18} color={theme.colors.textDim} />
+                </View>
+              </Pressable>
+            ) : null}
+            <AssistantComposer
+              onSend={send}
+              onStop={() => stopCurrentTurn(activeRequestId)}
+              onInputFocus={() => {
+                userScrollInProgressRef.current = false;
+                setKeyboardMovementMode(scrollModeRef.current);
+              }}
+              disabled={composerDisabled}
+              processing={composerProcessing || stoppingRequestId !== null}
+              elevation={scrollPresentation.elevation}
             />
-          ) : null}
-          {scrollPresentation.showJumpToLatest ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="回到最新消息"
-              hitSlop={4}
-              onPress={jumpToLatest}
-              style={({ pressed }) => [styles.jumpToLatest, pressed && styles.jumpToLatestPressed]}
-            >
-              <View style={styles.jumpToLatestCircle}>
-                <Ionicons name="chevron-down" size={18} color={theme.colors.textDim} />
-              </View>
-            </Pressable>
-          ) : null}
-          <AssistantComposer
-            onSend={send}
-            onStop={() => stopCurrentTurn(activeRequestId)}
-            onInputFocus={() => {
-              userScrollInProgressRef.current = false;
-              followEndOnKeyboardOpenRef.current = scrollModeRef.current === 'following';
-            }}
-            disabled={composerDisabled}
-            processing={composerProcessing || stoppingRequestId !== null}
-            elevation={scrollPresentation.elevation}
-          />
-        </View>
+          </View>
+        </KeyboardAvoidingView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -873,7 +736,9 @@ export default function AssistantScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
-  flex: { flex: 1 },
+  keyboardStage: { flex: 1, overflow: 'hidden' },
+  keyboardStageContent: { flex: 1 },
+  composerKeyboardStage: { position: 'absolute', zIndex: 10, left: 0, right: 0, bottom: 0 },
   header: { minHeight: 62, paddingHorizontal: theme.spacing.md, paddingTop: 7, paddingBottom: 8, justifyContent: 'space-between', alignItems: 'center', flexDirection: 'row' },
   debugEntry: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   title: { color: theme.colors.text, fontSize: theme.font.title, fontWeight: theme.fontWeight.semibold },
@@ -896,7 +761,7 @@ const styles = StyleSheet.create({
   olderRetryText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
   dateSeparatorWrap: { alignItems: 'center', paddingTop: 7, paddingBottom: 3 },
   dateSeparatorText: { color: theme.colors.textDim, fontSize: 11, lineHeight: 17, paddingHorizontal: 9, paddingVertical: 2, borderRadius: 11, backgroundColor: theme.colors.card },
-  composerWrap: { position: 'absolute', zIndex: 10, left: 0, right: 0, bottom: 0, paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6 },
+  composerWrap: { paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6 },
   composerShadowFade: {
     position: 'absolute',
     left: 0,

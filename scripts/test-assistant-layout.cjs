@@ -10,59 +10,45 @@ const llmSettingsSource = fs.readFileSync('app/settings/llm.tsx', 'utf8');
 
 assert.match(
   assistantSource,
-  /behavior=\{Platform\.OS === 'ios' \? 'height' : undefined\}/,
-  'iOS 小知页必须缩短有效高度，让绝对定位输入框停在键盘上方',
+  /contentContainerStyle=\{styles\.keyboardStageContent\}[\s\S]*behavior=\{Platform\.OS === 'ios' \? 'position' : undefined\}/,
+  'iOS 小知页必须用一个原生位移容器同步移动消息区和输入框',
 );
+assert.match(assistantSource, /<View style=\{styles\.header\}>[\s\S]*<KeyboardAvoidingView/,
+  '标题区必须留在键盘位移容器外，键盘只移动对话正文和输入框');
+assert.match(assistantSource, /<KeyboardAvoidingView[\s\S]*<FlatList[\s\S]*style=\{styles\.composerWrap\}[\s\S]*<\/KeyboardAvoidingView>/,
+  '消息列表与悬浮输入框必须位于同一个键盘动画容器');
+assert.match(assistantSource, /enabled=\{keyboardMovementMode === 'following'\}[\s\S]*<FlatList/,
+  '置底聚焦时外层必须整体移动消息列表和输入框');
+assert.match(assistantSource, /style=\{styles\.composerKeyboardStage\}[\s\S]*enabled=\{keyboardMovementMode === 'history'\}/,
+  '历史位置聚焦时必须只启用输入框自己的键盘位移层');
+assert.match(assistantSource, /onInputFocus=\{\(\) => \{[\s\S]*setKeyboardMovementMode\(scrollModeRef\.current\);/,
+  '键盘出现前必须冻结本轮 following/history 位移模式');
+assert.doesNotMatch(assistantSource, /setKeyboardMovementMode\([^)]*\)[\s\S]*onScrollBeginDrag/,
+  '键盘动画期间不得因列表拖动切换位移层级');
+assert.match(assistantSource, /keyboardStage: \{ flex: 1, overflow: 'hidden' \}/,
+  '整体上推时必须裁剪越过标题区的消息，避免覆盖固定标题');
+assert.doesNotMatch(assistantSource, /Animated\.timing|keyboardScrollAnimationRef|animateBottomOffsetWithKeyboard/,
+  '不得再用独立 JavaScript 滚动动画模拟正文与键盘同步');
 assert.match(assistantSource, /onLayout=\{handleListLayout\}/,
-  '消息区可视高度变化必须触发条件贴底');
+  '消息区真实布局变化仍必须触发条件贴底');
 assert.match(assistantSource, /onLayout=\{handleComposerLayout\}/,
   '输入框多行高度变化必须触发条件贴底');
 assert.match(assistantSource, /ListFooterComponent=\{<View style=\{\{ height: composerHeight \+ 18 \}\} \/>\}/,
   '悬浮输入框必须用真实尾部占位保证最新消息可滚到输入框上方');
 assert.doesNotMatch(assistantSource, /paddingBottom: composerHeight/,
   '不得依赖 FlatList 可能忽略的 contentContainer 底部 padding 作为滚动终点');
-assert.match(assistantSource, /composerWrap: \{ position: 'absolute', zIndex: 10/,
-  '输入框必须始终使用线上悬浮结构，不能形成独立底部面板');
+assert.match(assistantSource, /composerKeyboardStage: \{ position: 'absolute', zIndex: 10, left: 0, right: 0, bottom: 0 \}/,
+  '输入框避让层必须始终悬浮在消息区上方，不能形成独立底部面板');
 assert.doesNotMatch(assistantSource, /keyboardVisible|composerWrapKeyboard|style=\{keyboardVisible/,
   '输入框不得在键盘出现时切换定位模式，避免首次聚焦丢失');
-assert.match(assistantSource, /followEndOnKeyboardOpenRef\.current = scrollModeRef\.current === 'following'/,
-  '输入框聚焦时必须按单一滚动模式决定键盘跟随，不能被布局滚动误判');
 assert.doesNotMatch(assistantSource, /userReadingHistoryRef|followEndRef/,
   '不得保留含义重叠的历史阅读与贴底状态');
 assert.match(assistantSource, /onScrollBeginDrag=\{\(\) => \{\s*userScrollInProgressRef\.current = true;/,
   '只有用户主动拖动消息区时才允许进入历史阅读状态');
-assert.match(assistantSource, /onScrollBeginDrag=\{\(\) => \{[\s\S]*keyboardAnchorRef\.current = \{ active: false, following: false \};/,
-  '键盘过渡期间真实拖动必须立即取消自动置底，让用户手势优先');
-assert.match(assistantSource, /onScrollBeginDrag=\{\(\) => \{[\s\S]*stopKeyboardScrollAnimation\(\);/,
-  '用户开始拖动时必须停止正在进行的键盘联动动画');
 assert.match(assistantSource, /onInputFocus=\{\(\) => \{\s*userScrollInProgressRef\.current = false;/,
   '输入框聚焦前必须清理可能因 Tab 切换遗留的拖动状态');
 assert.match(assistantSource, /if \(fromUser\) \{\s*scrollModeRef\.current = nextPresentation\.atBottom \? 'following' : 'history';/,
   '只有用户手势滚动才能在贴底与历史阅读状态之间切换');
-assert.match(assistantSource, /Keyboard\.addListener\('keyboardDidShow',[\s\S]*keepLatestVisibleAfterLayout\(\)/,
-  '键盘完全出现后，原本位于末端的消息必须重新贴到输入框上方');
-assert.match(assistantSource, /Keyboard\.addListener\('keyboardWillShow',[\s\S]*keyboardAnchorRef\.current = \{[\s\S]*active: true,[\s\S]*following: shouldFollow/,
-  'iOS 键盘动画开始前必须冻结置底意图，不能等布局变化后再猜测');
-assert.match(assistantSource, /assistantBottomOffset\(\{[\s\S]*contentHeight: metrics\.contentHeight,[\s\S]*viewportHeight: metrics\.viewportHeight/,
-  '键盘过渡必须按最终内容与视口几何计算唯一置底位置');
-assert.match(assistantSource, /listRef\.current\?\.scrollToOffset\(\{[\s\S]*offset: assistantBottomOffset/,
-  '底部锚点事务必须使用精确 offset，不能只靠延迟 scrollToEnd');
-assert.match(assistantSource, /Keyboard\.addListener\('keyboardDidShow',[\s\S]*settleKeyboardAnchor\(\)/,
-  '键盘完全出现后必须做一次无动画收敛，消除动画取整误差');
-assert.match(assistantSource, /Keyboard\.addListener\('keyboardWillHide',[\s\S]*animateBottomOffsetWithKeyboard\(event, closedViewportHeightRef\.current\)/,
-  '收键盘必须从 willHide 开始按关闭态视口同步移动正文，不能等输入框落下后再补滚动');
-assert.match(assistantSource, /Animated\.timing\([\s\S]*duration: event\.duration[\s\S]*useNativeDriver: false/,
-  '正文回落必须复用系统键盘事件时长，避免与输入框形成两条不同速度的动画');
-assert.match(assistantSource, /addListener\(\(\{ value \}\) => \{[\s\S]*scrollToOffset\(\{ offset: value, animated: false \}\)/,
-  '键盘联动期间应逐帧设置正文位置，不能再启动 UIScrollView 自带的第二条动画');
-assert.match(assistantSource, /if \(shouldFollow\) keepLatestVisibleAfterLayout\(\)/,
-  '只有原本位于末端时才跟随键盘上移，历史阅读位置必须保持不动');
-assert.match(assistantSource, /Keyboard\.addListener\('keyboardDidHide',[\s\S]*scrollModeRef\.current === 'following';[\s\S]*keepLatestVisibleAfterLayout\(\)/,
-  '键盘收起并恢复页面高度后，原本位于末端的消息必须再次校正贴底，不能留下空白');
-assert.match(assistantSource, /const shouldPinForKeyboard = followEndOnKeyboardOpenRef\.current === true[\s\S]*if \(shouldPinForKeyboard\) keepLatestVisibleAfterLayout\(\)/,
-  '键盘开合改变可视高度的整个过程都必须保持末端，不得只在弹起完成时校正一次');
-assert.match(assistantSource, /followEndOnKeyboardOpenRef\.current = nextPresentation\.atBottom/,
-  '键盘内手动滚回末端后必须恢复收键盘时的贴底校正');
 assert.doesNotMatch(assistantSource, /maintainVisibleContentPosition=/,
   '消息列表不得使用会在键盘缩短视口时抵消主动贴底的原生位置保持');
 assert.match(assistantSource, /pendingPrependAnchorRef\.current = \{\s*contentHeight: metrics\.contentHeight,\s*offsetY: metrics\.offsetY/,

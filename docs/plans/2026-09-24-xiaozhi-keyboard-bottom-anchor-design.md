@@ -8,33 +8,28 @@ Release 使用生产长历史时，从首页进入小知并在消息末端点击
 
 ## 方案选择
 
-采用现有 React Native 0.86.3 `KeyboardAvoidingView` 的 `height` 模式负责系统键盘曲线和页面有效高度；小知列表只负责维持底部锚点。暂不引入额外原生键盘库，也不反转消息列表，避免扩大原生依赖、历史分页和滚动方向的改动范围。
+真机视频证明 `height` 模式加 JavaScript 逐帧滚动仍是两套动画：`KeyboardAvoidingView` 用原生布局曲线移动输入框，`FlatList` 通过 JS bridge 更新 offset，收键盘时正文会先跳、输入框再独立回落。相同时长并不代表同一帧。
 
-键盘过渡开始前快照阅读意图。若处于 `following`，布局变化后用 `内容高度 - 新可视高度` 得到唯一目标 offset，并与键盘过渡同步更新；键盘完全出现后再做一次无动画收敛。若处于 `history`，不改 offset。过渡期间的程序化滚动不能改变阅读模式，只有真实拖动才允许进入历史模式。
+最终方案改用 React Native 0.86.3 `KeyboardAvoidingView` 的 `position` 模式，并调整页面层级：标题、配置提示和事件上下文保持固定；消息列表与悬浮输入框放进外层 `position` 内容容器，输入框本身另有一层按自身高度测量的绝对悬浮避让容器。两层互斥启用，不再监听键盘事件模拟第二条滚动动画。
 
-键盘收起不能另起 `UIScrollView` 的默认滚动动画。`keyboardWillHide` 到达时，直接使用系统事件给出的 duration 启动逐帧 offset 更新，目标是键盘关闭前保存的完整视口高度；输入框继续由 `KeyboardAvoidingView` 按同一系统事件回落。两者结束后再进行一次无动画精确校准，从而避免输入框单独慢滑、正文提前跳回的割裂感。
+输入框聚焦前冻结当前 `following / history` 模式。本轮从 `following` 开始时，只启用外层，消息末端与输入框作为一个整体跟随键盘；本轮从 `history` 开始时，只启用输入框避让层，列表 viewport 与 offset 完全不变，输入框单独跟随键盘升降。模式在一次键盘开合期间不因拖动切换，避免层级中途跳变。用户拖动、分页、流式增长和输入框多行高度变化仍沿用原滚动状态机。
 
 ## 交互与数据流
 
 ```text
-点击输入框（快照 following/history）
-        │
-        ├─ history ──> 仅键盘与输入框上移，消息位置不变
-        │
-        └─ following
-             │ keyboardWillShow：进入底部锚点事务
-             │ 列表 onLayout：按新 viewport 计算精确 bottom offset
-             │ keyboardDidShow：无动画校准一次
-             └ 键盘收起时反向执行，回到关闭态底部
+固定标题 / 配置提示 / 事件上下文
+                │
+      KeyboardAvoidingView(position)
+                │
+        ┌───────┴────────┐
+        │                │
+   FlatList 消息区    悬浮输入框避让层
+        │                │
+ following：外层整体移动  │
+ history：列表固定 ──────> 输入框层单独移动
 ```
 
-底部目标统一为：
-
-```text
-max(0, contentHeight - viewportHeight)
-```
-
-列表尾部继续保留与输入框真实高度一致的 Footer，因此目标 offset 天然让最后一条消息停在输入框和渐隐层上方。
+列表尾部继续保留与输入框真实高度一致的 Footer，让最新消息在整体移动前后都停在输入框和渐隐层上方。
 
 ## 边界情况
 
@@ -43,6 +38,7 @@ max(0, contentHeight - viewportHeight)
 - 键盘开启时输入框从单行变多行。
 - 快速点击输入框、切换 Tab、交互式收键盘。
 - 历史位置点击输入框不得跳底。
+- 历史位置键盘开合时正文像素位置不得变化，输入框必须始终位于键盘上方。
 - 键盘过渡时用户主动拖动，用户手势优先并结束自动锚定。
 - 流式回复和 Markdown 高度继续变化时，`following` 保持末端，`history` 保持阅读位置。
 
