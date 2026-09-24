@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
   sectionTitle: { color: theme.colors.text, fontSize: 22, lineHeight: 30, fontWeight: theme.fontWeight.bold },
   sectionAction: { minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 2, paddingLeft: 10 },
   sectionActionText: { color: theme.colors.textDim, fontSize: 14 },
-  todoCard: { backgroundColor: theme.colors.card, borderRadius: theme.radius.card, paddingHorizontal: 16, ...theme.shadow },
+  todoCard: { marginHorizontal: -8, backgroundColor: theme.colors.card, borderRadius: theme.radius.card, paddingHorizontal: 16, ...theme.shadow },
   rowDivider: { height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border, marginLeft: 42 },
   emptyWeek: {
     borderWidth: 1,

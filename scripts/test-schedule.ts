@@ -59,8 +59,8 @@ check('今天到期未完成 ≠ 逾期', !isOverdue(todayTask, NOW));
 check('已完成 ≠ 逾期', !isOverdue(doneToday, NOW));
 
 console.log('— 行标签 —');
-check('本周行（今天）显 今天 M/D 周X', weekTaskLabel(todayTask.dueAt, NOW) === '今天 8/31 周一');
-check('本周行（明天）显 明天 M/D 周X', weekTaskLabel(NOW + DAY, NOW) === '明天 9/1 周二');
+check('本周行（今天）显 M/D 今天', weekTaskLabel(todayTask.dueAt, NOW) === '8/31 今天');
+check('本周行（明天）显 M/D 明天', weekTaskLabel(NOW + DAY, NOW) === '9/1 明天');
 check('本周行（后天）显 M/D 周X', weekTaskLabel(NOW + 2 * DAY, NOW) === '9/2 周三');
 check('长期行格式 9/2 周三（无小时）', longTermLabel(wedTask.dueAt!) === '9/2 周三');
 check('无时刻显 全天', weekTaskLabel(null) === '全天');
