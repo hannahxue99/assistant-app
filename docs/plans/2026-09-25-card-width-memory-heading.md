@@ -13,9 +13,9 @@
 ## Confirmed design
 
 - Give `todoCard` the same `marginHorizontal: -8` used by `eventCard`, so both cards share identical left and right edges.
-- Reduce the memory category icon container from 38 to 34 points and its glyph from 21 to 18 points.
-- Increase memory category headings from 14 to 16 points with a 22-point line height.
-- Reduce the category/body offset from 48 to 44 points so memory content stays aligned below the heading after the icon is reduced.
+- Match the memory category icon to setting rows: a 32-point container, 12-point radius, and 19-point glyph.
+- Match memory category headings to the setting-row body font size while preserving their orange color and bold weight.
+- Match the memory card's 14-point horizontal padding to setting rows and use a 42-point body offset so headings, icons, and content share the same left grid.
 - Preserve card height, padding, colors, shadows, actions, data flow, edit behavior, and empty/loading/error states.
 
 ## Acceptance criteria
@@ -34,10 +34,10 @@
 - Modify: `src/components/MemorySection.tsx`
 
 1. Add `marginHorizontal: -8` to `todoCard`.
-2. Change the memory category glyph size to 18.
-3. Change `memoryIcon` to 34 × 34 with a proportionate radius.
-4. Change `category` to 16/22 while keeping the existing weight and color.
-5. Change `memoryBody` left margin to 44.
+2. Change the memory category glyph size to 19.
+3. Change `memoryIcon` to 32 × 32 with the same 12-point radius used by setting rows.
+4. Change `category` to `theme.font.body` while keeping the existing weight and color.
+5. Match memory-card horizontal padding to setting rows and change `memoryBody` left margin to 42.
 
 ### Task 2: Verify and deliver Dev acceptance
 
