@@ -62,3 +62,5 @@ Release 使用生产长历史时，从首页进入小知并在消息末端点击
 用户确认采用 [`2026-09-24-xiaozhi-composer-depth-preview.svg`](2026-09-24-xiaozhi-composer-depth-preview.svg) 右侧的“轻微外凸”方案：输入框尺寸与位置不变，边框调整为 `#DCD4CA`，卡片底色为 `#FFFEFD`，置底时保留低强度暖灰外阴影；离开底部后继续按原距离逻辑增强阴影，不增加整宽底部面板。
 
 首页、小知、我的三个 Tab 场景及底部 Tab Bar 明确使用纯白 `#FFFFFF`。Tab Bar 使用实体白色背景并移除系统阴影，避免白色配置被默认模糊材质叠成灰色；顶部仅保留 `#F1EEE9` 的弱分隔线。
+
+用户发送后的消息气泡与小知最终回复正文统一为 `16px / 23px`，与输入框正文保持一致。Markdown 列表标记同步为 `16px / 23px`；标题、思考、搜索和处理状态保持原有层级。对比见 [`2026-09-24-xiaozhi-message-type-preview.svg`](2026-09-24-xiaozhi-message-type-preview.svg)。

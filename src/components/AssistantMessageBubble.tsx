@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
   assistantRow: { alignItems: 'flex-start' },
   userBubble: { maxWidth: '86%', borderRadius: 18, borderBottomRightRadius: 6, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.colors.accent },
   assistantBubble: { maxWidth: '94%', borderRadius: 18, borderBottomLeftRadius: 6, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: theme.colors.card, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.border },
-  content: { color: theme.colors.text, fontSize: theme.font.body, lineHeight: 22 },
+  content: { color: theme.colors.text, fontSize: 16, lineHeight: 23 },
   userContent: { color: '#FFFFFF' },
   runtimeRow: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 4, marginBottom: 2 },
   runtimeText: { flexShrink: 1, color: theme.colors.textDim, fontSize: 13 },

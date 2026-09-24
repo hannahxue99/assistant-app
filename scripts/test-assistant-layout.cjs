@@ -76,6 +76,12 @@ assert.match(composerSource, /shadowColor: '#6E5E52',[\s\S]*shadowOpacity: 0\.10
   '输入框在置底状态也必须保留轻微外凸阴影');
 assert.match(composerSource, /shadowOpacity: 0\.10 \+ 0\.06 \* elevation/,
   '用户离开底部时，输入框阴影必须从基础外凸连续增强');
+assert.match(bubbleSource, /content: \{ color: theme\.colors\.text, fontSize: 16, lineHeight: 23 \}/,
+  '用户发送后的消息气泡必须使用 16px 正文');
+assert.match(markdownSource, /body: \{ color: theme\.colors\.text, fontSize: 16, lineHeight: 23 \}/,
+  '小知最终回复正文必须使用 16px');
+assert.match(markdownSource, /listMarker: \{ width: 18, color: theme\.colors\.text, fontSize: 16, lineHeight: 23 \}/,
+  'Markdown 列表标记必须与 16px 回复正文对齐');
 assert.match(tabsSource, /sceneStyle: styles\.scene/,
   '首页、小知、我的三个 Tab 场景必须统一使用纯白背景');
 assert.match(tabsSource, /tabBarBackground: \(\) => <View style=\{styles\.tabBarBackground\} \/>/,

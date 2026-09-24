@@ -184,7 +184,7 @@ export function AssistantMarkdown({ content, streaming = false }: AssistantMarkd
 
 const styles = StyleSheet.create({
   root: { width: '100%', gap: 8 },
-  body: { color: theme.colors.text, fontSize: theme.font.body, lineHeight: 22 },
+  body: { color: theme.colors.text, fontSize: 16, lineHeight: 23 },
   strong: { fontWeight: theme.fontWeight.semibold },
   emphasis: { fontStyle: 'italic' },
   heading1: { fontSize: 18, lineHeight: 25, fontWeight: theme.fontWeight.bold, marginTop: 1 },
@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   heading3: { fontSize: 16, lineHeight: 23, fontWeight: theme.fontWeight.semibold },
   list: { width: '100%', gap: 6 },
   listItem: { width: '100%', flexDirection: 'row', alignItems: 'flex-start' },
-  listMarker: { width: 18, color: theme.colors.text, fontSize: theme.font.body, lineHeight: 22 },
+  listMarker: { width: 18, color: theme.colors.text, fontSize: 16, lineHeight: 23 },
   orderedMarker: { width: 28, paddingRight: 5, textAlign: 'right' },
   listItemBody: { flex: 1, minWidth: 0, gap: 5 },
   listParagraph: { flexShrink: 1 },

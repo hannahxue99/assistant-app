@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="300" viewBox="0 0 900 300">
+  <rect width="900" height="300" fill="#F5F3F0"/>
+  <g transform="translate(30 28)" font-family="-apple-system, BlinkMacSystemFont, sans-serif">
+    <rect width="400" height="244" rx="22" fill="#FFFFFF"/>
+    <text x="24" y="38" font-size="18" font-weight="600" fill="#2B2622">调整前</text>
+    <text x="24" y="64" font-size="13" fill="#8A837B">发送后和回复正文均为 15px</text>
+    <rect x="80" y="92" width="296" height="48" rx="18" fill="#D86E32"/>
+    <text x="100" y="122" font-size="15" fill="#FFFFFF">明天下午帮我提醒一下</text>
+    <rect x="24" y="156" width="330" height="58" rx="18" fill="#FFFEFD" stroke="#E8E2D9"/>
+    <text x="44" y="191" font-size="15" fill="#2B2622">好的，我会在明天下午提醒你。</text>
+  </g>
+  <g transform="translate(470 28)" font-family="-apple-system, BlinkMacSystemFont, sans-serif">
+    <rect width="400" height="244" rx="22" fill="#FFFFFF"/>
+    <text x="24" y="38" font-size="18" font-weight="600" fill="#2B2622">调整后</text>
+    <text x="24" y="64" font-size="13" fill="#8A837B">与输入框统一为 16px / 23px</text>
+    <rect x="80" y="92" width="296" height="49" rx="18" fill="#D86E32"/>
+    <text x="100" y="123" font-size="16" fill="#FFFFFF">明天下午帮我提醒一下</text>
+    <rect x="24" y="157" width="330" height="59" rx="18" fill="#FFFEFD" stroke="#E8E2D9"/>
+    <text x="44" y="193" font-size="16" fill="#2B2622">好的，我会在明天下午提醒你。</text>
+  </g>
+</svg>
