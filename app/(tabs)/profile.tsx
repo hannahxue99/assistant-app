@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CalendarSyncSetting } from '../../src/components/CalendarSyncSetting';
+import { AmbientOrbit } from '../../src/components/AmbientOrbit';
 import { MemorySection } from '../../src/components/MemorySection';
 import { ImportFeedbackModal } from '../../src/components/ImportFeedbackModal';
 import { ImportPreviewModal, type ImportPreviewData } from '../../src/components/ImportPreviewModal';
@@ -381,6 +382,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
+      <AmbientOrbit style={styles.orbit} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <MemorySection
           state={memorySectionState({
@@ -491,23 +493,21 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
-  content: { padding: 16, paddingBottom: 72, gap: 8 },
-  sectionTitle: { color: theme.colors.text, fontSize: 19, fontWeight: theme.fontWeight.bold, marginTop: 10 },
+  safe: { flex: 1, backgroundColor: theme.colors.bg, position: 'relative' },
+  orbit: { top: -24, opacity: 0.58 },
+  content: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 72, gap: 8 },
+  sectionTitle: { color: theme.colors.ink, fontSize: 24, lineHeight: 31, fontWeight: theme.fontWeight.bold, marginTop: 24 },
   rowLabel: { fontSize: theme.font.body, color: theme.colors.text },
   rowValue: { fontSize: theme.font.small, color: theme.colors.textDim },
   sectionLabel: {
     fontSize: theme.font.small,
     color: theme.colors.textDim,
-    marginTop: 2,
-    marginLeft: 4,
+    marginLeft: 0,
     marginBottom: -2,
+    marginTop: 10,
   },
   dataCard: {
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.input,
+    backgroundColor: 'transparent',
     overflow: 'hidden',
   },
   dataRow: {
@@ -515,15 +515,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 0,
     paddingVertical: 8,
   },
-  dataRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
+  dataRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.divider },
   settingsCard: {
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.input,
+    backgroundColor: 'transparent',
     overflow: 'hidden',
   },
   settingsRow: {
@@ -531,14 +528,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 0,
     paddingVertical: 8,
   },
   notifyCard: {
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.input,
+    backgroundColor: 'transparent',
     paddingVertical: 2,
   },
   notifyRow: {
@@ -546,7 +540,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     minHeight: theme.touchTarget,
-    paddingHorizontal: 14,
+    paddingHorizontal: 0,
     paddingVertical: 4,
   },
   undoBar: {

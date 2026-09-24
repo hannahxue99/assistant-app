@@ -54,12 +54,14 @@ export function MemorySection({ state, memories, summary, busyId, onRetry, onSav
       <Text style={styles.stateTitle}>还没有长期记忆</Text>
       <Text style={styles.stateCopy}>可以直接告诉小知：“记住，我……”</Text>
     </View>}
-    {state === 'ready' && <View style={styles.list}>{memories.map(memory => {
+    {state === 'ready' && <View style={styles.list}>{memories.map((memory, index) => {
       const editing = editingId === memory.id;
       const busy = busyId === memory.id;
       const saveEnabled = canSaveMemoryEdit(memory.content, draft, busy);
       return <View key={memory.id} style={styles.card}>
-        <View style={styles.cardHead}>
+        <Text style={styles.index}>{String(index + 1).padStart(2, '0')}</Text>
+        <View style={styles.cardBody}>
+          <View style={styles.cardHead}>
           <Text style={styles.category}>{ASSISTANT_MEMORY_CATEGORY_LABELS[memory.category]}</Text>
           {!editing && <View style={styles.cardActions}>
             <Pressable
@@ -80,8 +82,8 @@ export function MemorySection({ state, memories, summary, busyId, onRetry, onSav
             >{busy ? <ActivityIndicator size="small" color={theme.colors.textDim} />
               : <Ionicons name="trash-outline" size={17} color={theme.colors.textDim} />}</Pressable>
           </View>}
-        </View>
-        {editing ? <>
+          </View>
+          {editing ? <>
           <TextInput
             autoFocus multiline maxLength={200} value={draft} onChangeText={setDraft}
             style={styles.input} placeholderTextColor={theme.colors.textDim}
@@ -93,24 +95,27 @@ export function MemorySection({ state, memories, summary, busyId, onRetry, onSav
               style={[styles.saveButton, !saveEnabled && styles.disabled]}
             >{busy ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.saveText}>保存</Text>}</Pressable>
           </View>
-        </> : <Text style={styles.content}>{memory.content}</Text>}
+          </> : <Text style={styles.content}>{memory.content}</Text>}
+        </View>
       </View>;
     })}</View>}
   </View>;
 }
 
 const styles = StyleSheet.create({
-  section: { gap: 7, marginTop: 2 },
+  section: { gap: 9, marginTop: 2 },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 2 },
-  sectionTitle: { color: theme.colors.text, fontSize: 19, fontWeight: '700' },
+  sectionTitle: { color: theme.colors.ink, fontSize: 30, lineHeight: 38, fontWeight: '700' },
   summary: { color: theme.colors.textDim, fontSize: 12 },
-  list: { gap: 6 },
-  card: { backgroundColor: theme.colors.card, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 12, paddingVertical: 9, gap: 4 },
+  list: { gap: 0, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
+  card: { minHeight: 74, flexDirection: 'row', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.divider },
+  index: { width: 42, color: theme.colors.textDim, fontFamily: 'Menlo', fontSize: 12, lineHeight: 22 },
+  cardBody: { flex: 1, gap: 4 },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 22 },
-  category: { color: theme.colors.accent, fontSize: 12, fontWeight: '600' },
+  category: { color: theme.colors.textDim, fontSize: 11, fontWeight: '500' },
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   iconAction: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
-  content: { color: theme.colors.text, fontSize: theme.font.body, lineHeight: 21 },
+  content: { color: theme.colors.text, fontSize: 16, lineHeight: 23 },
   input: { minHeight: 68, borderRadius: 10, borderWidth: 1.5, borderColor: theme.colors.accent, backgroundColor: theme.colors.bg, paddingHorizontal: 11, paddingVertical: 9, color: theme.colors.text, fontSize: theme.font.body, lineHeight: 21, textAlignVertical: 'top' },
   editActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8 },
   textButton: { minHeight: 38, justifyContent: 'center', paddingHorizontal: 11 },
@@ -118,13 +123,13 @@ const styles = StyleSheet.create({
   saveButton: { minWidth: 66, minHeight: 38, borderRadius: 10, backgroundColor: theme.colors.accent, alignItems: 'center', justifyContent: 'center' },
   saveText: { color: '#fff', fontSize: theme.font.small, fontWeight: '700' },
   disabled: { opacity: 0.4 },
-  stateCard: { minHeight: 124, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card, alignItems: 'center', justifyContent: 'center', padding: 14, gap: 5 },
+  stateCard: { minHeight: 124, borderRadius: 18, backgroundColor: theme.colors.fog, alignItems: 'center', justifyContent: 'center', padding: 14, gap: 5 },
   emptyIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: theme.colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
   stateTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600', marginTop: 2 },
   stateCopy: { color: theme.colors.textDim, fontSize: theme.font.small, lineHeight: 19, textAlign: 'center' },
   retryButton: { minHeight: 38, justifyContent: 'center', paddingHorizontal: 16, marginTop: 3 },
   retryText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: '600' },
-  skeletonCard: { height: 78, justifyContent: 'center' },
+  skeletonCard: { height: 78, justifyContent: 'center', flexDirection: 'column', gap: 4 },
   skeletonLine: { height: 10, borderRadius: 5, backgroundColor: theme.colors.border },
   skeletonLabel: { width: 52 },
   skeletonContent: { width: '88%', marginTop: 4 },

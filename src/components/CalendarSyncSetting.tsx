@@ -70,7 +70,7 @@ export function CalendarSyncSetting({ embedded = false, topDividerStyle }: Calen
   </View>;
 }
 const styles = StyleSheet.create({
-  card: { backgroundColor: theme.colors.card, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12, gap: 4 },
+  card: { backgroundColor: 'transparent', paddingHorizontal: 0, paddingVertical: 9, gap: 4 },
   embeddedCard: { borderRadius: 0, minHeight: theme.touchTarget },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { fontSize: theme.font.body, color: theme.colors.text }, detail: { fontSize: 12, lineHeight: 18, color: theme.colors.textDim },

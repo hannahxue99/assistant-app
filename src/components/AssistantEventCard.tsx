@@ -47,16 +47,14 @@ export function AssistantEventCard({
 const styles = StyleSheet.create({
   card: {
     position: 'relative',
-    borderRadius: theme.radius.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.card,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.divider,
   },
-  pinned: { borderColor: theme.colors.eventBorder, backgroundColor: theme.colors.eventSoft },
-  content: { paddingHorizontal: 12, paddingVertical: 10, gap: 3 },
-  title: { color: theme.colors.text, fontSize: 17, lineHeight: 23, fontWeight: theme.fontWeight.semibold, paddingRight: 38 },
-  state: { color: theme.colors.text, fontSize: 14, lineHeight: 20, paddingRight: 20 },
-  time: { color: theme.colors.textDim, fontSize: 11, lineHeight: 16 },
+  pinned: { backgroundColor: 'rgba(233, 120, 61, 0.045)' },
+  content: { paddingLeft: 18, paddingRight: 44, paddingVertical: 15, gap: 4, borderLeftWidth: 1, borderLeftColor: theme.colors.border, marginLeft: 8 },
+  title: { color: theme.colors.ink, fontSize: 18, lineHeight: 24, fontWeight: theme.fontWeight.semibold },
+  state: { color: theme.colors.text, fontSize: 15, lineHeight: 21 },
+  time: { color: theme.colors.textDim, fontSize: 11, lineHeight: 17, fontFamily: 'Menlo' },
   pinButton: {
     position: 'absolute',
     right: 0,

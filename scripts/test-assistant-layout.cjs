@@ -12,6 +12,9 @@ const themeSource = fs.readFileSync('src/theme.ts', 'utf8');
 const orbitSource = fs.existsSync('src/components/AmbientOrbit.tsx')
   ? fs.readFileSync('src/components/AmbientOrbit.tsx', 'utf8')
   : '';
+const homeSource = fs.readFileSync('app/(tabs)/index.tsx', 'utf8');
+const profileSource = fs.readFileSync('app/(tabs)/profile.tsx', 'utf8');
+const memorySource = fs.readFileSync('src/components/MemorySection.tsx', 'utf8');
 
 assert.match(
   assistantSource,
@@ -100,6 +103,14 @@ assert.match(orbitSource, /pointerEvents="none"[\s\S]*accessibilityElementsHidde
   '环境轨道必须完全不参与点击和无障碍树');
 assert.doesNotMatch(assistantSource, /hero|mascot|centralOrb|assistantOrb/i,
   '小知页不得加入中央球体或占内容高度的英雄区');
+assert.match(homeSource, /<AmbientOrbit[\s\S]*本周待办[\s\S]*全部待办[\s\S]*<Text style=\{styles\.h1\}>事件<\/Text>/,
+  '首页视觉重构必须保留日期、两种待办和事件且只增加被动环境背景');
+assert.doesNotMatch(homeSource, /今日建议|快捷提问|进度[条环]|每日总结/,
+  '首页不得借视觉重构新增产品模块');
+assert.match(profileSource, /<AmbientOrbit[\s\S]*<MemorySection[\s\S]*助手与同步[\s\S]*待办通知[\s\S]*数据管理/,
+  '我的页视觉重构必须保留长期记忆和全部现有设置分组');
+assert.match(memorySource, /memories\.map\(\(memory, index\)[\s\S]*String\(index \+ 1\)\.padStart\(2, '0'\)/,
+  '长期记忆应以纯视觉编号建立层级，不能新增数据字段');
 assert.ok((assistantSource.match(/loadLatest\('if-following'\)/g) ?? []).length >= 3,
   '完成、停止和重试刷新都必须尊重用户是否仍在末端');
 assert.doesNotMatch(assistantSource, /loadLatest\((true|false)\)/,

@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AssistantEventCard } from '../../src/components/AssistantEventCard';
+import { AmbientOrbit } from '../../src/components/AmbientOrbit';
 import {
   listLongTermTasks,
   listWeekTasks,
@@ -158,6 +159,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
+      <AmbientOrbit style={styles.orbit} />
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
           <Text style={styles.dateLine}>{dateStr} · 今天</Text>
 
@@ -174,7 +176,7 @@ export default function HomeScreen() {
                 accessibilityRole="tab"
                 accessibilityState={{ selected: todoView === 'week' }}
                 onPress={() => setTodoView('week')}
-                style={styles.todoTabButton}
+                style={[styles.todoTabButton, todoView === 'week' && styles.todoTabButtonActive]}
               >
                 <Text style={[styles.todoTabWeek, todoView === 'week' && styles.todoTabActiveText]}>本周待办</Text>
               </Pressable>
@@ -183,7 +185,7 @@ export default function HomeScreen() {
                 accessibilityRole="tab"
                 accessibilityState={{ selected: todoView === 'all' }}
                 onPress={() => setTodoView('all')}
-                style={styles.todoTabButton}
+                style={[styles.todoTabButton, todoView === 'all' && styles.todoTabButtonActive]}
               >
                 <Text style={[styles.todoTabAll, todoView === 'all' && styles.todoTabActiveText]}>全部待办</Text>
               </Pressable>
@@ -288,25 +290,26 @@ function WeekTaskRow({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
-  content: { padding: 16, paddingBottom: 40, gap: 10 },
-  dateLine: { fontSize: theme.font.small, color: theme.colors.textDim },
-  h1: { fontSize: 18, fontWeight: '700', color: theme.colors.text, marginTop: 8 },
-  todoSection: { gap: 10 },
-  todoTabs: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center' },
-  todoTabButton: { minHeight: theme.touchTarget, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 1 },
-  todoTabWeek: { fontSize: 18, lineHeight: 25, fontWeight: '700', color: '#A9A29A' },
-  todoTabAll: { fontSize: 14, lineHeight: 22, fontWeight: '600', color: '#A9A29A' },
+  safe: { flex: 1, backgroundColor: theme.colors.bg, position: 'relative' },
+  orbit: { top: 4, opacity: 0.72 },
+  content: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 48, gap: 12 },
+  dateLine: { fontSize: theme.font.small, letterSpacing: 0.3, color: theme.colors.textDim, marginBottom: 38 },
+  h1: { fontSize: 24, lineHeight: 31, fontWeight: '700', color: theme.colors.ink, marginTop: 22 },
+  todoSection: { gap: 2 },
+  todoTabs: { minHeight: 54, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
+  todoTabButton: { minHeight: theme.touchTarget, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 1, marginRight: 10 },
+  todoTabButtonActive: { borderBottomWidth: 2, borderBottomColor: theme.colors.ink },
+  todoTabWeek: { fontSize: 19, lineHeight: 26, fontWeight: '700', color: theme.colors.graphite },
+  todoTabAll: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: theme.colors.graphite },
   todoTabActiveText: { color: theme.colors.text },
-  todoTabDivider: { color: '#A9A29A', fontSize: 15, lineHeight: 27, paddingHorizontal: 1 },
+  todoTabDivider: { color: theme.colors.border, fontSize: 15, lineHeight: 27, paddingHorizontal: 1, marginRight: 10 },
   emptyWeek: {
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: theme.colors.textDim,
-    borderRadius: theme.radius.input,
-    paddingVertical: 20,
+    borderRadius: theme.radius.card,
+    backgroundColor: theme.colors.fog,
+    paddingVertical: 22,
     alignItems: 'center',
     gap: 6,
+    marginTop: 10,
   },
   emptyWeekTitle: { fontSize: theme.font.body, color: theme.colors.textDim },
   emptyWeekSub: { fontSize: theme.font.small, color: theme.colors.textDim },
@@ -314,27 +317,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.input,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    minHeight: 66,
+    paddingHorizontal: 2,
+    paddingVertical: 11,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.divider,
   },
-  weekRowToday: { backgroundColor: theme.colors.eventSoft, borderColor: theme.colors.eventBorder },
-  weekRowHighlighted: { borderColor: theme.colors.accent, backgroundColor: theme.colors.accentSoft },
+  weekRowToday: { backgroundColor: 'rgba(233, 120, 61, 0.045)' },
+  weekRowHighlighted: { backgroundColor: theme.colors.accentSoft },
   check: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: theme.colors.textDim,
+    borderColor: theme.colors.graphite,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkOn: { backgroundColor: theme.colors.green, borderColor: theme.colors.green },
-  weekLabel: { fontSize: theme.font.small, fontWeight: '700', color: theme.colors.accent, minWidth: 48 },
-  weekText: { flex: 1, fontSize: theme.font.body, color: theme.colors.text },
+  checkOn: { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink },
+  weekLabel: { fontSize: 12, fontWeight: '600', color: theme.colors.graphite, minWidth: 72 },
+  weekText: { flex: 1, fontSize: 16, lineHeight: 22, color: theme.colors.text },
   weekTextDone: { textDecorationLine: 'line-through', color: theme.colors.textDim },
   eventsLoading: { marginVertical: 18 },
   eventsError: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
