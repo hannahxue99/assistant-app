@@ -164,15 +164,17 @@ export function AssistantMessageBubble({
         </View>
       ) : null}
       {surface === 'assistant-bubble' && (message.content || message.errorCode === 'cancelled') ? (
-        <View style={styles.assistantBubble}>
-          {message.content ? (
-            <AssistantMarkdown content={message.content} streaming={isStreaming} />
-          ) : null}
-          {message.errorCode === 'cancelled' ? (
-            <View style={styles.statusRow}>
-              <Text style={styles.statusText}>已停止 · 未执行任何操作</Text>
-            </View>
-          ) : null}
+        <View style={styles.assistantMessageLine}>
+          <View style={styles.assistantBubble}>
+            {message.content ? (
+              <AssistantMarkdown content={message.content} streaming={isStreaming} />
+            ) : null}
+            {message.errorCode === 'cancelled' ? (
+              <View style={styles.statusRow}>
+                <Text style={styles.statusText}>已停止 · 未执行任何操作</Text>
+              </View>
+            ) : null}
+          </View>
         </View>
       ) : null}
       {!isUser && message.operations?.length ? (
@@ -207,11 +209,25 @@ export function AssistantMessageBubble({
 }
 
 const styles = StyleSheet.create({
-  row: { width: '100%', marginVertical: 5 },
+  row: { width: '100%', marginVertical: 7 },
   userRow: { alignItems: 'flex-end' },
   assistantRow: { alignItems: 'flex-start' },
-  userBubble: { maxWidth: '86%', borderRadius: 18, borderBottomRightRadius: 6, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.colors.accent },
-  assistantBubble: { maxWidth: '94%', borderRadius: 18, borderBottomLeftRadius: 6, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: theme.colors.card, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.border },
+  userBubble: { maxWidth: '84%', borderRadius: 20, borderBottomRightRadius: 7, paddingHorizontal: 16, paddingVertical: 11, backgroundColor: theme.colors.accent, ...theme.shadow },
+  assistantMessageLine: { width: '94%', alignItems: 'flex-start' },
+  assistantBubble: {
+    width: '100%',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: theme.colors.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.border,
+    shadowColor: '#302923',
+    shadowOpacity: 0.045,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
   content: { color: theme.colors.text, fontSize: 16, lineHeight: 23 },
   userContent: { color: '#FFFFFF' },
   runtimeRow: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 4, marginBottom: 2 },

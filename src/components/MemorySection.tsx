@@ -60,7 +60,16 @@ export function MemorySection({ state, memories, summary, busyId, onRetry, onSav
       const saveEnabled = canSaveMemoryEdit(memory.content, draft, busy);
       return <View key={memory.id} style={styles.card}>
         <View style={styles.cardHead}>
-          <Text style={styles.category}>{ASSISTANT_MEMORY_CATEGORY_LABELS[memory.category]}</Text>
+          <View style={styles.categoryWrap}>
+            <View style={styles.memoryIcon}>
+              <Ionicons
+                name={memory.category === 'preference' ? 'heart-outline' : memory.category === 'long_term_goal' ? 'locate-outline' : memory.category === 'important_relationship' ? 'people-outline' : 'sparkles-outline'}
+                size={21}
+                color={theme.colors.accent}
+              />
+            </View>
+            <Text style={styles.category}>{ASSISTANT_MEMORY_CATEGORY_LABELS[memory.category]}</Text>
+          </View>
           {!editing && <View style={styles.cardActions}>
             <Pressable
               accessibilityRole="button"
@@ -81,7 +90,7 @@ export function MemorySection({ state, memories, summary, busyId, onRetry, onSav
               : <Ionicons name="trash-outline" size={17} color={theme.colors.textDim} />}</Pressable>
           </View>}
         </View>
-        {editing ? <>
+        {editing ? <View style={styles.memoryBody}>
           <TextInput
             autoFocus multiline maxLength={200} value={draft} onChangeText={setDraft}
             style={styles.input} placeholderTextColor={theme.colors.textDim}
@@ -93,24 +102,31 @@ export function MemorySection({ state, memories, summary, busyId, onRetry, onSav
               style={[styles.saveButton, !saveEnabled && styles.disabled]}
             >{busy ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.saveText}>保存</Text>}</Pressable>
           </View>
-        </> : <Text style={styles.content}>{memory.content}</Text>}
+        </View> : <View style={styles.memoryBody}>
+          <Text style={styles.content}>{memory.content}</Text>
+          <Text style={styles.date}>{new Date(memory.updatedAt).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}</Text>
+        </View>}
       </View>;
     })}</View>}
   </View>;
 }
 
 const styles = StyleSheet.create({
-  section: { gap: 7, marginTop: 2 },
+  section: { gap: 10, marginTop: 2 },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 2 },
-  sectionTitle: { color: theme.colors.text, fontSize: 19, fontWeight: '700' },
-  summary: { color: theme.colors.textDim, fontSize: 12 },
-  list: { gap: 6 },
-  card: { backgroundColor: theme.colors.card, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 12, paddingVertical: 9, gap: 4 },
-  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 22 },
-  category: { color: theme.colors.accent, fontSize: 12, fontWeight: '600' },
+  sectionTitle: { color: theme.colors.text, fontSize: 22, lineHeight: 30, fontWeight: '700' },
+  summary: { color: theme.colors.textDim, fontSize: 13 },
+  list: { gap: 10 },
+  card: { backgroundColor: theme.colors.card, borderRadius: theme.radius.card, paddingHorizontal: 16, paddingVertical: 14, gap: 3, ...theme.shadow },
+  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 38 },
+  categoryWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  memoryIcon: { width: 38, height: 38, borderRadius: 15, backgroundColor: theme.colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  category: { color: theme.colors.accent, fontSize: 14, fontWeight: '700' },
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   iconAction: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
-  content: { color: theme.colors.text, fontSize: theme.font.body, lineHeight: 21 },
+  memoryBody: { marginLeft: 48, gap: 5 },
+  content: { color: theme.colors.text, fontSize: 15, lineHeight: 22 },
+  date: { color: theme.colors.textDim, fontSize: 12, lineHeight: 17 },
   input: { minHeight: 68, borderRadius: 10, borderWidth: 1.5, borderColor: theme.colors.accent, backgroundColor: theme.colors.bg, paddingHorizontal: 11, paddingVertical: 9, color: theme.colors.text, fontSize: theme.font.body, lineHeight: 21, textAlignVertical: 'top' },
   editActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8 },
   textButton: { minHeight: 38, justifyContent: 'center', paddingHorizontal: 11 },
@@ -118,7 +134,7 @@ const styles = StyleSheet.create({
   saveButton: { minWidth: 66, minHeight: 38, borderRadius: 10, backgroundColor: theme.colors.accent, alignItems: 'center', justifyContent: 'center' },
   saveText: { color: '#fff', fontSize: theme.font.small, fontWeight: '700' },
   disabled: { opacity: 0.4 },
-  stateCard: { minHeight: 124, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card, alignItems: 'center', justifyContent: 'center', padding: 14, gap: 5 },
+  stateCard: { minHeight: 124, borderRadius: theme.radius.card, backgroundColor: theme.colors.card, alignItems: 'center', justifyContent: 'center', padding: 14, gap: 5, ...theme.shadow },
   emptyIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: theme.colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
   stateTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: '600', marginTop: 2 },
   stateCopy: { color: theme.colors.textDim, fontSize: theme.font.small, lineHeight: 19, textAlign: 'center' },

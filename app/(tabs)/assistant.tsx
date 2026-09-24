@@ -54,6 +54,7 @@ import { AssistantComposer } from '../../src/components/AssistantComposer';
 import { AssistantEmptyState } from '../../src/components/AssistantEmptyState';
 import { AssistantLoadErrorState } from '../../src/components/AssistantLoadErrorState';
 import { AssistantMessageBubble } from '../../src/components/AssistantMessageBubble';
+import { XiaozhiMascot } from '../../src/components/XiaozhiMascot';
 import { getSettings } from '../../src/db';
 import { theme } from '../../src/theme';
 
@@ -573,21 +574,13 @@ export default function AssistantScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerCopy}>
           <Text style={styles.title}>小知</Text>
           <Text style={styles.caption}>连续对话 · 自动保存</Text>
         </View>
-        {__DEV__ ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="打开决策日志调试页"
-            onPress={() => navigateAway('/debug/decisions')}
-            hitSlop={8}
-            style={({ pressed }) => [styles.debugEntry, pressed && styles.pressed]}
-          >
-            <Ionicons name="terminal-outline" size={20} color={theme.colors.textDim} />
-          </Pressable>
-        ) : null}
+        <View style={styles.headerAssistant}>
+          <XiaozhiMascot size={84} />
+        </View>
       </View>
 
       {engineStatus === 'unconfigured' && initialLoad === 'ready' ? (
@@ -759,13 +752,14 @@ export default function AssistantScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
+  safe: { flex: 1, backgroundColor: '#FFFFFF' },
   keyboardStage: { flex: 1, overflow: 'hidden' },
   composerKeyboardStage: { position: 'absolute', zIndex: 10, left: 0, right: 0, bottom: 0 },
-  header: { minHeight: 62, paddingHorizontal: theme.spacing.md, paddingTop: 7, paddingBottom: 8, justifyContent: 'space-between', alignItems: 'center', flexDirection: 'row' },
-  debugEntry: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  title: { color: theme.colors.text, fontSize: theme.font.title, fontWeight: theme.fontWeight.semibold },
-  caption: { color: theme.colors.textDim, fontSize: 12, marginTop: 1 },
+  header: { minHeight: 90, position: 'relative', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 4 },
+  headerCopy: { paddingTop: 8, gap: 5 },
+  headerAssistant: { position: 'absolute', top: 4, right: 13, width: 84, alignItems: 'center', justifyContent: 'center' },
+  title: { color: theme.colors.text, fontSize: 32, lineHeight: 40, fontWeight: theme.fontWeight.bold },
+  caption: { color: theme.colors.textDim, fontSize: 14, marginTop: 1 },
   configBanner: { minHeight: 44, marginHorizontal: theme.spacing.md, marginBottom: 6, paddingHorizontal: 12, borderRadius: 12, backgroundColor: theme.colors.goldSoft, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   configText: { color: theme.colors.text, fontSize: theme.font.small, flex: 1 },
   configAction: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
@@ -776,7 +770,7 @@ const styles = StyleSheet.create({
   contextClose: { width: theme.touchTarget, height: theme.touchTarget, alignItems: 'center', justifyContent: 'center' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { flex: 1 },
-  listContent: { paddingHorizontal: theme.spacing.md, paddingTop: 5 },
+  listContent: { paddingHorizontal: 20, paddingTop: 0 },
   emptyList: { flexGrow: 1 },
   olderSpinner: { marginVertical: 8 },
   olderError: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 },
@@ -784,7 +778,7 @@ const styles = StyleSheet.create({
   olderRetryText: { color: theme.colors.accent, fontSize: theme.font.small, fontWeight: theme.fontWeight.semibold },
   dateSeparatorWrap: { alignItems: 'center', paddingTop: 7, paddingBottom: 3 },
   dateSeparatorText: { color: theme.colors.textDim, fontSize: 11, lineHeight: 17, paddingHorizontal: 9, paddingVertical: 2, borderRadius: 11, backgroundColor: theme.colors.card },
-  composerWrap: { paddingHorizontal: 12, paddingTop: 5, paddingBottom: 6 },
+  composerWrap: { paddingHorizontal: 16, paddingTop: 5, paddingBottom: 7 },
   composerShadowFade: {
     position: 'absolute',
     left: 0,

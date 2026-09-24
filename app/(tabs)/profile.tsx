@@ -2,6 +2,7 @@
  * 「我的」页 — 长期记忆 + 助手与同步 + 待办通知 + 数据管理。
  */
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -20,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CalendarSyncSetting } from '../../src/components/CalendarSyncSetting';
 import { MemorySection } from '../../src/components/MemorySection';
+import { XiaozhiMascot } from '../../src/components/XiaozhiMascot';
 import { ImportFeedbackModal } from '../../src/components/ImportFeedbackModal';
 import { ImportPreviewModal, type ImportPreviewData } from '../../src/components/ImportPreviewModal';
 import {
@@ -382,6 +384,15 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={styles.hero}>
+          <View style={styles.heroCopy}>
+            <Text style={styles.pageTitle}>我的</Text>
+            <Text numberOfLines={1} style={styles.pageSubtitle}>管理你的记忆与偏好，让小知更懂你。</Text>
+          </View>
+          <View style={styles.heroAssistant}>
+            <XiaozhiMascot size={84} />
+          </View>
+        </View>
         <MemorySection
           state={memorySectionState({
             loadedOnce: memoryLoadedOnce,
@@ -399,11 +410,16 @@ export default function ProfileScreen() {
           onForget={forgetLongTermMemory}
         />
 
-        <Text style={styles.sectionTitle}>设置</Text>
+        <View style={styles.settingsHeading}>
+          <Text style={styles.sectionTitle}>设置</Text>
+        </View>
         <Text style={styles.sectionLabel}>助手与同步</Text>
         <View style={styles.settingsCard}>
           <Pressable style={styles.settingsRow} onPress={() => router.push('/settings/llm')}>
-            <Text style={styles.rowLabel}>理解引擎</Text>
+            <View style={styles.rowMain}>
+              <View style={styles.rowIcon}><Ionicons name="hardware-chip-outline" size={19} color={theme.colors.accent} /></View>
+              <Text style={styles.rowLabel}>理解引擎</Text>
+            </View>
             <Text style={[styles.rowValue, llmStatus.warn && { color: theme.colors.red }]}>
               {llmStatus.label} ›
             </Text>
@@ -412,7 +428,10 @@ export default function ProfileScreen() {
             style={[styles.settingsRow, styles.dataRowBorder]}
             onPress={() => router.push('/settings/web-search' as Href)}
           >
-            <Text style={styles.rowLabel}>联网搜索</Text>
+            <View style={styles.rowMain}>
+              <View style={styles.rowIcon}><Ionicons name="search-outline" size={19} color={theme.colors.accent} /></View>
+              <Text style={styles.rowLabel}>联网搜索</Text>
+            </View>
             <Text style={[styles.rowValue, webSearchStatus.warn && { color: theme.colors.red }]}>
               {webSearchStatus.label} ›
             </Text>
@@ -421,9 +440,12 @@ export default function ProfileScreen() {
         </View>
 
         <Text style={styles.sectionLabel}>待办通知</Text>
-        <View style={styles.notifyCard}>
-          <View style={styles.notifyRow}>
-            <Text style={styles.rowLabel}>早 8:00 晨间待办</Text>
+        <View style={styles.settingsCard}>
+          <View style={styles.settingsRow}>
+            <View style={styles.rowMain}>
+              <View style={styles.rowIcon}><Ionicons name="notifications-outline" size={19} color={theme.colors.accent} /></View>
+              <Text style={styles.rowLabel}>早 8:00 晨间待办</Text>
+            </View>
             <Switch
               value={profile?.notifyMorning ?? false}
               disabled={!profile}
@@ -432,8 +454,11 @@ export default function ProfileScreen() {
               thumbColor={profile?.notifyMorning ? theme.colors.accent : '#fff'}
             />
           </View>
-          <View style={[styles.notifyRow, styles.dataRowBorder]}>
-            <Text style={styles.rowLabel}>晚 21:00 夜间待办</Text>
+          <View style={[styles.settingsRow, styles.dataRowBorder]}>
+            <View style={styles.rowMain}>
+              <View style={styles.rowIcon}><Ionicons name="moon-outline" size={18} color={theme.colors.accent} /></View>
+              <Text style={styles.rowLabel}>晚 21:00 夜间待办</Text>
+            </View>
             <Switch
               value={profile?.notifyEvening ?? false}
               disabled={!profile}
@@ -445,16 +470,22 @@ export default function ProfileScreen() {
         </View>
 
         <Text style={styles.sectionLabel}>数据管理</Text>
-        <View style={styles.dataCard}>
+        <View style={styles.settingsCard}>
           <Pressable
-            style={styles.dataRow}
+            style={styles.settingsRow}
             onPress={doExport}
           >
-            <Text style={styles.rowLabel}>导出完整备份</Text>
+            <View style={styles.rowMain}>
+              <View style={styles.rowIcon}><Ionicons name="cloud-upload-outline" size={19} color={theme.colors.accent} /></View>
+              <Text style={styles.rowLabel}>导出完整备份</Text>
+            </View>
             <Text style={styles.rowValue}>Markdown ⤴</Text>
           </Pressable>
-          <Pressable style={[styles.dataRow, styles.dataRowBorder]} onPress={chooseImportFile}>
-            <Text style={styles.rowLabel}>从备份恢复</Text>
+          <Pressable style={[styles.settingsRow, styles.dataRowBorder]} onPress={chooseImportFile}>
+            <View style={styles.rowMain}>
+              <View style={styles.rowIcon}><Ionicons name="refresh-outline" size={19} color={theme.colors.accent} /></View>
+              <Text style={styles.rowLabel}>从备份恢复</Text>
+            </View>
             <Text style={styles.rowValue}>选择备份文件 ›</Text>
           </Pressable>
         </View>
@@ -491,11 +522,19 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
-  content: { padding: 16, paddingBottom: 72, gap: 8 },
-  sectionTitle: { color: theme.colors.text, fontSize: 19, fontWeight: theme.fontWeight.bold, marginTop: 10 },
+  safe: { flex: 1, backgroundColor: '#FFFFFF' },
+  content: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 82, gap: 8 },
+  hero: { minHeight: 80, position: 'relative' },
+  heroCopy: { flex: 1, paddingTop: 8, gap: 5 },
+  pageTitle: { color: theme.colors.text, fontSize: 32, lineHeight: 40, fontWeight: theme.fontWeight.bold },
+  pageSubtitle: { flexShrink: 1, color: theme.colors.textDim, fontSize: 13, lineHeight: 19, marginTop: 1 },
+  heroAssistant: { position: 'absolute', top: -6, right: -7, width: 84, justifyContent: 'center', alignItems: 'center' },
+  settingsHeading: { flexDirection: 'row', alignItems: 'baseline', gap: 9, marginTop: 16 },
+  sectionTitle: { color: theme.colors.text, fontSize: 22, lineHeight: 30, fontWeight: theme.fontWeight.bold },
   rowLabel: { fontSize: theme.font.body, color: theme.colors.text },
   rowValue: { fontSize: theme.font.small, color: theme.colors.textDim },
+  rowMain: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  rowIcon: { width: 32, height: 32, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.accentSoft },
   sectionLabel: {
     fontSize: theme.font.small,
     color: theme.colors.textDim,
@@ -503,51 +542,20 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     marginBottom: -2,
   },
-  dataCard: {
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.input,
-    overflow: 'hidden',
-  },
-  dataRow: {
-    minHeight: theme.touchTarget,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
   dataRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
   settingsCard: {
     backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.input,
+    borderRadius: theme.radius.card,
     overflow: 'hidden',
+    ...theme.shadow,
   },
   settingsRow: {
-    minHeight: theme.touchTarget,
+    minHeight: 56,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 8,
-  },
-  notifyCard: {
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.input,
-    paddingVertical: 2,
-  },
-  notifyRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    minHeight: theme.touchTarget,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
   },
   undoBar: {
     position: 'absolute',
