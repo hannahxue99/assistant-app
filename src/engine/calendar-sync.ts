@@ -74,6 +74,32 @@ async function enqueueLinks() {
   await runSql('INSERT OR IGNORE INTO calendar_jobs(entry_id) SELECT entry_id FROM calendar_links');
 }
 
+function assertOwnedEvent(event: ExpoCalendarEvent, calendarId: string, marker: string) {
+  if (event.calendarId !== calendarId || event.url !== marker) {
+    throw new Error('关联日程已被移动或来源标记改变，请恢复后重试。');
+  }
+}
+
+async function updateEvent(
+  cal: typeof import('expo-calendar'),
+  event: ExpoCalendarEvent,
+  desired: NonNullable<ReturnType<typeof calendarProjection>>,
+  calendarId: string,
+  marker: string,
+): Promise<ExpoCalendarEvent> {
+  if (event.allDay === desired.allDay) {
+    await event.update(desired);
+    return event;
+  }
+  // EventKit may normalize dates using the old all-day mode before Expo applies
+  // `allDay` in the same update. Commit the mode first, then write dependent dates.
+  await event.update({ allDay: desired.allDay });
+  const refreshed = await cal.ExpoCalendarEvent.get(event.id);
+  assertOwnedEvent(refreshed, calendarId, marker);
+  await refreshed.update(desired);
+  return refreshed;
+}
+
 let pending: Promise<void> | null = null;
 let retryAfter = 0;
 export function syncCalendar(reconcile = false): Promise<void> {
@@ -108,9 +134,7 @@ export function syncCalendar(reconcile = false): Promise<void> {
             catch (error) {
               if (!isMissingEvent(error)) throw error;
             }
-            if (event && (event.calendarId !== calendar.id || event.url !== marker)) {
-              throw new Error('关联日程已被移动或来源标记改变，请恢复后重试。');
-            }
+            if (event) assertOwnedEvent(event, calendar.id, marker);
           }
           if (!event && link) {
             // A successful create/update may precede a crash: search both durable old and intended dates.
@@ -126,7 +150,7 @@ export function syncCalendar(reconcile = false): Promise<void> {
           if (desired) {
             await runSql(`INSERT INTO calendar_links(entry_id,attempt_due) VALUES(?,?)
               ON CONFLICT(entry_id) DO UPDATE SET attempt_due=excluded.attempt_due`, job.entry_id, entry!.dueAt);
-            if (event) await event.update(desired);
+            if (event) event = await updateEvent(cal, event, desired, calendar.id, marker);
             else event = await calendar.createEvent(desired);
             await runSql('UPDATE calendar_links SET event_id=?,last_due=?,attempt_due=NULL WHERE entry_id=?',
               event.id, entry!.dueAt, job.entry_id);

@@ -124,3 +124,26 @@ Open a PR against `main` describing the Release evidence, safe data repair, veri
 **Step 4: Prepare acceptance**
 
 Provide the exact Release/Dev validation scenario, but do not claim device delivery until the installed app produces the repaired timed event on the phone.
+
+### Task 6: Guard EventKit all-day mode transitions
+
+**Files:**
+- Modify: `src/engine/calendar-sync.ts`
+- Modify: `scripts/test-calendar-sync.cjs`
+- Modify: `docs/plans/2026-10-05-calendar-time-precision-repair-design.md`
+
+**Step 1: Reproduce native normalization**
+
+Model the Expo SDK 57 iOS update order in the calendar harness: when an existing all-day event receives dates and `allDay=false` together, normalize its end time to midnight. Assert the incident requires 15:00–16:00, preserves the event ID, and creates no duplicate.
+
+**Step 2: Separate mode and dependent fields**
+
+When `event.allDay` differs from the desired projection, first update only `allDay`, re-fetch the event by ID, revalidate ownership, then apply the full projection. Apply the same guard in both directions.
+
+**Step 3: Verify retry safety**
+
+Keep the existing calendar job until both updates and the link write succeed. A failure after the first phase must be recoverable by the normal retry path without delete/recreate.
+
+**Step 4: Verify and redeliver**
+
+Run the focused calendar and database tests, typecheck, and full CI. Push the existing PR, wait for GitHub `CI / validate`, then build and install a new Release for iPhone acceptance. The authoritative result is an event block ending at 16:00 on iPhone.
