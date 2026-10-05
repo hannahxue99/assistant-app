@@ -21,6 +21,7 @@ import { retryFailedUnderstandings } from '@/src/engine/understand';
 import { migrateLegacyEntriesToAssistantHistory } from '@/src/assistant/migration';
 import { migrateLegacyTopicsToEvents } from '@/src/assistant/event-migration';
 import { migrateProfileToLongTermMemories } from '@/src/assistant/memory-migration';
+import { migrateStructuredTodoTimePrecision } from '@/src/assistant/time-precision-migration';
 import { recoverInterruptedAssistantRequests } from '@/src/assistant/store';
 import { theme } from '@/src/theme';
 
@@ -60,6 +61,12 @@ export default function RootLayout() {
       if (!assistantStartupRuntime.__assistantPendingRecoveryComplete) {
         await recoverInterruptedAssistantRequests();
         assistantStartupRuntime.__assistantPendingRecoveryComplete = true;
+      }
+      try {
+        await migrateStructuredTodoTimePrecision();
+      } catch (e) {
+        // 原时间精度保持不变；修复有幂等标记，下次启动可按已提交操作证据重试。
+        console.warn('待办时间精度修复未完成，将在下次启动重试', e);
       }
       try {
         await migrateLegacyEntriesToAssistantHistory();

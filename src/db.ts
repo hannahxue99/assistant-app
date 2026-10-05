@@ -499,11 +499,12 @@ export async function insertEntry(input: NewEntryInput, parsed?: {
 
   await d.runAsync(
     `INSERT INTO entries (id, raw_text, kind, summary, due_at, remind_at, topic, tags, persons,
-       parse_status, parse_source, created_at, updated_at, revision_at, done, source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+       parse_status, parse_source, created_at, updated_at, revision_at, done, source, time_precision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
     id, input.rawText, kind, summary, dueAt, dueAt, topic,
     JSON.stringify(tags), JSON.stringify(persons),
     parseStatus, parseSource, createdAt, createdAt, createdAt, input.source,
+    inferTimePrecision(input.rawText, dueAt),
   );
   await syncFts(id);
   return (await getEntry(id))!;
@@ -596,12 +597,13 @@ export async function restoreAssistantTaskWithDatabase(
   const result = await database.runAsync(
     `UPDATE entries SET raw_text=?, kind=?, summary=?, due_at=?, remind_at=?, topic=?, tags=?, persons=?,
        parse_status=?, parse_source=?, corrected_from=?, updated_at=?, revision_at=MAX(revision_at+1, ?),
-       done=?, done_at=?, source=?
+       done=?, done_at=?, source=?, time_precision=?
      WHERE id=?`,
     snapshot.rawText, snapshot.kind, snapshot.summary, snapshot.dueAt, snapshot.remindAt,
     snapshot.topic, JSON.stringify(snapshot.tags), JSON.stringify(snapshot.persons),
     snapshot.parseStatus, snapshot.parseSource, snapshot.correctedFrom, updatedAt, updatedAt,
-    snapshot.done, snapshot.doneAt, snapshot.source, snapshot.id,
+    snapshot.done, snapshot.doneAt, snapshot.source,
+    snapshot.timePrecision ?? inferTimePrecision(snapshot.rawText, snapshot.dueAt), snapshot.id,
   );
   if (result.changes === 0) return null;
   await syncFtsWithDatabase(database, snapshot.id);
@@ -666,10 +668,11 @@ export async function updateParsedResult(
   await d.withExclusiveTransactionAsync(async (txn) => {
   const result = await txn.runAsync(
     `UPDATE entries SET kind=?, summary=?, due_at=?, remind_at=?, topic=?, tags=?, persons=?,
-       parse_status=?, parse_source=?, revision_at=MAX(revision_at+1, ?)
+       parse_status=?, parse_source=?, time_precision=?, revision_at=MAX(revision_at+1, ?)
      WHERE id=? AND revision_at=? AND raw_text=? AND parse_status!='manual'`,
     parsed.kind, parsed.summary, parsed.dueAt, parsed.dueAt, parsed.topic,
-    JSON.stringify(parsed.tags), JSON.stringify(parsed.persons), status, parseSource, Date.now(), id,
+    JSON.stringify(parsed.tags), JSON.stringify(parsed.persons), status, parseSource,
+    inferTimePrecision(expected.rawText, parsed.dueAt), Date.now(), id,
     expected.revisionAt, expected.rawText,
   );
   applied = result.changes > 0;
@@ -712,18 +715,22 @@ export async function applyCorrection(
   });
   const changedAt = Date.now();
   const derived = deriveEditedEntry(prev, patch.summary ?? prev.summary, patch.rawText ?? prev.rawText, changedAt);
+  const nextRawText = patch.rawText ?? prev.rawText;
+  const nextDueAt = patch.dueAt !== undefined ? patch.dueAt : prev.dueAt;
+  const timePrecision = inferTimePrecision(nextRawText, nextDueAt) === 'dateTime'
+    || inferTimePrecision(derived.summary, nextDueAt) === 'dateTime' ? 'dateTime' : 'date';
   await txn.runAsync(
     `UPDATE entries SET kind=?, summary=?, raw_text=?, due_at=?, remind_at=?, topic=?, tags=?,
-       parse_status='manual', corrected_from=?, updated_at=?, revision_at=MAX(revision_at+1, ?)
+       time_precision=?, parse_status='manual', corrected_from=?, updated_at=?, revision_at=MAX(revision_at+1, ?)
      WHERE id=?`,
     patch.kind ?? (patch.dueAt != null ? 'task' : derived.kind ?? prev.kind),
     derived.summary,
-    patch.rawText ?? prev.rawText,
-    patch.dueAt !== undefined ? patch.dueAt : prev.dueAt,
-    patch.dueAt !== undefined ? patch.dueAt : prev.dueAt,
+    nextRawText,
+    nextDueAt,
+    nextDueAt,
     patch.topic !== undefined ? patch.topic : prev.topic,
     JSON.stringify(patch.tags ?? prev.tags),
-    snapshot, changedAt, changedAt, id,
+    timePrecision, snapshot, changedAt, changedAt, id,
   );
   await syncFtsWithDatabase(txn, id);
   await txn.runAsync(`INSERT INTO notification_sync_queue (entry_id, queued_at) VALUES (?, ?)
@@ -999,9 +1006,6 @@ async function syncFtsWithDatabase(d: SQLite.SQLiteDatabase, id: string): Promis
   const row = await d.getFirstAsync<any>('SELECT * FROM entries WHERE id=?', id);
   const e = row ? rowToEntry(row) : null;
   if (!e) return;
-  const precision = inferTimePrecision(e.rawText, e.dueAt) === 'dateTime'
-    || (e.parseStatus === 'manual' && inferTimePrecision(e.summary, e.dueAt) === 'dateTime') ? 'dateTime' : 'date';
-  await d.runAsync('UPDATE entries SET time_precision=? WHERE id=?', precision, id);
   // 先删旧
   await d.runAsync('DELETE FROM entries_fts WHERE entry_id=?', id);
   await d.runAsync(
