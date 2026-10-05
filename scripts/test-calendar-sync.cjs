@@ -6,14 +6,30 @@ const ts = require('typescript');
 const { DatabaseSync } = require('node:sqlite');
 const root = path.resolve(__dirname, '..');
 const sqlite = new DatabaseSync(':memory:');
-let failLinkWrite = false, granted = true, createCount = 0, updateHook;
+let failLinkWrite = false, failTimedDetails = false, granted = true, createCount = 0, updateHook;
 const events = new Map();
 const calendar = { id: 'owned', allowsModifications: true, sourceId: 'source',
   listEvents: async () => [...events.values()],
   createEvent: async data => {
     createCount++;
-    const event = { ...data, id: `event-${createCount}`, calendarId: 'owned',
-      async update(next) { Object.assign(this, next); if (updateHook) await updateHook(); },
+    const event = { ...data, id: `event-${createCount}`, calendarId: 'owned', updateCalls: [],
+      async update(next) {
+        const wasAllDay = this.allDay;
+        this.updateCalls.push({ ...next });
+        if (failTimedDetails && next.allDay === false && next.startDate && next.endDate) {
+          failTimedDetails = false;
+          throw new Error('native timed update failed');
+        }
+        Object.assign(this, next);
+        // Reproduce EventKit's all-day normalization when dates are written before
+        // the same native update flips an existing event to timed.
+        if (wasAllDay && next.allDay === false && next.startDate && next.endDate) {
+          const normalizedEnd = new Date(next.endDate);
+          normalizedEnd.setHours(0, 0, 0, 0);
+          this.endDate = normalizedEnd;
+        }
+        if (updateHook) await updateHook();
+      },
       async delete() { events.delete(this.id); },
     };
     events.set(event.id, event); return event;
@@ -72,6 +88,47 @@ async function main() {
   const allDayEnd = new Date(event.endDate);
   assert.equal(allDayEnd.toDateString(), new Date(event.startDate).toDateString(), '全天日程不得跨到次日');
   assert.equal(allDayEnd.getHours(), 23);
+  const timedDue = new Date(due); timedDue.setHours(15);
+  const beforeTimed = await db.getEntry(task.id);
+  await db.updateAssistantTaskWithDatabase(adapter, {
+    id: task.id, expectedRevisionAt: beforeTimed.revisionAt, dueAt: +timedDue,
+    timePrecision: 'dateTime', updatedAt: Date.now(),
+  });
+  const timedUpdateStart = event.updateCalls.length;
+  await sync.syncCalendar();
+  const timedUpdates = event.updateCalls.slice(timedUpdateStart);
+  assert.equal(timedUpdates.length, 2, '全天改定时必须分两阶段更新');
+  assert.equal(timedUpdates[0].allDay, false);
+  assert.deepEqual(Object.keys(timedUpdates[0]), ['allDay']);
+  assert.equal(event.id, 'event-1', '模式切换必须保留原 eventId');
+  assert.equal(event.allDay, false);
+  assert.equal(new Date(event.startDate).getHours(), 15);
+  assert.equal(new Date(event.endDate).getHours(), 16, '定时日程默认结束时间必须是开始后一小时');
+  assert.equal(createCount, 1, '模式切换不得重复创建日程');
+  const beforeAllDay = await db.getEntry(task.id);
+  await db.updateAssistantTaskWithDatabase(adapter, {
+    id: task.id, expectedRevisionAt: beforeAllDay.revisionAt, dueAt: +due,
+    timePrecision: 'date', updatedAt: Date.now(),
+  });
+  const allDayUpdateStart = event.updateCalls.length;
+  await sync.syncCalendar();
+  const allDayUpdates = event.updateCalls.slice(allDayUpdateStart);
+  assert.equal(allDayUpdates.length, 2, '定时改全天也必须分两阶段更新');
+  assert.equal(allDayUpdates[0].allDay, true);
+  assert.deepEqual(Object.keys(allDayUpdates[0]), ['allDay']);
+  assert.equal(event.allDay, true);
+  const beforeRetry = await db.getEntry(task.id);
+  await db.updateAssistantTaskWithDatabase(adapter, {
+    id: task.id, expectedRevisionAt: beforeRetry.revisionAt, dueAt: +timedDue,
+    timePrecision: 'dateTime', updatedAt: Date.now(),
+  });
+  failTimedDetails = true;
+  await sync.syncCalendar();
+  assert.ok((await sync.calendarStatus()).pending, '模式已切换但完整更新失败时必须保留任务');
+  assert.equal(event.allDay, false, '第一阶段成功后应保留新模式供重试收敛');
+  await sync.syncCalendar(true);
+  assert.equal(new Date(event.endDate).getHours(), 16, '重试必须补齐定时日程的一小时结束时间');
+  assert.equal(createCount, 1, '模式切换失败重试不得重复创建日程');
   await db.applyCorrection(task.id, { summary: '买葡萄' }); await sync.syncCalendar();
   assert.equal(events.size, 1); assert.equal(event.title, '买葡萄');
   await db.setDone(task.id, true); await sync.syncCalendar(); assert.equal(event.title, '✓ 买葡萄');

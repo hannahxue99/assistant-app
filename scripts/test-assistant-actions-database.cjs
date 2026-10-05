@@ -13,6 +13,7 @@ const adapter = {
   getAllAsync: async (sql, ...args) => sqlite.prepare(sql).all(...args),
   runAsync: async (sql, ...args) => sqlite.prepare(sql).run(...args),
   withExclusiveTransactionAsync: async callback => {
+    if (sqlite.isTransaction) return callback(adapter);
     sqlite.exec('BEGIN IMMEDIATE');
     try {
       await callback(adapter);
@@ -71,12 +72,14 @@ async function main() {
   const assistantStore = load('src/assistant/store.ts');
   const eventStore = load('src/assistant/event-store.ts');
   const eventMigration = load('src/assistant/event-migration.ts');
+  const timePrecisionMigration = load('src/assistant/time-precision-migration.ts');
   const legacyBackup = load('src/engine/legacy-backup.ts');
   const legacyImport = load('src/assistant/legacy-import.ts');
   const actionStore = load('src/assistant/action-store.ts');
   const actionContext = load('src/assistant/action-context.ts');
   const actionUndo = load('src/assistant/action-undo.ts');
   const decisionLog = load('src/assistant/decision-log.ts');
+  const { calendarProjection } = load('src/engine/calendar-projection.ts');
   await db.initDatabase();
 
   const expectedTables = [
@@ -103,6 +106,185 @@ async function main() {
   }
   const requestColumns = new Set(sqlite.prepare('PRAGMA table_info(assistant_requests)').all().map(row => row.name));
   assert.ok(requestColumns.has('error_code'), '历史助手请求表升级后必须补齐 error_code');
+
+  sqlite.exec('SAVEPOINT explicit_clock_regression');
+  const timedDueAt = new Date(2026, 9, 11, 15, 0, 0, 0).getTime();
+  const timedTodo = await db.insertAssistantTaskWithDatabase(adapter, {
+    id: 'todo-explicit-clock', text: '顾朝希用工商银行信用卡买校服',
+    dueAt: timedDueAt, timePrecision: 'dateTime', source: 'text', createdAt: 900,
+  });
+  assert.equal(timedTodo.timePrecision, 'dateTime',
+    '结构化明确时刻不得被不含时刻的待办标题覆盖为全天');
+  const updatedTimedTodo = await db.updateAssistantTaskWithDatabase(adapter, {
+    id: timedTodo.id, expectedRevisionAt: timedTodo.revisionAt,
+    dueAt: timedDueAt, timePrecision: 'dateTime', updatedAt: 950,
+  });
+  assert.equal(updatedTimedTodo?.timePrecision, 'dateTime',
+    '修改待办后刷新全文索引不得覆盖结构化时间精度');
+  const timedProjection = calendarProjection(updatedTimedTodo, 'test-owner');
+  assert.equal(timedProjection.allDay, false, '明确时刻必须同步为非全天日程');
+  assert.equal(+timedProjection.endDate - +timedProjection.startDate, 3600000,
+    '未指定结束时间时继续默认占位一小时');
+  const allDayBeforeUpdate = await db.insertAssistantTaskWithDatabase(adapter, {
+    id: 'todo-undo-clock', text: '撤销时间测试',
+    dueAt: new Date(2026, 9, 12, 9, 0, 0, 0).getTime(),
+    timePrecision: 'date', source: 'text', createdAt: 960,
+  });
+  await db.updateAssistantTaskWithDatabase(adapter, {
+    id: allDayBeforeUpdate.id, expectedRevisionAt: allDayBeforeUpdate.revisionAt,
+    dueAt: new Date(2026, 9, 12, 15, 0, 0, 0).getTime(),
+    timePrecision: 'dateTime', updatedAt: 970,
+  });
+  const restoredAllDay = await db.restoreAssistantTaskWithDatabase(adapter, allDayBeforeUpdate, 980);
+  assert.equal(restoredAllDay?.timePrecision, 'date', '撤销修改必须恢复快照中的全天精度');
+  assert.equal(restoredAllDay?.dueAt, allDayBeforeUpdate.dueAt, '撤销修改必须同时恢复原日期');
+  sqlite.exec('ROLLBACK TO explicit_clock_regression; RELEASE explicit_clock_regression');
+
+  sqlite.exec('SAVEPOINT time_precision_migration');
+  sqlite.prepare(`INSERT INTO conversation_segments (
+    id, summary, status, started_at, ended_at, updated_at
+  ) VALUES ('time-precision-migration-segment', '', 'closed', 700, 700, 700)`).run();
+  const insertRepairTodo = async (id, dueAt) => db.insertAssistantTaskWithDatabase(adapter, {
+    id, text: `待办 ${id}`, dueAt, timePrecision: 'date', source: 'text', createdAt: 800,
+  });
+  const insertRepairEvidence = ({
+    entryId, requestId, operationId, operationKey, createdAt, proposal,
+    proposedOperations = [proposal], proposedEventDeltas = [], validationAccepted = true,
+    decisionStatus = 'committed', operationStatus = 'committed', committed = true,
+  }) => {
+    sqlite.prepare(`INSERT INTO assistant_requests (
+      id, user_message_id, status, attempt_count, created_at, updated_at
+    ) VALUES (?, ?, 'succeeded', 1, ?, ?)`).run(requestId, `message-${requestId}`, createdAt, createdAt);
+    sqlite.prepare(`INSERT INTO assistant_messages (
+      id, request_id, role, content, source, status, segment_id,
+      legacy_entry_id, stage_durations_json, created_at, updated_at
+    ) VALUES (?, ?, 'user', '迁移测试消息', 'text', 'saved',
+      'time-precision-migration-segment', NULL, '{}', ?, ?)`)
+      .run(`message-${requestId}`, requestId, createdAt, createdAt);
+    sqlite.prepare(`INSERT INTO assistant_decision_logs (
+      request_id, user_message_id, prompt_version, model, reference_at, time_zone,
+      proposed_operations_json, proposed_event_deltas_json, validation_json,
+      committed_operation_ids_json, status, created_at, updated_at
+    ) VALUES (?, ?, 'test', 'fixture', ?, 'Asia/Shanghai', ?, ?, ?, ?, ?, ?, ?)`)
+      .run(
+        requestId, `message-${requestId}`, createdAt,
+        JSON.stringify(proposedOperations), JSON.stringify(proposedEventDeltas),
+        JSON.stringify({ accepted: validationAccepted ? [{ key: operationKey, type: proposal?.type ?? 'update_todo' }] : [] }),
+        JSON.stringify(committed ? [operationId] : []), decisionStatus, createdAt, createdAt,
+      );
+    sqlite.prepare(`INSERT INTO assistant_operations (
+      id, request_id, operation_key, operation_type, object_type, object_id,
+      before_snapshot, after_snapshot, receipt_summary, status, sequence, created_at, undone_at
+    ) VALUES (?, ?, ?, 'update_todo', 'todo', ?, '{}', '{}', '更新待办', ?, 0, ?, NULL)`)
+      .run(operationId, requestId, operationKey, entryId, operationStatus, createdAt);
+  };
+  const repairDueAt = new Date(2026, 9, 11, 15, 0, 0, 0).getTime();
+  await insertRepairTodo('repair-target', repairDueAt);
+  insertRepairEvidence({
+    entryId: 'repair-target', requestId: 'repair-request-target', operationId: 'repair-operation-target',
+    operationKey: 'set-1500', createdAt: 1000,
+    proposal: {
+      key: 'set-1500', type: 'update_todo', todoId: 'repair-target', dateStatus: 'resolved',
+      dateText: '这周日15:00', dueDate: '2026-10-11', dueTime: '15:00', timePrecision: 'dateTime',
+    },
+  });
+
+  const deltaDueAt = new Date(2026, 9, 11, 18, 30, 0, 0).getTime();
+  await insertRepairTodo('repair-event-delta', deltaDueAt);
+  const deltaProposal = {
+    type: 'update_todo', dateStatus: 'resolved', dateText: '周日18:30',
+    dueDate: '2026-10-11', dueTime: '18:30', timePrecision: 'dateTime',
+  };
+  insertRepairEvidence({
+    entryId: 'repair-event-delta', requestId: 'repair-request-delta', operationId: 'repair-operation-delta',
+    operationKey: 'event-delta-1-todo-1', createdAt: 1100, proposal: deltaProposal,
+    proposedOperations: [],
+    proposedEventDeltas: [{ key: 'delta', todos: [{ action: 'update', todoId: 'repair-event-delta', ...deltaProposal }] }],
+  });
+
+  await insertRepairTodo('repair-mismatch', new Date(2026, 9, 11, 16, 0, 0, 0).getTime());
+  insertRepairEvidence({
+    entryId: 'repair-mismatch', requestId: 'repair-request-mismatch', operationId: 'repair-operation-mismatch',
+    operationKey: 'set-mismatch', createdAt: 1200,
+    proposal: {
+      key: 'set-mismatch', type: 'update_todo', todoId: 'repair-mismatch', dateStatus: 'resolved',
+      dateText: '周日15:00', dueDate: '2026-10-11', dueTime: '15:00', timePrecision: 'dateTime',
+    },
+  });
+
+  await insertRepairTodo('repair-uncommitted', repairDueAt);
+  insertRepairEvidence({
+    entryId: 'repair-uncommitted', requestId: 'repair-request-uncommitted',
+    operationId: 'repair-operation-uncommitted', operationKey: 'uncommitted', createdAt: 1250,
+    committed: false,
+    proposal: {
+      key: 'uncommitted', type: 'update_todo', todoId: 'repair-uncommitted', dateStatus: 'resolved',
+      dateText: '周日15:00', dueDate: '2026-10-11', dueTime: '15:00', timePrecision: 'dateTime',
+    },
+  });
+
+  const allDayDueAt = new Date(2026, 9, 11, 9, 0, 0, 0).getTime();
+  await insertRepairTodo('repair-later-all-day', allDayDueAt);
+  insertRepairEvidence({
+    entryId: 'repair-later-all-day', requestId: 'repair-request-old-timed', operationId: 'repair-operation-old-timed',
+    operationKey: 'old-timed', createdAt: 1300,
+    proposal: {
+      key: 'old-timed', type: 'update_todo', todoId: 'repair-later-all-day', dateStatus: 'resolved',
+      dateText: '周日15:00', dueDate: '2026-10-11', dueTime: '15:00', timePrecision: 'dateTime',
+    },
+  });
+  insertRepairEvidence({
+    entryId: 'repair-later-all-day', requestId: 'repair-request-new-date', operationId: 'repair-operation-new-date',
+    operationKey: 'new-date', createdAt: 1400,
+    proposal: {
+      key: 'new-date', type: 'update_todo', todoId: 'repair-later-all-day', dateStatus: 'resolved',
+      dateText: '周日', dueDate: '2026-10-11', timePrecision: 'date',
+    },
+  });
+
+  await insertRepairTodo('repair-malformed-latest', repairDueAt);
+  insertRepairEvidence({
+    entryId: 'repair-malformed-latest', requestId: 'repair-request-old-valid', operationId: 'repair-operation-old-valid',
+    operationKey: 'old-valid', createdAt: 1500,
+    proposal: {
+      key: 'old-valid', type: 'update_todo', todoId: 'repair-malformed-latest', dateStatus: 'resolved',
+      dateText: '周日15:00', dueDate: '2026-10-11', dueTime: '15:00', timePrecision: 'dateTime',
+    },
+  });
+  insertRepairEvidence({
+    entryId: 'repair-malformed-latest', requestId: 'repair-request-malformed', operationId: 'repair-operation-malformed',
+    operationKey: 'malformed', createdAt: 1600,
+    proposal: { key: 'malformed', type: 'update_todo', todoId: 'repair-malformed-latest' },
+  });
+  sqlite.prepare("UPDATE assistant_decision_logs SET proposed_operations_json='{' WHERE request_id='repair-request-malformed'").run();
+
+  await insertRepairTodo('repair-malformed-proposal', repairDueAt);
+  insertRepairEvidence({
+    entryId: 'repair-malformed-proposal', requestId: 'repair-request-malformed-proposal',
+    operationId: 'repair-operation-malformed-proposal', operationKey: 'malformed-proposal', createdAt: 1700,
+    proposal: {
+      key: 'malformed-proposal', type: 'update_todo', todoId: 'repair-malformed-proposal',
+      dateStatus: 'resolved', timePrecision: 'dateTime',
+    },
+  });
+
+  sqlite.prepare("DELETE FROM calendar_jobs WHERE entry_id LIKE 'repair-%'").run();
+  assert.equal(await timePrecisionMigration.migrateStructuredTodoTimePrecision(), 2,
+    '只应修复有完整已提交 dateTime 证据且时间戳匹配的待办');
+  assert.equal((await db.getEntry('repair-target')).timePrecision, 'dateTime');
+  assert.equal((await db.getEntry('repair-event-delta')).timePrecision, 'dateTime',
+    '事件增量编译出的待办时刻也应可恢复');
+  for (const id of [
+    'repair-mismatch', 'repair-uncommitted', 'repair-later-all-day', 'repair-malformed-latest',
+    'repair-malformed-proposal',
+  ]) {
+    assert.equal((await db.getEntry(id)).timePrecision, 'date', `${id} 缺少安全证据时必须保持全天`);
+  }
+  assert.ok(sqlite.prepare("SELECT entry_id FROM calendar_jobs WHERE entry_id='repair-target'").get(),
+    '修复精度应触发现有日历补偿队列');
+  assert.equal(await timePrecisionMigration.migrateStructuredTodoTimePrecision(), 0,
+    '迁移重复运行必须幂等');
+  sqlite.exec('ROLLBACK TO time_precision_migration; RELEASE time_precision_migration');
 
   sqlite.prepare(`INSERT INTO conversation_segments (
     id, summary, status, started_at, ended_at, updated_at
