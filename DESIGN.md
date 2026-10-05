@@ -1,5 +1,7 @@
 # 个人助手 App — 页面设计稿 v1.1
 
+> **历史基线（截至 2026-09-03）**：本文描述“小知”三 Tab 与事件/长期记忆上线前的“主人的备忘录”界面，只用于追溯早期决策，不是当前页面规范。现行产品结构见 [`PRD.md`](./PRD.md)，已验收视觉见 [`docs/knowledge/generated-three-screen-visual-system.md`](./docs/knowledge/generated-three-screen-visual-system.md)。
+
 > 状态：已与产品 owner 逐轮对齐定稿（2026-08-31；2026-09-01 真机验证后修订）
 > 配套文档：需求见 `PRD.md`；本文件只描述页面结构、布局与交互规则
 

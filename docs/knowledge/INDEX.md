@@ -4,7 +4,7 @@
 
 | 专题 | 内容 | 最近更新 |
 |---|---|---|
-| [V1 产品口径：完整愿景与实现进度分离](v1-product-baseline.md) | V1版本定义、目标/实现/发布三层状态、维护模式、验证与回滚 | 2026-09-17 |
+| [V1 产品口径：完整愿景与实现进度分离](v1-product-baseline.md) | V1版本定义、README 产品宣言、目标/实现/发布分层、验证与回滚 | 2026-10-05 |
 | [V1 当前实现基线](secretary-mentor-v03-release.md) | 三入口、数据边界、事件多行状态、模型/代码职责、Release真机记录与回滚 | 2026-09-22 |
 | [小知按需读取与真实回执闭环](xiaozhi-grounded-read-tools.md) | 九只读工具、真实回执、DeepSeek文档相反行为、风控词+数字串组合、三层容错原则、决策日志排障闭环 | 2026-09-21 |
 | [小知 DeepSeek 原生联网搜索与 Agent 对话层级](xiaozhi-deepseek-web-search.md) | 服务端搜索规划、联网轮只读、来源持久化与备份、来源/思考/回复/回执层级、悬浮输入区渐隐 | 2026-09-23 |
@@ -22,7 +22,7 @@
 | [SQLite FTS5 原生闪退](sqlite-fts-native-crash.md) | 连接关闭与内部语句清理、原生测试盲区、完整Reload及PR #12发布 | 2026-09-07 |
 | [原声一致性与主题规模](entry-consistency-and-topic-scale.md) | 日期基准、条件回填、编辑事务、完整计数与空白安装；PR #10/#11发布记录 | 2026-09-06 |
 | [数据库启动与通知异常隔离](database-startup-recovery.md) | 初始化等待、Fast Refresh、通知副作用隔离、补偿及发布记录 | 2026-09-05 |
-| [真机开发与连接](../../README.md#真机调试踩坑存档) | Dev Client、Tunnel、HTTPS、端口和原生模块排障 | 2026-09-03 |
+| [真机开发、连接与发布排障](agent-dev-playbook.md) | Dev Client、Tunnel、HTTPS、端口、固定 CMake、安装和运行证据 | 2026-09-24 |
 | [开发与 PR 流程](../DEVELOPMENT_WORKFLOW.md) | 设计先行、图示确认、分支开发、验收与沉淀 | 2026-09-03 |
 | [聚合主题操作与编辑一致性](topic-actions.md) | 置顶排序、主题合并事务、共享编辑入口 | 2026-09-03 |
 | [理解状态反馈](understanding-status.md) | 处理中、失败重试、批量异常升级与纯规则静默 | 2026-09-03 |

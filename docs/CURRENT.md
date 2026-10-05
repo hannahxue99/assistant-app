@@ -4,6 +4,7 @@ Short, stable entry point for repository work. It does not replace product, PR, 
 
 ## Sources of truth
 
+- Human-facing documentation map: [`docs/README.md`](README.md).
 - Product scope: [`PRD.md`](../PRD.md).
 - Development and release: [`docs/DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md), [`docs/RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md).
 - Reusable decisions: [`docs/knowledge/INDEX.md`](knowledge/INDEX.md).
