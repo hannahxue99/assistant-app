@@ -49,12 +49,23 @@ PR #36 将 README 从功能说明改为宏观产品宣言，并在用户验收�
 
 可复用的文档原则是：README 保持宏观、稳定、与具体实现解耦；页面、对象、配置和交付细节分别进入 PRD、CURRENT、专题知识与发布记录。竞品理念可以启发叙事角度，但不得在没有可靠来源时写入具体竞品结论或引用。
 
+## README 产品愿景图（2026-10-15）
+
+- 用户验收：2026-10-15 确认 PR #38 的效果并要求更新。
+- 最终决策：在一张图中融合已实现与规划能力，以首页、小知、我的三页展示完整体验，不按完成状态拆分画面。
+- 图片：[`design/product-vision.png`](../../design/product-vision.png)。使用示例内容，README 明确标为产品愿景并链接 PRD 实现进度；不将生成图当成实机截图或发布证明。
+- 可复用经验：先区分用户要的是当前截图、现有设计稿还是完整目标效果图；“一张图”同时约束交付资产和叙事组织，不能只并排贴旧稿。
+- 验证：图片已目视检查，用户已确认；本地 `npm run ci` 与 `git diff --check` 通过，初始提交 `98a8b41` 的 GitHub `CI / validate` 通过。合并前须确认最终提交的同名检查通过。
+- 发布范围：仅 README、设计图片和知识记录；无运行时代码、原生依赖、权限、Bundle ID 或数据库变化，不需要 iOS 导出、原生构建、Reload 或设备安装。未执行真机验收，不据此宣称手机更新。
+- 关联 PR：[#38](https://github.com/hannahxue99/assistant-app/pull/38)，分支 `codex/readme-product-vision`；最终合并提交见 PR 记录。
+- 回滚：revert PR #38 的合并提交即可撤回愿景图及文档说明，不影响用户数据。
+
 ## 验证方法
 
 - `rg -n "V0\.3" README.md PRD.md docs`：剩余 V0.3 只能出现在历史映射、文件名或原方案说明中。
 - 对照 `app/(tabs)`、`src/assistant`、数据库表和自动测试核实进度矩阵，未找到运行时实现的能力不得标为完成。
 - 运行 `npm run ci`，确认文档更新没有伴随错误的运行时代码或测试变更。
-- 审查 Git diff，改动范围应只有 Markdown 与设计 SVG。
+- 审查 Git diff，产品文档更新的改动范围应只有 Markdown 与设计资产。
 - PR #36 验证了核心 Markdown 相对链接、`npm run test:agent-tooling` 与完整 `npm run ci`；GitHub `CI / validate` 通过，用户于 2026-10-05 明确验收 README 产品宣言。
 
 ## 关联与回滚
